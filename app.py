@@ -1,0 +1,340 @@
+"""
+OnePay — Application factory
+All routes live in blueprints:
+  blueprints/auth.py     — register, login, logout, password reset
+  blueprints/payments.py — dashboard, create link, status, history
+  blueprints/public.py   — verify page, preview API, polling, health
+"""
+import logging
+import uuid
+from datetime import timedelta, datetime, timezone
+
+from flask import Flask, request, redirect, g, jsonify, render_template, session
+
+from config import Config
+from database import init_db
+from blueprints.auth import auth_bp
+from blueprints.payments import payments_bp
+from blueprints.public import public_bp
+
+# ── Logging ────────────────────────────────────────────────────────────────────
+
+class RequestIdFilter(logging.Filter):
+    """Inject request_id from Flask g into every log record."""
+    def filter(self, record):
+        try:
+            from flask import g
+            record.request_id = g.get("request_id", "-")
+        except RuntimeError:
+            record.request_id = "-"
+        return True
+
+
+def _configure_logging():
+    """
+    Use JSON structured logging in production, plain text in debug.
+    JSON logs are easier to ingest in log aggregators (CloudWatch, Datadog, etc.)
+    """
+    from core.logging_filters import SensitiveDataFilter
+    
+    request_id_filter = RequestIdFilter()
+    sensitive_filter = SensitiveDataFilter()
+    
+    if Config.DEBUG:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter(
+            "%(asctime)s  %(levelname)-8s  [%(request_id)s]  %(name)s — %(message)s"
+        ))
+        handler.addFilter(request_id_filter)
+        handler.addFilter(sensitive_filter)
+        root = logging.getLogger()
+        root.handlers = [handler]
+        root.setLevel(logging.DEBUG)
+    else:
+        try:
+            from pythonjsonlogger import jsonlogger
+            handler   = logging.StreamHandler()
+            formatter = jsonlogger.JsonFormatter(
+                "%(asctime)s %(levelname)s %(request_id)s %(name)s %(message)s"
+            )
+            handler.setFormatter(formatter)
+            handler.addFilter(request_id_filter)
+            handler.addFilter(sensitive_filter)
+            root = logging.getLogger()
+            root.handlers = [handler]
+            root.setLevel(logging.INFO)
+        except ImportError:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter(
+                "%(asctime)s  %(levelname)-8s  [%(request_id)s]  %(name)s — %(message)s"
+            ))
+            handler.addFilter(request_id_filter)
+            handler.addFilter(sensitive_filter)
+            root = logging.getLogger()
+            root.handlers = [handler]
+            root.setLevel(logging.INFO)
+
+_configure_logging()
+logger = logging.getLogger(__name__)
+
+# ── App factory ────────────────────────────────────────────────────────────────
+
+def create_app() -> Flask:
+    app = Flask(__name__)
+    app.config["SECRET_KEY"] = Config.SECRET_KEY
+    app.config["DEBUG"]      = Config.DEBUG
+    app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # 1MB max request size
+    app.config.update(
+        SESSION_COOKIE_HTTPONLY  = True,
+        SESSION_COOKIE_SAMESITE  = "Lax",  # Better compatibility while maintaining security
+        SESSION_COOKIE_SECURE    = Config.ENFORCE_HTTPS,
+        SESSION_COOKIE_DOMAIN    = None,  # Restrict to exact domain (no subdomains)
+        SESSION_PERMANENT        = True,
+        PERMANENT_SESSION_LIFETIME = timedelta(hours=Config.PERMANENT_SESSION_LIFETIME),
+    )
+
+    Config.validate()
+
+    # Boot timestamp — used to invalidate sessions from before this restart
+    BOOT_TIME = datetime.now(timezone.utc).isoformat()
+    app.config["BOOT_TIME"] = BOOT_TIME
+
+    # ── Request ID tracing ─────────────────────────────────────────────────────
+    @app.before_request
+    def inject_request_id():
+        g.request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+
+    @app.after_request
+    def add_request_id_header(response):
+        response.headers["X-Request-ID"] = g.get("request_id", "")
+        return response
+
+    # ── Invalidate pre-restart sessions ───────────────────────────────────────
+    @app.before_request
+    def invalidate_old_sessions():
+        """Clear any session that was created before this app boot."""
+        boot_time = app.config.get("BOOT_TIME")
+        if session.get("_boot") != boot_time:
+            session.clear()
+            session["_boot"] = boot_time
+            return
+        
+        # Absolute maximum session lifetime (7 days)
+        session_created = session.get("_created")
+        if session_created:
+            try:
+                created_dt = datetime.fromisoformat(session_created)
+                max_age = timedelta(days=7)
+                if datetime.now(timezone.utc) - created_dt > max_age:
+                    if session.get("user_id"):
+                        logger.info("Session expired due to maximum age | user=%s", session.get("username"))
+                    session.clear()
+                    return
+            except (ValueError, TypeError):
+                pass
+        
+        # Session inactivity timeout - applies to ALL sessions
+        last_activity = session.get("_last_activity")
+        if last_activity:
+            try:
+                last_active_dt = datetime.fromisoformat(last_activity)
+                # Different timeout for authenticated vs unauthenticated sessions
+                timeout_minutes = 30 if session.get("user_id") else 60
+                if datetime.now(timezone.utc) - last_active_dt > timedelta(minutes=timeout_minutes):
+                    if session.get("user_id"):
+                        logger.info("Session expired due to inactivity | user=%s", session.get("username"))
+                    session.clear()
+                    return
+            except (ValueError, TypeError):
+                pass
+        
+        # Update last activity timestamp for all sessions
+        session["_last_activity"] = datetime.now(timezone.utc).isoformat()
+
+    # ── HTTPS enforcement ──────────────────────────────────────────────────────
+    @app.before_request
+    def enforce_https():
+        if not Config.ENFORCE_HTTPS or Config.DEBUG:
+            return None
+        if request.is_secure:
+            return None
+        if Config.TRUST_X_FORWARDED_PROTO:
+            if (request.headers.get("X-Forwarded-Proto") or "").lower() == "https":
+                return None
+        return redirect(request.url.replace("http://", "https://", 1), code=301)
+
+
+    # ── Security response headers ──────────────────────────────────────────────
+    @app.after_request
+    def set_security_headers(response):
+        """
+        Add defence-in-depth HTTP security headers to every response.
+
+        Content-Security-Policy: restricts what the browser can load.
+          - default-src 'self': only same-origin resources by default
+          - script-src 'self' 'unsafe-inline': allows inline JS (needed for
+            the CSRF token injected via Jinja into <script> blocks).
+            For stronger protection, replace 'unsafe-inline' with a nonce.
+          - style-src 'self' 'unsafe-inline' fonts.googleapis.com: allows
+            inline styles and Google Fonts.
+        X-Frame-Options: DENY prevents the verify page being clickjacked.
+        X-Content-Type-Options: nosniff prevents MIME-type sniffing.
+        Referrer-Policy: no-referrer-when-downgrade avoids leaking URLs.
+        Permissions-Policy: disables unnecessary browser features.
+        X-XSS-Protection: enables browser XSS filter (legacy browsers).
+        X-Download-Options: prevents IE from executing downloads in site context.
+        """
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; "
+            "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com; "
+            "img-src 'self' data: https://lh3.googleusercontent.com; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self';",
+        )
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", 
+            "geolocation=(), camera=(), microphone=(), payment=(), usb=(), magnetometer=()")
+        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        # Removed Cross-Origin-Embedder-Policy as it blocks CDN resources
+        response.headers.setdefault("X-XSS-Protection", "1; mode=block")
+        response.headers.setdefault("X-Download-Options", "noopen")
+        response.headers.setdefault("X-Permitted-Cross-Domain-Policies", "none")
+        
+        # Additional headers for maximum compatibility
+        response.headers.setdefault("X-Content-Security-Policy", response.headers.get("Content-Security-Policy", ""))
+        response.headers.setdefault("Expect-CT", "max-age=86400, enforce")
+        
+        return response
+
+    # ── Blueprints ─────────────────────────────────────────────────────────────
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(payments_bp)
+    app.register_blueprint(public_bp)
+
+    # ── Error handlers ─────────────────────────────────────────────────────────
+    @app.errorhandler(404)
+    def not_found_error(error):
+        """Handle 404 errors with a friendly message."""
+        if request.path.startswith('/api/'):
+            return jsonify({
+                "success": False,
+                "error": "NOT_FOUND",
+                "message": "The requested resource was not found"
+            }), 404
+        return render_template('base.html'), 404
+
+    @app.errorhandler(500)
+    def internal_error(error):
+        """Handle 500 errors without exposing stack traces."""
+        # Only log full trace in debug mode
+        if Config.DEBUG:
+            logger.error("Internal server error: %s", error, exc_info=True)
+        else:
+            logger.error("Internal server error: %s", str(error)[:200])
+        
+        # Rollback any pending database transactions
+        try:
+            from database import get_db
+            with get_db() as db:
+                db.rollback()
+        except Exception:
+            pass
+        
+        if request.path.startswith('/api/'):
+            return jsonify({
+                "success": False,
+                "error": "INTERNAL_ERROR",
+                "message": "An internal error occurred. Please try again later."
+            }), 500
+        
+        return render_template('base.html'), 500
+
+    @app.errorhandler(403)
+    def forbidden_error(error):
+        """Handle 403 errors."""
+        if request.path.startswith('/api/'):
+            return jsonify({
+                "success": False,
+                "error": "FORBIDDEN",
+                "message": "You don't have permission to access this resource"
+            }), 403
+        return render_template('base.html'), 403
+
+    # ── Security headers (Talisman) ────────────────────────────────────────────
+    if not Config.TESTING and not Config.DEBUG:
+        from flask_talisman import Talisman
+        
+        csp = {
+            "default-src": ["'self'"],
+            "script-src": ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
+            "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.tailwindcss.com"],
+            "font-src": ["'self'", "https://fonts.gstatic.com", "https://fonts.googleapis.com"],
+            "img-src": ["'self'", "data:", "https://lh3.googleusercontent.com"],
+            "connect-src": ["'self'"],
+            "frame-ancestors": ["'none'"],
+            "base-uri": ["'self'"],
+            "form-action": ["'self'"],
+        }
+
+        Talisman(
+            app,
+            force_https=Config.ENFORCE_HTTPS,
+            strict_transport_security=Config.ENFORCE_HTTPS,
+            strict_transport_security_max_age=31536000,
+            strict_transport_security_include_subdomains=True,
+            strict_transport_security_preload=True,
+            content_security_policy=csp,
+            referrer_policy="strict-origin-when-cross-origin",
+        )
+
+    # ── Database ───────────────────────────────────────────────────────────────
+    init_db()
+
+    # ── Background threads ─────────────────────────────────────────────────────
+    import threading
+    import time
+    from database import get_db
+    from services.webhook import retry_failed_webhooks
+    from app_cleanup import start_cleanup_threads
+    
+    def _webhook_retry_loop():
+        """Background thread that retries failed webhook deliveries."""
+        # Wait a bit for DB to be fully initialized
+        time.sleep(5)
+        while True:
+            try:
+                with get_db() as db:
+                    retry_failed_webhooks(db)
+            except Exception as e:
+                logger.error("Webhook retry loop error: %s", e)
+            time.sleep(60)
+    
+    webhook_thread = threading.Thread(
+        target=_webhook_retry_loop,
+        daemon=True,
+        name="webhook-retry"
+    )
+    webhook_thread.start()
+    logger.info("Webhook retry thread started")
+    
+    # Start cleanup threads for audit logs and rate limits
+    start_cleanup_threads()
+
+    return app
+
+
+# ── Entry point ────────────────────────────────────────────────────────────────
+# Module-level app instance for gunicorn (gunicorn app:app)
+# create_app() is also importable directly for testing.
+
+app = create_app()
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=Config.DEBUG)

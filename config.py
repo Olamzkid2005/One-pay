@@ -1,0 +1,178 @@
+"""
+OnePay — Configuration
+Environment-specific subclasses selected by APP_ENV env var.
+
+Usage in app factory:
+    app.config.from_object(get_config())
+"""
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+class BaseConfig:
+    # ── App ──────────────────────────────────────────────────────────────────
+    SECRET_KEY  = os.getenv("SECRET_KEY", "change-this-in-production")
+    DEBUG       = False
+    TESTING     = False
+
+    # ── Database ─────────────────────────────────────────────────────────────
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///onepay.db")
+
+    # ── Security ─────────────────────────────────────────────────────────────
+    HMAC_SECRET     = os.getenv("HMAC_SECRET", "change-this-hmac-secret")
+    HMAC_SECRET_OLD = os.getenv("HMAC_SECRET_OLD", "")
+    LINK_EXPIRATION_MINUTES = int(os.getenv("LINK_EXPIRATION_MINUTES", "5"))
+
+    # ── Proxy trust ───────────────────────────────────────────────────────────
+    TRUST_X_FORWARDED_FOR   = os.getenv("TRUST_X_FORWARDED_FOR",   "false").lower() == "true"
+    TRUST_X_FORWARDED_PROTO = os.getenv("TRUST_X_FORWARDED_PROTO", "false").lower() == "true"
+
+    # ── Account lockout ───────────────────────────────────────────────────────
+    LOGIN_MAX_ATTEMPTS    = int(os.getenv("LOGIN_MAX_ATTEMPTS",    "5"))
+    LOCKOUT_DURATION_SECS = int(os.getenv("LOCKOUT_DURATION_SECS", "900"))
+
+    # ── Email ─────────────────────────────────────────────────────────────────
+    MAIL_SERVER   = os.getenv("MAIL_SERVER",   "smtp.gmail.com")
+    MAIL_PORT     = int(os.getenv("MAIL_PORT", "587"))
+    MAIL_USE_TLS  = os.getenv("MAIL_USE_TLS",  "true").lower() == "true"
+    MAIL_USERNAME = os.getenv("MAIL_USERNAME", "")
+    MAIL_PASSWORD = os.getenv("MAIL_PASSWORD", "")
+    MAIL_FROM     = os.getenv("MAIL_FROM",     "noreply@onepay.com")
+
+    # ── Quickteller ───────────────────────────────────────────────────────────
+    QUICKTELLER_CLIENT_ID     = os.getenv("QUICKTELLER_CLIENT_ID",     "")
+    QUICKTELLER_CLIENT_SECRET = os.getenv("QUICKTELLER_CLIENT_SECRET", "")
+    QUICKTELLER_BASE_URL      = os.getenv("QUICKTELLER_BASE_URL",      "https://passport.k8.isw.la")
+
+    # ── Dynamic Transfer ──────────────────────────────────────────────────────
+    MERCHANT_CODE            = os.getenv("MERCHANT_CODE",  "")
+    PAYABLE_CODE             = os.getenv("PAYABLE_CODE",   "")
+    VIRTUAL_ACCOUNT_BASE_URL = os.getenv(
+        "VIRTUAL_ACCOUNT_BASE_URL", "https://payment-service.k8.isw.la"
+    )
+
+    # ── Rate Limiting ─────────────────────────────────────────────────────────
+    RATE_LIMIT_LINK_CREATE           = int(os.getenv("RATE_LIMIT_LINK_CREATE",           "10"))
+    RATE_LIMIT_VERIFY                = int(os.getenv("RATE_LIMIT_VERIFY",                "20"))
+    RATE_LIMIT_VERIFY_PAGE_ATTEMPTS  = int(os.getenv("RATE_LIMIT_VERIFY_PAGE_ATTEMPTS",  "5"))
+    RATE_LIMIT_VERIFY_PAGE_WINDOW_SECS = int(os.getenv("RATE_LIMIT_VERIFY_PAGE_WINDOW_SECS", "300"))
+
+    # ── Session lifetime ──────────────────────────────────────────────────────
+    # SESSION_LIFETIME_HOURS: how long a permanent session lasts (default 24h)
+    PERMANENT_SESSION_LIFETIME = int(os.getenv("SESSION_LIFETIME_HOURS", "24"))
+
+    # ── HTTPS ─────────────────────────────────────────────────────────────────
+    ENFORCE_HTTPS = os.getenv("ENFORCE_HTTPS", "false").lower() == "true"
+
+    # ── Webhook ───────────────────────────────────────────────────────────────
+    # Separate signing secret for outbound webhooks.
+    # Falls back to HMAC_SECRET if not set — set this to a distinct value in production.
+    WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
+
+    WEBHOOK_TIMEOUT_SECS = int(os.getenv("WEBHOOK_TIMEOUT_SECS", "10"))
+    WEBHOOK_MAX_RETRIES  = int(os.getenv("WEBHOOK_MAX_RETRIES",  "3"))
+
+    @classmethod
+    def validate(cls):
+        """Enforce strong secrets in production. Called explicitly from app factory."""
+        import logging as _logging
+        import sys as _sys
+        import os as _os
+        _logger = _logging.getLogger(__name__)
+        
+        errors = []
+        warnings = []
+        
+        # Check for placeholder secrets
+        if "change-this" in cls.SECRET_KEY.lower():
+            errors.append("SECRET_KEY contains placeholder value")
+        if "change-this" in cls.HMAC_SECRET.lower():
+            errors.append("HMAC_SECRET contains placeholder value")
+        if cls.WEBHOOK_SECRET and "change-this" in cls.WEBHOOK_SECRET.lower():
+            errors.append("WEBHOOK_SECRET contains placeholder value")
+        
+        # Check minimum entropy (32 bytes = 64 hex chars)
+        if len(cls.SECRET_KEY) < 32:
+            errors.append("SECRET_KEY too short (minimum 32 characters)")
+        if len(cls.HMAC_SECRET) < 32:
+            errors.append("HMAC_SECRET too short (minimum 32 characters)")
+        
+        # Check secrets are different
+        if cls.SECRET_KEY == cls.HMAC_SECRET:
+            errors.append("SECRET_KEY and HMAC_SECRET must be different")
+        if cls.WEBHOOK_SECRET and cls.WEBHOOK_SECRET == cls.HMAC_SECRET:
+            errors.append("WEBHOOK_SECRET and HMAC_SECRET must be different")
+        
+        # Check DEBUG mode in production
+        app_env = _os.getenv("APP_ENV", "development").lower()
+        if app_env == "production" and cls.DEBUG:
+            errors.append("DEBUG mode is enabled in production environment")
+        
+        # Check HTTPS enforcement in production
+        if not cls.DEBUG and not cls.TESTING:
+            if not cls.ENFORCE_HTTPS:
+                warnings.append("ENFORCE_HTTPS is disabled in production")
+            if "sqlite" in cls.DATABASE_URL.lower():
+                warnings.append("Using SQLite in production (use PostgreSQL)")
+        
+        # Log warnings
+        for warning in warnings:
+            _logger.warning("SECURITY WARNING: %s", warning)
+        
+        # Abort on errors
+        if errors:
+            _logger.critical(
+                "STARTUP ABORTED: Security validation failed:\n  - %s\n"
+                "Generate strong secrets with: python -c \"import secrets; print(secrets.token_hex(32))\"",
+                "\n  - ".join(errors)
+            )
+            if not cls.DEBUG:
+                _sys.exit(1)
+
+
+class DevelopmentConfig(BaseConfig):
+    DEBUG = True
+    # Shorter link expiry in dev so you don't wait around
+    LINK_EXPIRATION_MINUTES = int(os.getenv("LINK_EXPIRATION_MINUTES", "30"))
+
+
+class TestingConfig(BaseConfig):
+    TESTING     = True
+    DEBUG       = True
+    DATABASE_URL = "sqlite:///:memory:"
+    # Disable rate limiting in tests
+    RATE_LIMIT_LINK_CREATE          = 9999
+    RATE_LIMIT_VERIFY               = 9999
+    RATE_LIMIT_VERIFY_PAGE_ATTEMPTS = 9999
+    # Fast lockout for auth tests
+    LOGIN_MAX_ATTEMPTS    = 3
+    LOCKOUT_DURATION_SECS = 5
+    # Use fixed secrets so HMAC is deterministic in tests
+    SECRET_KEY   = "test-secret-key"
+    HMAC_SECRET  = "test-hmac-secret"
+
+
+class ProductionConfig(BaseConfig):
+    ENFORCE_HTTPS = os.getenv("ENFORCE_HTTPS", "true").lower() == "true"
+
+
+# ── Config selector ────────────────────────────────────────────────────────────
+
+_configs = {
+    "development": DevelopmentConfig,
+    "testing":     TestingConfig,
+    "production":  ProductionConfig,
+}
+
+def get_config():
+    """
+    Return the config class for the current APP_ENV.
+    Defaults to DevelopmentConfig so local dev works with no env vars set.
+    """
+    env = os.getenv("APP_ENV", "development").lower()
+    return _configs.get(env, DevelopmentConfig)
+
+# Convenience alias — existing code that does `from config import Config` keeps working
+Config = get_config()
