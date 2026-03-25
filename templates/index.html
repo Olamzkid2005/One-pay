@@ -1,0 +1,279 @@
+{% extends "dashboard_base.html" %}
+
+{% set active_page = 'create' %}
+
+{% block title %}OnePay — Dashboard{% endblock %}
+
+{% block dashboard_content %}
+<!-- Top Navigation Bar -->
+<header class="flex justify-between items-center w-full px-10 py-4 bg-[#10141a]">
+    <div class="flex items-center gap-6">
+        <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-xl" style="font-variation-settings: 'FILL' 1;">shield</span>
+            <div class="text-xl font-black text-[#dfe2eb] tracking-tighter font-manrope">OnePay</div>
+        </div>
+        <div class="h-6 w-px bg-outline-variant/30"></div>
+        <div class="text-sm font-label text-outline">Terminal ID: <span class="text-on-surface">OP-{{ username }}</span></div>
+    </div>
+    <div class="flex items-center gap-4">
+        <!-- Health indicator -->
+        <div id="health-indicator" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-low text-primary text-xs font-label">
+            <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+            <span id="health-text">Connecting...</span>
+        </div>
+    </div>
+</header>
+
+<!-- Canvas Area -->
+<div class="flex-grow px-10 py-6">
+    <div class="max-w-6xl mx-auto">
+        <!-- Editorial Header -->
+        <div class="mb-8">
+            <h2 class="text-3xl font-extrabold font-headline tracking-tight text-on-surface mb-2">Create Payment Link</h2>
+            <p class="text-outline font-body text-sm max-w-md">Generate a unique, secure checkout URL to share with your customers instantly via any platform.</p>
+        </div>
+
+        <!-- Bento Grid Content -->
+        <div class="grid grid-cols-12 gap-6">
+            <!-- Primary Form Section -->
+            <div class="col-span-12 lg:col-span-8 space-y-6">
+                <section class="bg-surface-container-low rounded-xl p-6 relative overflow-hidden">
+                    <!-- Subtle background glow -->
+                    <div class="absolute -top-24 -right-24 w-64 h-64 bg-primary/5 blur-[80px] rounded-full"></div>
+                    
+                    <!-- Flash Messages -->
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                            <div class="mb-6 p-4 rounded-xl {% if category == 'error' %}bg-error-container/10 border border-error/20 text-error{% elif category == 'success' %}bg-success/10 border border-success/20 text-success{% else %}bg-primary/10 border border-primary/20 text-primary{% endif %} relative z-10">
+                                <div class="flex items-center gap-2 text-sm">
+                                    <span class="material-symbols-outlined text-lg">
+                                        {% if category == 'error' %}error{% elif category == 'success' %}check_circle{% else %}info{% endif %}
+                                    </span>
+                                    <span>{{ message }}</span>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                    
+                    <form id="create-form" class="space-y-4 relative z-10" novalidate>
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-label uppercase tracking-widest text-outline ml-1">Transaction Amount</label>
+                            <div class="relative group">
+                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <span class="text-primary font-label text-lg">₦</span>
+                                </div>
+                                <input 
+                                    id="amount"
+                                    type="number"
+                                    min="1"
+                                    max="100000000"
+                                    step="0.01"
+                                    class="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl py-3 pl-10 pr-4 text-lg font-label focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-on-surface placeholder:text-outline/30" 
+                                    placeholder="0.00"
+                                    oninput="if(parseFloat(this.value)<0){this.value=Math.abs(this.value)}; if(parseFloat(this.value)>100000000){this.value=100000000}; updateAmountInWords(this.value)"
+                                    required
+                                />
+                            </div>
+                            <p id="amount-in-words" class="text-xs text-primary/70 ml-1 min-h-[16px] italic"></p>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="space-y-1">
+                                <label class="text-[10px] font-label uppercase tracking-widest text-outline ml-1">Customer Email</label>
+                                <input 
+                                    id="email"
+                                    type="email"
+                                    class="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl py-2.5 px-4 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-on-surface" 
+                                    placeholder="client@example.com"
+                                />
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[10px] font-label uppercase tracking-widest text-outline ml-1">Customer Phone</label>
+                                <input 
+                                    id="phone"
+                                    type="tel"
+                                    class="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl py-2.5 px-4 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-on-surface" 
+                                    placeholder="+234..."
+                                />
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-label uppercase tracking-widest text-outline ml-1">Description</label>
+                            <textarea 
+                                id="description"
+                                class="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl py-2.5 px-4 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-on-surface resize-none" 
+                                placeholder="What is this payment for?" 
+                                rows="2"
+                            ></textarea>
+                        </div>
+                        
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-label uppercase tracking-widest text-outline ml-1">Return URL (Optional)</label>
+                            <input 
+                                id="return_url"
+                                type="url"
+                                class="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl py-2.5 px-4 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-on-surface" 
+                                placeholder="https://yourstore.com/success"
+                            />
+                        </div>
+                        
+                        <div class="pt-2">
+                            <button 
+                                id="create-btn"
+                                type="submit"
+                                class="w-full bg-gradient-to-r from-[#aac7ff] to-[#418fff] text-[#001b3e] font-headline font-bold py-3.5 rounded-xl shadow-lg shadow-primary/10 hover:shadow-primary/20 transition-all active:scale-95 flex justify-center items-center gap-2"
+                            >
+                                Generate Secure Link
+                                <span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">shield</span>
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <!-- Link Result (hidden by default) -->
+                    <div id="link-result" class="hidden space-y-6 relative z-10">
+                        <div class="text-center">
+                            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-success/10 mb-4">
+                                <span class="material-symbols-outlined text-success text-3xl" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            </div>
+                            <h3 class="text-2xl font-bold font-headline text-on-surface mb-2">Link Created!</h3>
+                            <p class="text-sm text-outline">Share this secure link with your customer</p>
+                            <!-- Live payment status indicator -->
+                            <div id="res-live-status" class="flex items-center justify-center gap-2 text-sm font-medium text-tertiary-fixed-dim mt-3">
+                                <span class="material-symbols-outlined text-base" style="font-variation-settings:'FILL' 1">schedule</span>
+                                <span>Awaiting payment…</span>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-surface-container-highest/40 rounded-2xl p-6 border border-outline-variant/10 space-y-4">
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs text-outline uppercase font-label">Amount</span>
+                                <span id="res-amount" class="text-2xl font-bold font-label text-primary"></span>
+                            </div>
+                            <div id="res-desc-row" class="flex justify-between items-center hidden">
+                                <span class="text-xs text-outline uppercase font-label">Description</span>
+                                <span id="res-desc" class="text-sm text-on-surface"></span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs text-outline uppercase font-label">Reference</span>
+                                <span id="res-ref" class="text-xs font-mono text-on-surface truncate"></span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs text-outline uppercase font-label">Expires</span>
+                                <span id="res-expires" class="text-xs text-on-surface"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="flex gap-2">
+                            <input id="res-url" type="text" readonly class="flex-1 bg-surface-container-highest border border-outline-variant/20 rounded-xl py-4 px-5 text-sm text-on-surface font-mono" />
+                            <button id="copy-btn" onclick="copyLink()" class="px-6 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-all flex items-center gap-2">
+                                <span class="material-symbols-outlined text-sm">content_copy</span>
+                                <span>Copy</span>
+                            </button>
+                        </div>
+                        
+                        <div id="res-bank-section" class="hidden bg-surface-container-lowest/50 rounded-2xl p-6 border border-outline-variant/5 space-y-4">
+                            <h4 class="text-sm font-bold text-on-surface uppercase tracking-wider">Bank Transfer Details</h4>
+                            <div class="space-y-3">
+                                <div class="flex justify-between">
+                                    <span class="text-xs text-outline">Bank</span>
+                                    <span id="res-bank-name" class="text-sm font-semibold text-on-surface"></span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-xs text-outline">Account Number</span>
+                                    <span id="res-bank-acct" class="text-sm font-mono font-bold text-primary"></span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-xs text-outline">Account Name</span>
+                                    <span id="res-bank-label" class="text-sm font-semibold text-on-surface"></span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-xs text-outline">Exact Amount</span>
+                                    <span id="res-bank-amount" class="text-lg font-bold font-label text-primary"></span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex gap-3">
+                            <button onclick="resetCreate()" class="flex-1 py-3 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-surface-container-highest transition-colors font-medium">
+                                Create Another
+                            </button>
+                            <button onclick="window.location.href='/history'" class="flex-1 py-3 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium">
+                                View History
+                            </button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+            
+            <!-- Side Utility Section -->
+            <div class="col-span-12 lg:col-span-4 flex flex-col gap-4">
+                <!-- Security Signal Card -->
+                <div class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/5">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">security</span>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-on-surface">Enterprise Security</h4>
+                            <p class="text-xs text-outline">Active Protection Layer</p>
+                        </div>
+                    </div>
+                    <ul class="space-y-4">
+                        <li class="flex items-start gap-3">
+                            <span class="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                            </span>
+                            <p class="text-xs text-outline-variant leading-relaxed">Links automatically expire after {{ link_expiry_minutes }} minutes for security.</p>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                            </span>
+                            <p class="text-xs text-outline-variant leading-relaxed">All transactions are secured with HMAC-SHA256 signatures.</p>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                            </span>
+                            <p class="text-xs text-outline-variant leading-relaxed">Real-time webhook notifications for payment confirmations.</p>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Statistics Card -->
+                <div id="stats-card" class="bg-surface-container-highest rounded-xl p-6 relative overflow-hidden group">
+                    <div class="relative z-10">
+                        <p class="text-[10px] font-label text-primary uppercase tracking-[0.2em] mb-4">Performance</p>
+                        <div class="flex items-baseline gap-2 mb-1">
+                            <span id="stats-amount" class="text-3xl font-label font-bold text-on-surface">₦0</span>
+                        </div>
+                        <p class="text-xs text-outline mb-4">Total collected this month</p>
+                        <a href="{{ url_for('payments.history') }}" class="text-xs font-medium text-primary hover:underline flex items-center gap-1">
+                            See more
+                            <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<div id="app-config" 
+     data-csrf-token="{{ csrf_token }}" 
+     data-expiry-minutes="{{ link_expiry_minutes }}"
+     style="display: none;">
+</div>
+<script>
+  // Read config from data attributes to avoid linter warnings
+  const config = document.getElementById('app-config');
+  window.ONEPAY_CSRF_TOKEN = config.dataset.csrfToken;
+  window.LINK_EXPIRY_MINUTES = parseInt(config.dataset.expiryMinutes);
+</script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

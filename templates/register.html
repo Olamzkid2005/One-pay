@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}OnePay — Merchant Registration{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .vault-bg {
+        background: radial-gradient(circle at top right, #181c22 0%, #10141a 100%);
+    }
+    .glass-card {
+        background-color: rgba(28, 35, 48, 0.8);
+        backdrop-filter: blur(24px);
+    }
+    .primary-gradient {
+        background: linear-gradient(135deg, #aac7ff 0%, #418fff 100%);
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<main class="flex-grow flex items-center justify-center p-6 vault-bg">
+    <div class="w-full max-w-[400px]">
+        <!-- Logo Section -->
+        <div class="flex flex-col items-center mb-8">
+            <div class="w-12 h-12 primary-gradient rounded-xl flex items-center justify-center shadow-lg shadow-primary/20 mb-3">
+                <span class="material-symbols-outlined text-on-primary-container text-3xl" style="font-variation-settings: 'FILL' 1;">shield</span>
+            </div>
+            <h1 class="font-headline text-3xl font-extrabold tracking-tighter text-on-surface">OnePay</h1>
+            <p class="font-label text-sm uppercase tracking-widest text-outline mt-1">Merchant Registration</p>
+        </div>
+        
+        <!-- Registration Card -->
+        <div class="glass-card rounded-xl p-8 shadow-2xl border border-outline-variant/15">
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="mb-6 p-4 rounded-xl {% if category == 'error' %}bg-error-container/10 border border-error/20 text-error{% elif category == 'success' %}bg-success/10 border border-success/20 text-success{% else %}bg-primary/10 border border-primary/20 text-primary{% endif %}">
+                        <div class="flex items-center gap-2 text-sm">
+                            <span class="material-symbols-outlined text-lg">
+                                {% if category == 'error' %}error{% elif category == 'success' %}check_circle{% else %}info{% endif %}
+                            </span>
+                            <span>{{ message }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <form method="POST" class="space-y-5">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                
+                <!-- Username -->
+                <div class="space-y-1.5">
+                    <label class="font-label text-xs font-semibold text-outline uppercase tracking-wider ml-1">Username</label>
+                    <div class="relative">
+                        <input 
+                            name="username"
+                            type="text"
+                            value="{{ username or '' }}"
+                            class="w-full h-14 bg-surface-container-high border-none rounded-xl px-4 text-on-surface placeholder:text-outline/50 focus:ring-2 focus:ring-primary/50 transition-all font-body text-sm" 
+                            placeholder="3-30 chars, letters/digits"
+                            required
+                            autocomplete="username"
+                            pattern="[a-zA-Z0-9_]{3,30}"
+                        />
+                        <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline/40">person</span>
+                    </div>
+                </div>
+                
+                <!-- Email -->
+                <div class="space-y-1.5">
+                    <label class="font-label text-xs font-semibold text-outline uppercase tracking-wider ml-1">Email address</label>
+                    <div class="relative">
+                        <input 
+                            name="email"
+                            type="email"
+                            value="{{ email or '' }}"
+                            class="w-full h-14 bg-surface-container-high border-none rounded-xl px-4 text-on-surface placeholder:text-outline/50 focus:ring-2 focus:ring-primary/50 transition-all font-body text-sm" 
+                            placeholder="merchant@onepay.com"
+                            required
+                            autocomplete="email"
+                        />
+                        <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline/40">mail</span>
+                    </div>
+                </div>
+                
+                <!-- Password -->
+                <div class="space-y-1.5">
+                    <label class="font-label text-xs font-semibold text-outline uppercase tracking-wider ml-1">Password</label>
+                    <div class="relative">
+                        <input 
+                            id="password"
+                            name="password"
+                            type="password"
+                            class="w-full h-14 bg-surface-container-high border-none rounded-xl px-4 pr-12 text-on-surface placeholder:text-outline/50 focus:ring-2 focus:ring-primary/50 transition-all font-body text-sm" 
+                            placeholder="Min 8 chars, letter + number"
+                            required
+                            autocomplete="new-password"
+                            minlength="8"
+                        />
+                        <button type="button" onclick="togglePassword('password', 'password-icon')" class="absolute right-4 top-1/2 -translate-y-1/2 text-outline/40 hover:text-on-surface transition-colors">
+                            <span id="password-icon" class="material-symbols-outlined">visibility_off</span>
+                        </button>
+                    </div>
+                    <!-- Password Strength Indicator -->
+                    <div id="strength-container" class="hidden mt-2">
+                        <div class="flex gap-1 mb-1.5">
+                            <div id="strength-bar-1" class="h-1 flex-1 rounded-full bg-surface-container-highest transition-all duration-300"></div>
+                            <div id="strength-bar-2" class="h-1 flex-1 rounded-full bg-surface-container-highest transition-all duration-300"></div>
+                            <div id="strength-bar-3" class="h-1 flex-1 rounded-full bg-surface-container-highest transition-all duration-300"></div>
+                            <div id="strength-bar-4" class="h-1 flex-1 rounded-full bg-surface-container-highest transition-all duration-300"></div>
+                        </div>
+                        <p id="strength-text" class="text-xs font-medium"></p>
+                    </div>
+                </div>
+                
+                <!-- Confirm Password -->
+                <div class="space-y-1.5">
+                    <label class="font-label text-xs font-semibold text-outline uppercase tracking-wider ml-1">Confirm password</label>
+                    <div class="relative">
+                        <input 
+                            id="password2"
+                            name="password2"
+                            type="password"
+                            class="w-full h-14 bg-surface-container-high border-none rounded-xl px-4 pr-12 text-on-surface placeholder:text-outline/50 focus:ring-2 focus:ring-primary/50 transition-all font-body text-sm" 
+                            placeholder="Re-enter your password"
+                            required
+                            autocomplete="new-password"
+                            minlength="8"
+                        />
+                        <button type="button" onclick="togglePassword('password2', 'password2-icon')" class="absolute right-4 top-1/2 -translate-y-1/2 text-outline/40 hover:text-on-surface transition-colors">
+                            <span id="password2-icon" class="material-symbols-outlined">visibility_off</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Submit Button -->
+                <button 
+                    type="submit"
+                    class="w-full h-14 primary-gradient text-on-primary-container font-headline font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all shadow-xl shadow-primary/20 mt-4"
+                >
+                    Create Account
+                    <span class="material-symbols-outlined">arrow_forward</span>
+                </button>
+            </form>
+            
+            <!-- Footer Link -->
+            <div class="mt-8 text-center">
+                <p class="font-body text-sm text-outline">
+                    Already have an account? 
+                    <a class="text-primary font-semibold hover:underline ml-1" href="{{ url_for('auth.login_page') }}">Sign in</a>
+                </p>
+            </div>
+        </div>
+        
+        <!-- Trust Signal -->
+        <div class="mt-8 flex items-center justify-center gap-2 opacity-50">
+            <span class="material-symbols-outlined text-outline text-lg">encrypted</span>
+            <span class="font-label text-[10px] uppercase tracking-[0.2em] text-outline">Military Grade 256-bit Encryption</span>
+        </div>
+    </div>
+</main>
+
+<!-- Footer -->
+<footer class="w-full py-8 border-t border-outline-variant/15 flex flex-col md:flex-row justify-between items-center px-8 space-y-4 md:space-y-0">
+    <div class="font-inter text-xs tracking-wide uppercase text-on-surface/40">
+        © 2024 OnePay Financial Technologies. Secure Digital Vault Architecture.
+    </div>
+    <div class="flex gap-6">
+        <a class="font-inter text-xs tracking-wide uppercase text-on-surface/40 hover:text-primary transition-colors" href="#">Privacy Policy</a>
+        <a class="font-inter text-xs tracking-wide uppercase text-on-surface/40 hover:text-primary transition-colors" href="#">Merchant Agreement</a>
+        <a class="font-inter text-xs tracking-wide uppercase text-on-surface/40 hover:text-primary transition-colors" href="#">Support</a>
+    </div>
+</footer>
+
+<script>
+// Password visibility toggle
+function togglePassword(inputId, iconId) {
+    const input = document.getElementById(inputId);
+    const icon = document.getElementById(iconId);
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.textContent = 'visibility';
+    } else {
+        input.type = 'password';
+        icon.textContent = 'visibility_off';
+    }
+}
+
+// Password strength indicator
+const passwordInput = document.getElementById('password');
+const strengthContainer = document.getElementById('strength-container');
+const strengthText = document.getElementById('strength-text');
+const strengthBars = [
+    document.getElementById('strength-bar-1'),
+    document.getElementById('strength-bar-2'),
+    document.getElementById('strength-bar-3'),
+    document.getElementById('strength-bar-4')
+];
+
+function calculatePasswordStrength(password) {
+    if (!password) return { score: 0, label: '', color: '' };
+    
+    let score = 0;
+    
+    // Length check
+    if (password.length >= 8) score++;
+    if (password.length >= 12) score++;
+    
+    // Character variety checks
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++; // Mixed case
+    if (/\d/.test(password)) score++; // Numbers
+    if (/[^a-zA-Z0-9]/.test(password)) score++; // Special chars
+    
+    // Bonus for very long passwords
+    if (password.length >= 16) score++;
+    
+    // Cap at 4
+    score = Math.min(4, score);
+    
+    const levels = {
+        0: { label: '', color: '', bars: 0 },
+        1: { label: 'Weak', color: '#f87171', bars: 1 },
+        2: { label: 'Fair', color: '#fb923c', bars: 2 },
+        3: { label: 'Good', color: '#facc15', bars: 3 },
+        4: { label: 'Strong', color: '#4ade80', bars: 4 }
+    };
+    
+    return levels[score];
+}
+
+passwordInput.addEventListener('input', (e) => {
+    const password = e.target.value;
+    
+    if (!password) {
+        strengthContainer.classList.add('hidden');
+        return;
+    }
+    
+    strengthContainer.classList.remove('hidden');
+    const strength = calculatePasswordStrength(password);
+    
+    // Update bars
+    strengthBars.forEach((bar, index) => {
+        if (index < strength.bars) {
+            bar.style.backgroundColor = strength.color;
+        } else {
+            bar.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        }
+    });
+    
+    // Update text
+    strengthText.textContent = strength.label;
+    strengthText.style.color = strength.color;
+});
+</script>
+{% endblock %}

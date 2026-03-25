@@ -1,0 +1,309 @@
+{% extends "dashboard_base.html" %}
+
+{% block title %}Transaction History - OnePay{% endblock %}
+
+{% block dashboard_content %}
+<div class="px-12 max-w-7xl mx-auto w-full">
+    <!-- Header Section -->
+    <header class="mb-12 flex justify-between items-start">
+        <div>
+            <h2 class="text-4xl font-headline font-extrabold tracking-tight text-on-surface mb-2">Transaction History</h2>
+            <p class="text-on-surface-variant text-lg max-w-2xl font-body">View and manage all your payment transactions.</p>
+        </div>
+        <button onclick="exportTransactions()" class="flex items-center gap-2 px-6 py-3 bg-surface-container-high rounded-xl text-on-surface hover:bg-surface-container-highest transition-colors font-medium">
+            <span class="material-symbols-outlined text-sm">download</span>
+            Export CSV
+        </button>
+    </header>
+    
+    <!-- Filters -->
+    <div class="mb-8 flex gap-4 items-center">
+        <div class="relative flex-1 max-w-md">
+            <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-sm">search</span>
+            <input id="searchInput" class="w-full bg-surface-container-high border-none rounded-xl pl-11 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary text-on-surface" placeholder="Search by reference, amount, or description..." type="text"/>
+        </div>
+        
+        <select id="statusFilter" class="bg-surface-container-high border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary text-on-surface">
+            <option value="">All Statuses</option>
+            <option value="verified">Verified</option>
+            <option value="pending">Pending</option>
+            <option value="expired">Expired</option>
+            <option value="failed">Failed</option>
+        </select>
+    </div>
+    
+    <!-- Transactions Table -->
+    <div class="overflow-hidden border border-outline-variant/10 rounded-2xl bg-surface-container-low shadow-xl">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="bg-surface-container-highest/30 border-b border-outline-variant/10">
+                    <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Status</th>
+                    <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Reference</th>
+                    <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Amount</th>
+                    <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Description</th>
+                    <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Created</th>
+                    <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="transactionsBody" class="divide-y divide-outline-variant/5">
+                <!-- Transactions will be loaded here -->
+            </tbody>
+        </table>
+        
+        <!-- Loading State -->
+        <div id="loadingState" class="p-12 text-center">
+            <div class="inline-block w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+            <p class="mt-4 text-sm text-outline">Loading transactions...</p>
+        </div>
+        
+        <!-- Empty State -->
+        <div id="emptyState" class="p-12 text-center hidden">
+            <span class="material-symbols-outlined text-6xl text-outline/30 mb-4">receipt_long</span>
+            <h3 class="text-lg font-bold text-on-surface mb-2">No Transactions Found</h3>
+            <p class="text-sm text-outline">Create your first payment link to get started.</p>
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    <div id="pagination" class="mt-8 flex justify-between items-center">
+        <div class="text-sm text-outline">
+            Showing <span id="pageInfo"></span>
+        </div>
+        <div class="flex gap-2">
+            <button id="prevBtn" onclick="loadPage(currentPage - 1)" class="px-4 py-2 bg-surface-container-high rounded-lg text-on-surface hover:bg-surface-container-highest transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                <span class="material-symbols-outlined text-sm">chevron_left</span>
+            </button>
+            <div id="pageNumbers" class="flex gap-2"></div>
+            <button id="nextBtn" onclick="loadPage(currentPage + 1)" class="px-4 py-2 bg-surface-container-high rounded-lg text-on-surface hover:bg-surface-container-highest transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <span class="material-symbols-outlined text-sm">chevron_right</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+let totalPages = 1;
+let allTransactions = [];
+
+// Load transactions on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadTransactions();
+    
+    // Auto-refresh every 10 seconds while page is open
+    setInterval(() => loadTransactions(currentPage), 10000);
+    
+    // Setup search and filter
+    document.getElementById('searchInput').addEventListener('input', debounce(filterTransactions, 300));
+    document.getElementById('statusFilter').addEventListener('change', filterTransactions);
+});
+
+async function loadTransactions(page = 1) {
+    try {
+        const response = await fetch(`/api/payments/history?page=${page}`);
+        
+        // Session expired — redirect to login
+        if (response.status === 401 || response.status === 403) {
+            window.location.href = '/login';
+            return;
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            allTransactions = data.transactions;
+            currentPage = data.pagination.page;
+            totalPages = data.pagination.total_pages;
+            
+            displayTransactions(allTransactions);
+            updatePagination(data.pagination);
+        }
+    } catch (error) {
+        console.error('Failed to load transactions:', error);
+        showEmptyState();
+    }
+}
+
+function displayTransactions(transactions) {
+    const tbody = document.getElementById('transactionsBody');
+    const loadingState = document.getElementById('loadingState');
+    const emptyState = document.getElementById('emptyState');
+    
+    loadingState.classList.add('hidden');
+    
+    if (!transactions || transactions.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+    }
+    
+    emptyState.classList.add('hidden');
+    
+    tbody.innerHTML = transactions.map(tx => {
+        const statusConfig = {
+            'verified': { style: 'background:rgba(170,199,255,.15);color:#aac7ff;border:1px solid rgba(170,199,255,.3)', text: 'Verified' },
+            'pending':  { style: 'background:rgba(193,199,208,.12);color:#c1c7d0;border:1px solid rgba(193,199,208,.25)', text: 'Pending' },
+            'expired':  { style: 'background:rgba(139,145,159,.12);color:#8b919f;border:1px solid rgba(139,145,159,.25)', text: 'Expired' },
+            'failed':   { style: 'background:rgba(255,180,171,.12);color:#ffb4ab;border:1px solid rgba(255,180,171,.25)', text: 'Failed' }
+        };
+        
+        // Normalize status to lowercase and trim whitespace
+        const normalizedStatus = (tx.status || 'pending').toLowerCase().trim();
+        const status = statusConfig[normalizedStatus] || statusConfig['pending'];
+        const amount = parseFloat(tx.amount).toLocaleString('en-NG', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const created = new Date(tx.created_at).toLocaleString('en-NG', {
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+        
+        return `
+            <tr class="hover:bg-surface-container-highest/20 transition-colors group">
+                <td class="px-6 py-4">
+                    <span style="display:inline-block;padding:.2rem .65rem;border-radius:9999px;font-size:.7rem;font-weight:700;${status.style}">${status.text}</span>
+                </td>
+                <td class="px-6 py-4">
+                    <div class="flex items-center gap-2">
+                        <span class="font-mono text-sm text-on-surface">${tx.tx_ref}</span>
+                        <button onclick="copyToClipboard('${tx.tx_ref}')" class="material-symbols-outlined text-[14px] text-outline opacity-0 group-hover:opacity-100 cursor-pointer hover:text-primary transition-all">content_copy</button>
+                    </div>
+                </td>
+                <td class="px-6 py-4 font-label font-bold text-on-surface">₦ ${amount}</td>
+                <td class="px-6 py-4 text-sm text-on-surface-variant max-w-xs truncate">${tx.description || 'No description'}</td>
+                <td class="px-6 py-4 font-label text-xs text-outline">${created}</td>
+                <td class="px-6 py-4 text-right">
+                    <div class="flex items-center justify-end gap-2">
+                        <button onclick="viewTransaction('${tx.tx_ref}')" class="p-2 hover:bg-surface-container-highest rounded-lg transition-colors" title="View Details">
+                            <span class="material-symbols-outlined text-sm text-on-surface">visibility</span>
+                        </button>
+                        ${tx.status === 'expired' ? `
+                        <button onclick="reissueTransaction('${tx.tx_ref}')" class="p-2 hover:bg-surface-container-highest rounded-lg transition-colors" title="Re-issue Link">
+                            <span class="material-symbols-outlined text-sm text-primary">refresh</span>
+                        </button>
+                        ` : ''}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function updatePagination(pagination) {
+    document.getElementById('pageInfo').textContent = 
+        `${((pagination.page - 1) * pagination.page_size) + 1}-${Math.min(pagination.page * pagination.page_size, pagination.total)} of ${pagination.total}`;
+    
+    document.getElementById('prevBtn').disabled = !pagination.has_prev;
+    document.getElementById('nextBtn').disabled = !pagination.has_next;
+    
+    // Generate page numbers
+    const pageNumbers = document.getElementById('pageNumbers');
+    pageNumbers.innerHTML = '';
+    
+    const maxPages = 5;
+    let startPage = Math.max(1, pagination.page - Math.floor(maxPages / 2));
+    let endPage = Math.min(pagination.total_pages, startPage + maxPages - 1);
+    
+    if (endPage - startPage < maxPages - 1) {
+        startPage = Math.max(1, endPage - maxPages + 1);
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const btn = document.createElement('button');
+        btn.textContent = i;
+        btn.className = `px-4 py-2 rounded-lg transition-colors ${
+            i === pagination.page 
+                ? 'bg-primary text-on-primary-container font-bold' 
+                : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest'
+        }`;
+        btn.onclick = () => loadPage(i);
+        pageNumbers.appendChild(btn);
+    }
+}
+
+function loadPage(page) {
+    if (page < 1 || page > totalPages) return;
+    loadTransactions(page);
+}
+
+function filterTransactions() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const statusFilter = document.getElementById('statusFilter').value;
+    
+    let filtered = allTransactions;
+    
+    if (searchTerm) {
+        filtered = filtered.filter(tx => 
+            tx.tx_ref.toLowerCase().includes(searchTerm) ||
+            (tx.description && tx.description.toLowerCase().includes(searchTerm)) ||
+            tx.amount.toString().includes(searchTerm)
+        );
+    }
+    
+    if (statusFilter) {
+        filtered = filtered.filter(tx => tx.status === statusFilter);
+    }
+    
+    displayTransactions(filtered);
+}
+
+function viewTransaction(txRef) {
+    window.location.href = `/check-status?ref=${txRef}`;
+}
+
+async function reissueTransaction(txRef) {
+    if (!confirm('Are you sure you want to re-issue this payment link?')) return;
+    
+    try {
+        const response = await fetch(`/api/payments/reissue/${txRef}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': '{{ csrf_token }}'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`New payment link created!\n\nReference: ${data.tx_ref}\nURL: ${data.payment_url}`);
+            loadTransactions(currentPage);
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (error) {
+        alert('Failed to re-issue link');
+    }
+}
+
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        // Show a brief success indicator
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = 'check';
+        setTimeout(() => {
+            btn.textContent = originalText;
+        }, 1000);
+    });
+}
+
+function exportTransactions() {
+    window.location.href = '/api/payments/export';
+}
+
+function showEmptyState() {
+    document.getElementById('loadingState').classList.add('hidden');
+    document.getElementById('emptyState').classList.remove('hidden');
+    document.getElementById('transactionsBody').innerHTML = '';
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+</script>
+{% endblock %}

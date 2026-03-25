@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>OnePay | Link Expired</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-low": "#181c22",
+                        "primary": "#aac7ff",
+                        "secondary-fixed-dim": "#c0c6d8",
+                        "surface-container-high": "#262a31",
+                        "surface-tint": "#aac7ff",
+                        "error-container": "#93000a",
+                        "on-tertiary-fixed-variant": "#41474f",
+                        "surface-variant": "#31353c",
+                        "surface-bright": "#353940",
+                        "on-secondary-fixed-variant": "#404755",
+                        "on-surface": "#dfe2eb",
+                        "on-background": "#dfe2eb",
+                        "on-tertiary-fixed": "#161c23",
+                        "primary-fixed-dim": "#aac7ff",
+                        "on-error-container": "#ffdad6",
+                        "inverse-on-surface": "#2d3137",
+                        "surface": "#10141a",
+                        "secondary-container": "#424958",
+                        "tertiary": "#c1c7d0",
+                        "on-tertiary": "#2b3138",
+                        "surface-container-lowest": "#0a0e14",
+                        "surface-container": "#1c2026",
+                        "surface-dim": "#10141a",
+                        "primary-container": "#418fff",
+                        "error": "#ffb4ab",
+                        "tertiary-container": "#8b9199",
+                        "on-secondary-container": "#b2b8ca",
+                        "on-primary-fixed": "#001b3e",
+                        "secondary": "#c0c6d8",
+                        "outline-variant": "#414753",
+                        "on-secondary": "#2a313e",
+                        "on-primary": "#002f65",
+                        "tertiary-fixed-dim": "#c1c7d0",
+                        "on-tertiary-container": "#242a31",
+                        "surface-container-highest": "#31353c",
+                        "tertiary-fixed": "#dde3ec",
+                        "outline": "#8b919f",
+                        "inverse-surface": "#dfe2eb",
+                        "primary-fixed": "#d7e3ff",
+                        "inverse-primary": "#005cba",
+                        "on-primary-container": "#002959",
+                        "on-primary-fixed-variant": "#00458e",
+                        "secondary-fixed": "#dce2f4",
+                        "on-error": "#690005",
+                        "on-secondary-fixed": "#151c28",
+                        "background": "#10141a",
+                        "on-surface-variant": "#c1c6d6"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Space Grotesk"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass-panel {
+            background: rgba(28, 32, 38, 0.7);
+            backdrop-filter: blur(24px);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body min-h-screen flex flex-col selection:bg-primary selection:text-on-primary">
+    <!-- Top Navigation -->
+    <header class="bg-[#10141a] flex justify-between items-center w-full px-10 py-4 fixed top-0 z-50">
+        <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-xl" style="font-variation-settings: 'FILL' 1;">shield</span>
+            <span class="text-xl font-black text-[#dfe2eb] tracking-tighter font-headline">OnePay</span>
+            <div class="h-4 w-[1px] bg-outline-variant opacity-30 mx-2"></div>
+            <div class="flex items-center gap-1.5 px-2.5 py-1 bg-surface-container-high rounded-full">
+                <span class="material-symbols-outlined text-[14px] text-primary" style="font-variation-settings: 'FILL' 1;">shield</span>
+                <span class="text-[10px] font-label font-bold tracking-widest uppercase text-on-surface-variant">Secure Payment</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-6">
+            <span class="material-symbols-outlined text-outline hover:text-on-surface transition-colors cursor-pointer">help</span>
+        </div>
+    </header>
+
+    <!-- Main Content Canvas -->
+    <main class="flex-grow flex items-center justify-center px-6 pt-24 pb-12">
+        <div class="max-w-md w-full">
+            <!-- Expired Card -->
+            <div class="glass-panel border border-outline-variant/15 rounded-3xl overflow-hidden shadow-[0_64px_64px_-12px_rgba(10,14,20,0.4)]">
+                <div class="p-12 text-center">
+                    <!-- Expired visual indicator -->
+                    <div class="mb-8 flex justify-center">
+                        <div class="h-24 w-24 rounded-full bg-surface-container-highest/30 border border-outline-variant/10 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-[48px] text-outline opacity-40">timer_off</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Heading -->
+                    <h1 class="text-2xl font-headline font-extrabold tracking-tight text-on-surface mb-4">Payment Link Expired</h1>
+                    
+                    <!-- Message -->
+                    <p class="text-on-surface-variant text-sm leading-relaxed mb-8 max-w-[280px] mx-auto">
+                        This secure payment session has timed out. Please contact the merchant to generate a new payment link.
+                    </p>
+                    
+                    <!-- Transaction Context -->
+                    <div class="bg-surface-container-lowest/50 rounded-2xl p-6 border border-outline-variant/5">
+                        <div class="space-y-3">
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="text-outline font-label uppercase tracking-widest">Invoice</span>
+                                <span class="text-on-surface font-medium" id="invoice-ref">{{ reference or '#9928' }}</span>
+                            </div>
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="text-outline font-label uppercase tracking-widest">Ref ID</span>
+                                <span class="text-on-surface font-label opacity-70" id="transaction-id">{{ transaction_id or 'TX-882910-OP' }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Footer Action (Contact) -->
+                <div class="bg-surface-container-highest/20 p-6 border-t border-outline-variant/10">
+                    <button onclick="window.history.back()" class="w-full py-4 text-sm font-bold font-headline text-on-surface bg-surface-container-high border border-outline-variant/15 rounded-xl hover:bg-surface-container-highest transition-all">
+                        Return to Merchant
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Trust Badges -->
+            <div class="mt-10 flex flex-wrap justify-center gap-x-8 gap-y-4 opacity-50 grayscale transition-all hover:opacity-100 hover:grayscale-0">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[18px]">lock</span>
+                    <span class="text-[10px] font-label font-bold tracking-widest uppercase">SSL SECURE</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[18px]">verified_user</span>
+                    <span class="text-[10px] font-label font-bold tracking-widest uppercase">PCI-DSS</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[18px]">monitoring</span>
+                    <span class="text-[10px] font-label font-bold tracking-widest uppercase">24/7 FRAUD MONITORING</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full py-8">
+        <div class="mt-12 opacity-15 border-t border-[#dfe2eb]"></div>
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center px-10 gap-4 mt-8">
+            <div class="flex items-center gap-4">
+                <p class="font-inter text-xs tracking-wide text-[#909196]">Powered by Interswitch · HMAC-SHA256 secured</p>
+            </div>
+            <div class="flex gap-6">
+                <a class="font-inter text-xs tracking-wide text-[#909196] hover:text-[#388bfd] transition-colors" href="#">Privacy</a>
+                <a class="font-inter text-xs tracking-wide text-[#909196] hover:text-[#388bfd] transition-colors" href="#">Security</a>
+                <a class="font-inter text-xs tracking-wide text-[#909196] hover:text-[#388bfd] transition-colors underline" href="#">Terms</a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>{% block title %}OnePay{% endblock %}</title>
+    
+    <!-- Tailwind CSS with inline config -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-low": "#181c22",
+                        "primary": "#aac7ff",
+                        "secondary-fixed-dim": "#c0c6d8",
+                        "surface-container-high": "#262a31",
+                        "surface-tint": "#aac7ff",
+                        "error-container": "#93000a",
+                        "on-tertiary-fixed-variant": "#41474f",
+                        "surface-variant": "#31353c",
+                        "surface-bright": "#353940",
+                        "on-secondary-fixed-variant": "#404755",
+                        "on-surface": "#dfe2eb",
+                        "on-background": "#dfe2eb",
+                        "on-tertiary-fixed": "#161c23",
+                        "primary-fixed-dim": "#aac7ff",
+                        "on-error-container": "#ffdad6",
+                        "inverse-on-surface": "#2d3137",
+                        "surface": "#10141a",
+                        "secondary-container": "#424958",
+                        "tertiary": "#c1c7d0",
+                        "on-tertiary": "#2b3138",
+                        "surface-container-lowest": "#0a0e14",
+                        "surface-container": "#1c2026",
+                        "surface-dim": "#10141a",
+                        "primary-container": "#418fff",
+                        "error": "#ffb4ab",
+                        "tertiary-container": "#8b9199",
+                        "on-secondary-container": "#b2b8ca",
+                        "on-primary-fixed": "#001b3e",
+                        "secondary": "#c0c6d8",
+                        "outline-variant": "#414753",
+                        "on-secondary": "#2a313e",
+                        "on-primary": "#002f65",
+                        "tertiary-fixed-dim": "#c1c7d0",
+                        "on-tertiary-container": "#242a31",
+                        "surface-container-highest": "#31353c",
+                        "tertiary-fixed": "#dde3ec",
+                        "outline": "#8b919f",
+                        "inverse-surface": "#dfe2eb",
+                        "primary-fixed": "#d7e3ff",
+                        "inverse-primary": "#005cba",
+                        "on-primary-container": "#002959",
+                        "on-primary-fixed-variant": "#00458e",
+                        "secondary-fixed": "#dce2f4",
+                        "on-error": "#690005",
+                        "on-secondary-fixed": "#151c28",
+                        "background": "#10141a",
+                        "on-surface-variant": "#c1c6d6",
+                        "success": "#b4f0ad",
+                        "on-success-container": "#002204"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Space Grotesk"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        };
+    </script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet"/>
+    
+    <!-- Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(28, 32, 38, 0.7);
+            backdrop-filter: blur(40px);
+        }
+        .cloud-shadow {
+            box-shadow: 0 64px 64px -12px rgba(10, 14, 20, 0.4);
+        }
+        .gradient-cta {
+            background: linear-gradient(135deg, #aac7ff 0%, #418fff 100%);
+        }
+    </style>
+    {% block extra_styles %}{% endblock %}
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-background text-on-surface font-body min-h-screen flex flex-col selection:bg-primary/30 antialiased">
+    {% block body %}{% endblock %}
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

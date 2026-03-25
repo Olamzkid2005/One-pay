@@ -1,0 +1,290 @@
+{% extends "dashboard_base.html" %}
+
+{% block title %}Check Status - OnePay{% endblock %}
+
+{% block dashboard_content %}
+<div class="px-12 max-w-7xl mx-auto w-full">
+    <!-- Header Section -->
+    <header class="mb-12">
+        <h2 class="text-4xl font-headline font-extrabold tracking-tight text-on-surface mb-2">Check Transaction Status</h2>
+        <p class="text-on-surface-variant text-lg max-w-2xl font-body">Query any transaction by reference to view its current status and details.</p>
+    </header>
+    
+    <div class="grid grid-cols-12 gap-8">
+        <!-- Search Section -->
+        <section class="col-span-12 lg:col-span-8">
+            <div class="bg-surface-container-low p-8 rounded-xl border border-outline-variant/10 shadow-xl">
+                <form id="statusForm" class="space-y-6">
+                    <div class="space-y-2">
+                        <label class="text-sm font-label font-medium text-on-surface-variant" for="tx_ref">Transaction Reference</label>
+                        <div class="relative group">
+                            <input class="w-full bg-surface-container-highest border-outline-variant/20 border rounded-2xl py-5 px-6 text-on-surface focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none font-body text-lg" 
+                                   id="tx_ref" 
+                                   name="tx_ref" 
+                                   placeholder="Enter reference or paste a payment link" 
+                                   type="text" 
+                                   required/>
+                            <span class="material-symbols-outlined absolute right-5 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">search</span>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="w-full h-[56px] bg-gradient-to-r from-primary to-primary-container text-on-primary-container font-headline font-bold rounded-xl hover:opacity-90 active:scale-[0.98] transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-2">
+                        <span class="material-symbols-outlined">search</span>
+                        Check Status
+                    </button>
+                </form>
+            </div>
+            
+            <!-- Result Section -->
+            <div id="resultSection" class="mt-8 hidden">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-lg font-bold font-headline text-on-surface">Transaction Details</h3>
+                    <span id="statusBadge" class="text-[10px] font-bold font-label uppercase tracking-widest px-3 py-1 rounded-full"></span>
+                </div>
+                
+                <div class="bg-surface-container-low border border-outline-variant/10 rounded-2xl overflow-hidden shadow-xl">
+                    <!-- Status Header -->
+                    <div id="statusHeader" class="p-8 bg-surface-container-lowest/50 flex flex-col items-center text-center border-b border-outline-variant/5">
+                        <div class="w-16 h-16 rounded-full flex items-center justify-center mb-4" id="statusIcon">
+                            <span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'FILL' 1;"></span>
+                        </div>
+                        <h4 id="statusTitle" class="text-2xl font-bold font-headline text-on-surface"></h4>
+                        <p id="statusRef" class="text-sm font-label font-bold mt-1 tracking-tight"></p>
+                    </div>
+                    
+                    <!-- Details Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-px bg-outline-variant/5">
+                        <div class="bg-surface-container-low p-6 flex flex-col gap-1">
+                            <span class="text-[10px] font-bold font-label text-outline uppercase tracking-widest">Amount</span>
+                            <span id="detailAmount" class="text-2xl font-bold font-label text-on-surface"></span>
+                        </div>
+                        <div class="bg-surface-container-low p-6 flex flex-col gap-1">
+                            <span class="text-[10px] font-bold font-label text-outline uppercase tracking-widest">Reference</span>
+                            <span id="detailRef" class="text-sm font-label font-medium text-on-surface tracking-tight"></span>
+                        </div>
+                        <div class="bg-surface-container-low p-6 flex flex-col gap-1">
+                            <span class="text-[10px] font-bold font-label text-outline uppercase tracking-widest">Created Date</span>
+                            <span id="detailCreated" class="text-sm font-body text-on-surface/80 font-medium"></span>
+                        </div>
+                        <div class="bg-surface-container-low p-6 flex flex-col gap-1">
+                            <span class="text-[10px] font-bold font-label text-outline uppercase tracking-widest">Expiry Date</span>
+                            <span id="detailExpiry" class="text-sm font-body text-on-surface/80 font-medium"></span>
+                        </div>
+                        <div class="bg-surface-container-low p-6 flex flex-col gap-1 col-span-2">
+                            <span class="text-[10px] font-bold font-label text-outline uppercase tracking-widest">Description</span>
+                            <span id="detailDescription" class="text-sm font-body text-on-surface/80"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Actions Footer -->
+                    <div class="p-6 bg-surface-container-low flex justify-end gap-4 border-t border-outline-variant/5">
+                        <button onclick="downloadReceipt()" class="px-5 py-2.5 rounded-lg text-xs font-bold font-headline border border-outline-variant/30 text-on-surface/70 hover:bg-surface-container-high transition-colors">
+                            Download Receipt
+                        </button>
+                        <button id="reissueBtn" onclick="reissueLink()" class="px-5 py-2.5 rounded-lg text-xs font-bold font-headline bg-primary/10 text-primary hover:bg-primary/20 transition-colors hidden">
+                            Re-issue Link
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Error Section -->
+            <div id="errorSection" class="mt-8 hidden">
+                <div class="bg-error-container/10 border border-error/20 rounded-xl p-6 flex items-start gap-4">
+                    <span class="material-symbols-outlined text-error text-2xl">error</span>
+                    <div>
+                        <h4 class="font-bold text-error mb-1">Transaction Not Found</h4>
+                        <p id="errorMessage" class="text-sm text-error/80"></p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Sidebar -->
+        <aside class="col-span-12 lg:col-span-4">
+            <div class="bg-surface-container-low p-6 rounded-xl border border-outline-variant/10">
+                <h4 class="text-xs font-label font-bold text-outline uppercase tracking-[0.2em] mb-5">Quick Tips</h4>
+                <ul class="space-y-4 text-sm text-on-surface-variant">
+                    <li class="flex gap-3">
+                        <span class="material-symbols-outlined text-primary text-lg shrink-0">info</span>
+                        <span>Transaction references are case-sensitive</span>
+                    </li>
+                    <li class="flex gap-3">
+                        <span class="material-symbols-outlined text-primary text-lg shrink-0">schedule</span>
+                        <span>Status updates may take up to 30 seconds</span>
+                    </li>
+                    <li class="flex gap-3">
+                        <span class="material-symbols-outlined text-primary text-lg shrink-0">history</span>
+                        <span>View all transactions in History tab</span>
+                    </li>
+                </ul>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<script>
+let currentTxRef = null;
+
+function extractTxRefLocal(input) {
+    const trimmed = input.trim();
+    if (!trimmed) return '';
+    try {
+        const url = new URL(trimmed);
+        const segments = url.pathname.split('/').filter(Boolean);
+        const idx = segments.findIndex(s => s === 'pay' || s === 'verify');
+        if (idx >= 0 && segments.length > idx + 1) return segments[idx + 1];
+    } catch { /* not a URL */ }
+    return trimmed;
+}
+
+document.getElementById('statusForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const raw = document.getElementById('tx_ref').value.trim();
+    const txRef = extractTxRefLocal(raw);
+    
+    if (!txRef) return;
+    
+    currentTxRef = txRef;
+    
+    // Hide previous results
+    document.getElementById('resultSection').classList.add('hidden');
+    document.getElementById('errorSection').classList.add('hidden');
+    
+    try {
+        const response = await fetch(`/api/payments/status/${encodeURIComponent(txRef)}`);
+        
+        // Session expired — redirect to login
+        if (response.status === 401 || response.status === 403) {
+            window.location.href = '/login';
+            return;
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            displayTransaction(data);
+        } else {
+            showError(data.message || 'Transaction not found');
+        }
+    } catch (error) {
+        showError('Failed to fetch transaction status');
+    }
+});
+
+function displayTransaction(data) {
+    const resultSection = document.getElementById('resultSection');
+    const statusIcon = document.getElementById('statusIcon');
+    const statusTitle = document.getElementById('statusTitle');
+    const statusRef = document.getElementById('statusRef');
+    const statusBadge = document.getElementById('statusBadge');
+    
+    // Normalize to lowercase — API returns lowercase values
+    const status = (data.status || 'pending').toLowerCase();
+    
+    const statusConfig = {
+        'verified': {
+            icon: 'check_circle',
+            iconColor: 'text-[#4ade80]',
+            iconBg: 'bg-[#4ade80]/10',
+            title: 'Payment Verified',
+            badge: 'bg-[#4ade80]/10 text-[#4ade80] border border-[#4ade80]/20'
+        },
+        'pending': {
+            icon: 'schedule',
+            iconColor: 'text-[#facc15]',
+            iconBg: 'bg-[#facc15]/10',
+            title: 'Payment Pending',
+            badge: 'bg-[#facc15]/10 text-[#facc15] border border-[#facc15]/20'
+        },
+        'expired': {
+            icon: 'timer_off',
+            iconColor: 'text-outline',
+            iconBg: 'bg-outline/10',
+            title: 'Payment Expired',
+            badge: 'bg-outline/10 text-outline border border-outline/20'
+        },
+        'failed': {
+            icon: 'cancel',
+            iconColor: 'text-[#f87171]',
+            iconBg: 'bg-[#f87171]/10',
+            title: 'Payment Failed',
+            badge: 'bg-[#f87171]/10 text-[#f87171] border border-[#f87171]/20'
+        }
+    };
+    
+    const config = statusConfig[status] || statusConfig['pending'];
+    
+    // Update status header
+    statusIcon.className = `w-16 h-16 rounded-full flex items-center justify-center mb-4 ${config.iconBg}`;
+    statusIcon.querySelector('span').className = `material-symbols-outlined text-4xl ${config.iconColor}`;
+    statusIcon.querySelector('span').style.fontVariationSettings = "'FILL' 1";
+    statusIcon.querySelector('span').textContent = config.icon;
+    statusTitle.textContent = config.title;
+    statusRef.textContent = data.tx_ref;
+    statusRef.className = `text-sm font-label font-bold mt-1 tracking-tight ${config.iconColor}`;
+    statusBadge.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+    statusBadge.className = `text-[10px] font-bold font-label uppercase tracking-widest px-3 py-1 rounded-full ${config.badge}`;
+    
+    // Update details
+    document.getElementById('detailAmount').textContent = `₦ ${parseFloat(data.amount).toLocaleString('en-NG', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    document.getElementById('detailRef').textContent = data.tx_ref;
+    document.getElementById('detailCreated').textContent = new Date(data.created_at).toLocaleString('en-NG', {
+        year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+    document.getElementById('detailExpiry').textContent = new Date(data.expires_at).toLocaleString('en-NG', {
+        year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+    document.getElementById('detailDescription').textContent = data.description || 'No description';
+    
+    // Show/hide reissue button — compare lowercase
+    const reissueBtn = document.getElementById('reissueBtn');
+    if (status === 'expired') {
+        reissueBtn.classList.remove('hidden');
+    } else {
+        reissueBtn.classList.add('hidden');
+    }
+    
+    resultSection.classList.remove('hidden');
+}
+
+function showError(message) {
+    document.getElementById('errorMessage').textContent = message;
+    document.getElementById('errorSection').classList.remove('hidden');
+}
+
+function downloadReceipt() {
+    if (currentTxRef) {
+        window.open(`/api/payments/receipt/${currentTxRef}`, '_blank');
+    }
+}
+
+async function reissueLink() {
+    if (!currentTxRef) return;
+    
+    if (!confirm('Are you sure you want to re-issue this payment link?')) return;
+    
+    try {
+        const response = await fetch(`/api/payments/reissue/${currentTxRef}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': '{{ csrf_token }}'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`New payment link created!\n\nReference: ${data.tx_ref}\nURL: ${data.payment_url}`);
+            // Refresh the status
+            document.getElementById('tx_ref').value = data.tx_ref;
+            document.getElementById('statusForm').dispatchEvent(new Event('submit'));
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (error) {
+        alert('Failed to re-issue link');
+    }
+}
+</script>
+{% endblock %}

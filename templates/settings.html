@@ -1,0 +1,164 @@
+{% extends "dashboard_base.html" %}
+
+{% block title %}Settings - OnePay{% endblock %}
+
+{% block dashboard_content %}
+<div class="px-12 max-w-6xl mx-auto w-full">
+    <!-- Header Section -->
+    <header class="mb-12">
+        <h2 class="text-4xl font-headline font-extrabold tracking-tight text-on-surface mb-2">Merchant Settings</h2>
+        <p class="text-on-surface-variant text-lg max-w-2xl font-body">Configure your merchant profile, manage API integrations, and set up real-time webhook notifications for your payment vault.</p>
+    </header>
+    
+    <!-- Bento Grid Layout for Content -->
+    <div class="grid grid-cols-12 gap-8">
+        <!-- Main Settings Card -->
+        <section class="col-span-12 lg:col-span-8 space-y-8">
+            <div class="bg-surface-container-low p-8 rounded-xl shadow-2xl relative overflow-hidden group border border-outline-variant/10">
+                <div class="flex items-center gap-3 mb-6">
+                    <span class="material-symbols-outlined text-primary">webhook</span>
+                    <h3 class="text-xl font-headline font-bold text-on-surface">Webhook Configuration</h3>
+                </div>
+                
+                <form id="webhookForm" class="space-y-6 relative z-10">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
+                    
+                    <div class="space-y-2">
+                        <label class="block text-sm font-label font-medium text-on-surface-variant" for="webhook_url">Webhook URL</label>
+                        <div class="relative group">
+                            <input 
+                                class="w-full bg-surface-container-highest border-outline-variant/20 border rounded-xl py-4 px-5 text-on-surface focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none font-body" 
+                                id="webhook_url" 
+                                name="webhook_url"
+                                placeholder="https://api.yourdomain.com/webhooks/onepay" 
+                                type="url"
+                                value="{{ webhook_url }}"
+                            />
+                            <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors" style="font-variation-settings: 'FILL' 1;">shield</span>
+                        </div>
+                        <p class="text-sm text-outline font-body flex items-start gap-2 mt-2">
+                            <span class="material-symbols-outlined text-[16px] mt-0.5">info</span>
+                            OnePay will POST signed JSON to this URL when payment is confirmed.
+                        </p>
+                    </div>
+                    
+                    <!-- Code Snippet Box -->
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <label class="text-sm font-label font-medium text-on-surface-variant">Signature Verification Example (Python)</label>
+                            <span class="text-[10px] uppercase tracking-widest bg-surface-container-highest px-2 py-1 rounded text-primary border border-primary/20">Secure HMAC-SHA256</span>
+                        </div>
+                        <div class="bg-surface-container-lowest rounded-xl p-6 font-mono text-sm leading-relaxed overflow-x-auto border border-outline-variant/5">
+                            <pre class="text-on-surface-variant/80"><span class="text-primary">import</span> hmac, hashlib
+
+<span class="text-primary-container">def</span> <span class="text-on-surface">verify_signature</span>(payload, received_sig, secret):
+    expected_sig = hmac.new(
+        secret.encode(), 
+        payload.encode(), 
+        hashlib.sha256
+    ).hexdigest()
+    <span class="text-primary">return</span> hmac.compare_digest(expected_sig, received_sig)</pre>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end pt-4">
+                        <button type="submit" class="h-[56px] px-10 bg-gradient-to-br from-primary to-primary-container text-on-primary-container font-bold rounded-xl hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-primary/10">
+                            Save Settings
+                        </button>
+                    </div>
+                </form>
+                
+                <!-- Subtle background decoration -->
+                <div class="absolute -top-24 -right-24 w-64 h-64 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-colors duration-700"></div>
+            </div>
+        </section>
+        
+        <!-- Sidebar Info Section -->
+        <aside class="col-span-12 lg:col-span-4 space-y-6">
+            <!-- Status Badge Card -->
+            <div class="bg-surface-container-high p-6 rounded-xl border border-outline-variant/10">
+                <h4 class="text-sm font-label font-bold text-outline uppercase tracking-widest mb-4">Security Status</h4>
+                <div class="flex items-center gap-3 bg-primary/10 p-3 rounded-lg">
+                    <div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+                    <span class="text-primary font-semibold text-sm">Verified Merchant</span>
+                    <span class="material-symbols-outlined text-primary text-sm ml-auto" style="font-variation-settings: 'FILL' 1;">verified</span>
+                </div>
+                <p class="mt-4 text-xs text-on-surface-variant font-body leading-relaxed">
+                    Your merchant account is currently active and secured with Tier-3 encryption protocols.
+                </p>
+            </div>
+        </aside>
+    </div>
+    
+    <!-- Transaction List Aesthetic (No Dividers) -->
+    <section class="mt-16">
+        <h3 class="text-xl font-headline font-bold text-on-surface mb-6">Recent Webhook Deliveries</h3>
+        <div class="space-y-4">
+            <div class="grid grid-cols-4 items-center px-8 py-5 bg-surface-container-low rounded-xl hover:bg-surface-container group transition-all">
+                <div class="flex items-center gap-4">
+                    <div class="w-2 h-2 rounded-full bg-primary"></div>
+                    <span class="font-label text-sm text-on-surface">wh_8x294l...</span>
+                </div>
+                <span class="text-sm text-on-surface-variant font-body">Payment Confirmation</span>
+                <span class="text-sm text-on-surface-variant font-label text-right">200 OK</span>
+                <span class="text-xs text-outline font-label text-right">2 mins ago</span>
+            </div>
+            
+            <div class="grid grid-cols-4 items-center px-8 py-5 bg-surface-container-lowest rounded-xl hover:bg-surface-container group transition-all">
+                <div class="flex items-center gap-4">
+                    <div class="w-2 h-2 rounded-full bg-primary"></div>
+                    <span class="font-label text-sm text-on-surface">wh_9z011v...</span>
+                </div>
+                <span class="text-sm text-on-surface-variant font-body">Vault Authorization</span>
+                <span class="text-sm text-on-surface-variant font-label text-right">200 OK</span>
+                <span class="text-xs text-outline font-label text-right">15 mins ago</span>
+            </div>
+            
+            <div class="grid grid-cols-4 items-center px-8 py-5 bg-surface-container-low rounded-xl hover:bg-surface-container group transition-all">
+                <div class="flex items-center gap-4">
+                    <div class="w-2 h-2 rounded-full bg-error"></div>
+                    <span class="font-label text-sm text-on-surface">wh_4k112m...</span>
+                </div>
+                <span class="text-sm text-on-surface-variant font-body">Payment Confirmation</span>
+                <span class="text-sm text-error font-label text-right">500 ERROR</span>
+                <span class="text-xs text-outline font-label text-right">1 hour ago</span>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+document.getElementById('webhookForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData);
+    
+    try {
+        const response = await fetch('/api/settings/webhook', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': data.csrf_token
+            },
+            body: JSON.stringify({ webhook_url: data.webhook_url })
+        });
+        
+        // Session expired — redirect to login
+        if (response.status === 401 || response.status === 403) {
+            alert('Session expired. Redirecting to login...');
+            window.location.href = '/login';
+            return;
+        }
+        
+        const result = await response.json();
+        if (result.success) {
+            alert('Webhook settings saved successfully!');
+        } else {
+            alert('Error: ' + result.message);
+        }
+    } catch (error) {
+        alert('Failed to save settings');
+    }
+});
+</script>
+{% endblock %}
