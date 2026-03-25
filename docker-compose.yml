@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: onepay_user
+      POSTGRES_PASSWORD: onepay_pass
+      POSTGRES_DB: onepay
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "onepay_user"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "5432:5432"
+
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql://onepay_user:onepay_pass@db:5432/onepay
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
