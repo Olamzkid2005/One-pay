@@ -26,7 +26,7 @@ if "sqlite" in Config.DATABASE_URL:
     _engine_kwargs["connect_args"] = {"check_same_thread": False}
     # SQLite-specific: limit connections to prevent lock contention
     _engine_kwargs["pool_size"] = 5
-    _engine_kwargs["max_overflow"] = 10
+    # Note: max_overflow not supported with SQLite's SingletonThreadPool
 else:
     # Postgres / MySQL — sensible pool defaults
     _engine_kwargs["pool_size"] = 10

@@ -40,8 +40,3 @@ These files are preserved for reference but the current documentation in the mai
 
 ## Contributing
 
-When adding new documentation:
-- Place active documentation in the main docs/ directory
-- Move outdated documentation to archive/
-- Update this README with links to new documents
-- Keep documentation concise and up-to-date
