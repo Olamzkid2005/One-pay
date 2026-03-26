@@ -426,6 +426,77 @@ class TestAuditLoggingSettings:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# MEDIUM FIX: Configurable Session Timeout
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestConfigurableSessionTimeout:
+    def test_session_timeout_authenticated_default(self, app):
+        """Verify SESSION_TIMEOUT_AUTHENTICATED defaults to 30 minutes"""
+        assert app.config["SESSION_TIMEOUT_AUTHENTICATED"] == 30
+
+    def test_session_timeout_unauthenticated_default(self, app):
+        """Verify SESSION_TIMEOUT_UNAUTHENTICATED defaults to 60 minutes"""
+        assert app.config["SESSION_TIMEOUT_UNAUTHENTICATED"] == 60
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MEDIUM FIX: Content-Type Validation for JSON POST Endpoints
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestContentTypeValidation:
+    """Verify JSON POST endpoints enforce Content-Type: application/json"""
+
+    def _setup_session(self, client, app):
+        """Helper to set up a valid logged-in session"""
+        with client.session_transaction() as sess:
+            sess["user_id"] = 1
+            sess["username"] = "testuser"
+            sess["csrf_token"] = "test-csrf"
+            sess["_boot"] = app.config.get("BOOT_TIME")
+            sess["_created"] = datetime.now(timezone.utc).isoformat()
+            sess["_last_activity"] = datetime.now(timezone.utc).isoformat()
+
+    def test_create_payment_link_rejects_form_content_type(self, client, app):
+        """Verify /api/payments/link rejects form-urlencoded Content-Type (existing behavior)"""
+        self._setup_session(client, app)
+
+        # Send POST with form-urlencoded instead of JSON
+        r = client.post("/api/payments/link",
+            data={"amount": "1000"},
+            content_type="application/x-www-form-urlencoded",
+            headers={"X-CSRFToken": "test-csrf"}
+        )
+
+        # Should be rejected with 415 Unsupported Media Type
+        assert r.status_code == 415
+        data = r.get_json()
+        assert data.get("error_code") == "INVALID_CONTENT_TYPE"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LOW FIX: Add pagination to CSV export endpoint
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestExportPagination:
+    def test_export_returns_csv(self, client):
+        """Verify the export endpoint returns 200 with CSV content type"""
+        username = f"export_csv_{secrets.token_hex(4)}"
+        _register(client, username)
+        _login(client, username)
+
+        r = client.get("/api/payments/export")
+        assert r.status_code == 200
+        assert r.content_type == "text/csv"
+        assert "attachment" in r.headers.get("Content-Disposition", "")
+
+    def test_export_has_row_limit(self, client):
+        """Verify that the MAX_EXPORT_ROWS constant exists and equals 1000"""
+        from blueprints import payments
+        assert hasattr(payments, 'MAX_EXPORT_ROWS')
+        assert payments.MAX_EXPORT_ROWS == 1000
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Run Tests
 # ══════════════════════════════════════════════════════════════════════════════
 

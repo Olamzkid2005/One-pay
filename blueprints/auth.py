@@ -390,3 +390,4 @@ def update_settings():
         logger.info("Webhook URL updated for merchant: %s", user.username)
 
     return jsonify({"success": True, "message": "Settings updated", "webhook_url": webhook_url})
+

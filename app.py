@@ -91,6 +91,8 @@ def create_app() -> Flask:
         SESSION_COOKIE_DOMAIN    = None,  # Restrict to exact domain (no subdomains)
         SESSION_PERMANENT        = True,
         PERMANENT_SESSION_LIFETIME = timedelta(hours=Config.PERMANENT_SESSION_LIFETIME),
+        SESSION_TIMEOUT_AUTHENTICATED = Config.SESSION_TIMEOUT_AUTHENTICATED,
+        SESSION_TIMEOUT_UNAUTHENTICATED = Config.SESSION_TIMEOUT_UNAUTHENTICATED,
     )
 
     Config.validate()
@@ -139,7 +141,7 @@ def create_app() -> Flask:
             try:
                 last_active_dt = datetime.fromisoformat(last_activity)
                 # Different timeout for authenticated vs unauthenticated sessions
-                timeout_minutes = 30 if session.get("user_id") else 60
+                timeout_minutes = Config.SESSION_TIMEOUT_AUTHENTICATED if session.get("user_id") else Config.SESSION_TIMEOUT_UNAUTHENTICATED
                 if datetime.now(timezone.utc) - last_active_dt > timedelta(minutes=timeout_minutes):
                     if session.get("user_id"):
                         logger.info("Session expired due to inactivity | user=%s", session.get("username"))

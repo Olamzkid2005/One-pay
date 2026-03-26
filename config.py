@@ -63,6 +63,11 @@ class BaseConfig:
     # SESSION_LIFETIME_HOURS: how long a permanent session lasts (default 24h)
     PERMANENT_SESSION_LIFETIME = int(os.getenv("SESSION_LIFETIME_HOURS", "24"))
 
+    # ── Session inactivity timeout ────────────────────────────────────────────
+    # Minutes before session expires due to inactivity
+    SESSION_TIMEOUT_AUTHENTICATED = int(os.getenv("SESSION_TIMEOUT_AUTHENTICATED", "30"))
+    SESSION_TIMEOUT_UNAUTHENTICATED = int(os.getenv("SESSION_TIMEOUT_UNAUTHENTICATED", "60"))
+
     # ── HTTPS ─────────────────────────────────────────────────────────────────
     ENFORCE_HTTPS = os.getenv("ENFORCE_HTTPS", "false").lower() == "true"
 

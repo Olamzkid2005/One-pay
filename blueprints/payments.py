@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 payments_bp = Blueprint("payments", __name__)
 
 PAGE_SIZE = 20
+MAX_EXPORT_ROWS = 1000
 
 
 def _safe(val, maxlen=255):
@@ -193,6 +194,7 @@ def export_transactions():
             db.query(Transaction)
             .filter(Transaction.user_id == current_user_id())
             .order_by(Transaction.created_at.desc())
+            .limit(MAX_EXPORT_ROWS)
             .all()
         )
         
@@ -212,7 +214,11 @@ def export_transactions():
                 tx.created_at.isoformat() if tx.created_at else '',
                 tx.expires_at.isoformat() if tx.expires_at else ''
             ])
-        
+
+        # Add truncation note if limit was reached
+        if len(transactions) == MAX_EXPORT_ROWS:
+            writer.writerow(['Note: Export limited to most recent 1000 transactions', '', '', '', '', '', '', ''])
+
         output = make_response(si.getvalue())
         output.headers["Content-Disposition"] = f"attachment; filename=onepay_transactions_{current_username()}.csv"
         output.headers["Content-type"] = "text/csv"
