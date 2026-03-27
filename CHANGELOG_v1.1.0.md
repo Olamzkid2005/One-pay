@@ -22,12 +22,16 @@
 - **Database Schema**: Added `qr_code_payment_url` and `qr_code_virtual_account` columns
 - **API Integration**: QR codes included in all payment API responses
 - **Migration Support**: Alembic migration for QR code database columns
+- **Bug Fix**: Fixed variable scope error in `blueprints/payments.py` where `payment_url` was used before definition
+- **Persistence Fix**: Added `db.flush()` after QR code generation to ensure data is saved
 
 ### **Frontend Changes**
 - **Dashboard Updates**: QR status indicators on merchant dashboard
-- **Payment Page**: Interactive QR code display with download buttons
+- **Payment Page**: Interactive QR code toggle between Bank Transfer and QR Code views
 - **JavaScript Enhancement**: QR code handling and download functionality
 - **Responsive Design**: Mobile-optimized QR code display
+- **Bug Fix**: Removed auto-loading of QR codes on page load (now loads only when user clicks "QR Code" button)
+- **UI Improvement**: Removed duplicate virtual account QR code, showing only payment URL QR code
 
 ### **Dependencies**
 - **qrcode[pil]==7.4.2**: QR code generation with PIL image support
@@ -84,12 +88,35 @@ qr_code_virtual_account TEXT  -- Virtual account QR code (base64)
 - **Legacy Tests**: Cleaned up old development tests
 - **Redundant Tests**: Consolidated into comprehensive integration test
 
+## � **Bug Fixes**
+
+### **QR Code Display Issues**
+- **Fixed**: Variable scope error causing QR code generation to fail silently
+  - **Issue**: `payment_url` was used before being defined in `blueprints/payments.py`
+  - **Impact**: All payments had `NULL` QR code values in database
+  - **Solution**: Moved `payment_url` definition before QR code generation
+  
+- **Fixed**: QR codes appearing on page load when Bank Transfer was selected
+  - **Issue**: `showQRCodes()` called automatically in `verify.js`
+  - **Impact**: QR section visible even when not selected
+  - **Solution**: Removed auto-call, QR codes now load only on button click
+  
+- **Fixed**: Duplicate QR codes confusing users
+  - **Issue**: Both payment URL and virtual account QR codes displayed
+  - **Impact**: Users saw two identical-looking QR codes
+  - **Solution**: Removed virtual account QR, kept only payment URL QR
+
+### **Files Modified**
+- `blueprints/payments.py` - Fixed QR generation logic
+- `static/js/verify.js` - Removed auto-load behavior
+- `templates/verify.html` - Removed duplicate QR code section
+
 ## 📚 **Documentation**
 
 ### **New Documentation**
 - **QR Code Feature Guide**: `docs/QR_CODE_FEATURE.md`
 - **Implementation Complete**: `docs/QR_IMPLEMENTATION_COMPLETE.md`
-- **Codebase Cleanup**: `CODEBASE_CLEANUP_COMPLETE.md`
+- **QR Code Fix Summary**: `docs/QR_CODE_FIX_SUMMARY.md` - Complete bug fix documentation
 
 ### **Updated Documentation**
 - **README.md**: Updated with QR code features

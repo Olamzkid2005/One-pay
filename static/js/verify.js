@@ -159,10 +159,8 @@ async function loadPreview() {
       if (noBankNote) noBankNote.classList.remove('hidden');
     }
 
-    // Show QR codes if available
-    if (typeof showQRCodes === 'function') {
-      showQRCodes(data.qr_code_payment_url, data.qr_code_virtual_account);
-    }
+    // Don't load QR codes on page load - only when user clicks "QR Code" button
+    // The showPaymentMethod('qr') function will call showQRCodes() when needed
 
     // Show the details panel and start countdown + polling
     showState('state-details');

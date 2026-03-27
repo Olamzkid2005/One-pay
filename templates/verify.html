@@ -109,9 +109,28 @@
                 </div>
             </div>
             
+            <!-- Payment Method Toggle -->
+            <div class="px-8 pb-4">
+                <div class="bg-surface-container-lowest/50 rounded-2xl p-4 border border-outline-variant/5">
+                    <p class="text-[10px] font-label font-bold text-outline tracking-widest uppercase mb-4 text-center">Payment Method</p>
+                    <div class="flex items-center justify-center">
+                        <div class="bg-surface-container-high/40 rounded-xl p-1 flex gap-1">
+                            <button id="toggle-bank" onclick="showPaymentMethod('bank')" class="px-4 py-2 rounded-lg text-sm font-medium transition-all bg-primary text-primary-container">
+                                <span class="material-symbols-outlined text-[18px] mr-1">account_balance</span>
+                                Bank Transfer
+                            </button>
+                            <button id="toggle-qr" onclick="showPaymentMethod('qr')" class="px-4 py-2 rounded-lg text-sm font-medium transition-all text-on-surface-variant hover:text-on-surface">
+                                <span class="material-symbols-outlined text-[18px] mr-1">qr_code_2</span>
+                                QR Code
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Bank Details -->
             <div class="px-8 pb-8">
-                <div id="bank-section" class="hidden bg-surface-container-lowest/50 rounded-2xl p-6 border border-outline-variant/5">
+                <div id="bank-section" class="bg-surface-container-lowest/50 rounded-2xl p-6 border border-outline-variant/5">
                     <p class="text-[10px] font-label font-bold text-outline tracking-widest uppercase mb-4 text-center">Transfer Details</p>
                     <div class="space-y-5">
                         <div class="flex justify-between items-center">
@@ -142,46 +161,30 @@
                         </div>
                     </div>
                     
-                    <!-- QR Code Section -->
-                    <div id="qr-section" class="hidden mt-6">
-                        <div class="bg-surface-container-lowest/50 rounded-2xl p-6 border border-outline-variant/5">
-                            <p class="text-[10px] font-label font-bold text-outline tracking-widest uppercase mb-4 text-center">Scan to Pay</p>
-                            
-                            <!-- Payment URL QR Code -->
-                            <div id="payment-qr-container" class="hidden mb-6">
-                                <div class="text-center">
-                                    <p class="text-xs text-on-surface-variant mb-3">Scan this QR code to open payment page</p>
-                                    <div class="inline-block bg-white p-4 rounded-xl border border-outline-variant/20">
-                                        <img id="payment-qr-code" class="w-48 h-48 mx-auto" alt="Payment QR Code">
-                                    </div>
-                                    <button onclick="downloadQR('payment')" class="mt-3 text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 mx-auto">
-                                        <span class="material-symbols-outlined text-[16px]">download</span>
-                                        Download QR Code
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <!-- Virtual Account QR Code -->
-                            <div id="virtual-account-qr-container" class="hidden">
-                                <div class="text-center">
-                                    <p class="text-xs text-on-surface-variant mb-3">Scan this QR code for direct bank transfer</p>
-                                    <div class="inline-block bg-white p-4 rounded-xl border border-outline-variant/20">
-                                        <img id="virtual-account-qr-code" class="w-48 h-48 mx-auto" alt="Virtual Account QR Code">
-                                    </div>
-                                    <button onclick="downloadQR('virtual-account')" class="mt-3 text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 mx-auto">
-                                        <span class="material-symbols-outlined text-[16px]">download</span>
-                                        Download QR Code
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
                     <div class="mt-6 flex gap-3 p-3 bg-error-container/10 rounded-xl border border-error-container/20">
                         <span class="material-symbols-outlined text-error text-[20px] shrink-0">warning</span>
                         <p class="text-xs text-error font-medium leading-relaxed">
                             Transfer exact amount — wrong amounts cannot be matched automatically.
                         </p>
+                    </div>
+                </div>
+                
+                <!-- QR Code Section (moved outside bank-section to be a sibling) -->
+                <div id="qr-section" class="hidden bg-surface-container-lowest/50 rounded-2xl p-6 border border-outline-variant/5">
+                    <p class="text-[10px] font-label font-bold text-outline tracking-widest uppercase mb-4 text-center">Scan to Pay</p>
+                    
+                    <!-- Payment URL QR Code -->
+                    <div id="payment-qr-container" class="hidden">
+                        <div class="text-center">
+                            <p class="text-xs text-on-surface-variant mb-3">Scan this QR code to open payment page</p>
+                            <div class="inline-block bg-white p-4 rounded-xl border border-outline-variant/20">
+                                <img id="payment-qr-code" class="w-48 h-48 mx-auto" alt="Payment QR Code">
+                            </div>
+                            <button onclick="downloadQR('payment')" class="mt-3 text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 mx-auto">
+                                <span class="material-symbols-outlined text-[16px]">download</span>
+                                Download QR Code
+                            </button>
+                        </div>
                     </div>
                 </div>
                 
@@ -405,6 +408,69 @@
 <script>
   window.ONEPAY_TX_REF = {{ tx_ref | tojson }};
   window.ONEPAY_LINK_ERROR = {{ link_error | default("") | tojson }};
+  window.ONEPAY_QR_PAYMENT_URL = {{ qr_code_payment_url | default(None) | tojson }};
+  window.ONEPAY_QR_VIRTUAL_ACCOUNT = {{ qr_code_virtual_account | default(None) | tojson }};
+
+// QR Code functions - MUST be defined before verify.js loads
+function showQRCodes(paymentQR, virtualAccountQR) {
+    const qrSection = document.getElementById('qr-section');
+    const paymentContainer = document.getElementById('payment-qr-container');
+    const virtualContainer = document.getElementById('virtual-account-qr-container');
+    const paymentImg = document.getElementById('payment-qr-code');
+    const virtualImg = document.getElementById('virtual-account-qr-code');
+    
+    console.log('showQRCodes called:', { paymentQR: !!paymentQR, virtualAccountQR: !!virtualAccountQR });
+    
+    if (paymentQR && paymentImg) {
+        paymentImg.src = paymentQR;
+        paymentContainer.classList.remove('hidden');
+        console.log('Payment QR code set');
+    }
+    
+    if (virtualAccountQR && virtualImg) {
+        virtualImg.src = virtualAccountQR;
+        virtualContainer.classList.remove('hidden');
+        console.log('Virtual account QR code set');
+    }
+    
+    // Show QR section if we have any QR codes
+    if ((paymentQR && paymentImg) || (virtualAccountQR && virtualImg)) {
+        qrSection.classList.remove('hidden');
+        console.log('QR section shown');
+    }
+}
+
+// Payment Method Toggle Function
+function showPaymentMethod(method) {
+    const bankSection = document.getElementById('bank-section');
+    const qrSection = document.getElementById('qr-section');
+    const bankToggle = document.getElementById('toggle-bank');
+    const qrToggle = document.getElementById('toggle-qr');
+    
+    console.log('showPaymentMethod called with:', method);
+    
+    if (method === 'bank') {
+        // Show bank details, hide QR codes
+        bankSection.classList.remove('hidden');
+        qrSection.classList.add('hidden');
+        
+        // Update toggle buttons
+        bankToggle.className = 'px-4 py-2 rounded-lg text-sm font-medium transition-all bg-primary text-primary-container';
+        qrToggle.className = 'px-4 py-2 rounded-lg text-sm font-medium transition-all text-on-surface-variant hover:text-on-surface';
+    } else if (method === 'qr') {
+        // Ensure QR codes are loaded before showing
+        console.log('Loading QR codes...');
+        showQRCodes(window.ONEPAY_QR_PAYMENT_URL, window.ONEPAY_QR_VIRTUAL_ACCOUNT);
+        
+        // Show QR codes, hide bank details
+        bankSection.classList.add('hidden');
+        qrSection.classList.remove('hidden');
+        
+        // Update toggle buttons
+        bankToggle.className = 'px-4 py-2 rounded-lg text-sm font-medium transition-all text-on-surface-variant hover:text-on-surface';
+        qrToggle.className = 'px-4 py-2 rounded-lg text-sm font-medium transition-all bg-primary text-primary-container';
+    }
+}
 </script>
 <script src="{{ url_for('static', filename='js/verify.js') }}"></script>
 <script>
@@ -476,29 +542,6 @@ function downloadQR(type) {
     link.download = `onepay-${type}-qr-${window.ONEPAY_TX_REF}.png`;
     link.href = img.src;
     link.click();
-}
-
-function showQRCodes(paymentQR, virtualAccountQR) {
-    const qrSection = document.getElementById('qr-section');
-    const paymentContainer = document.getElementById('payment-qr-container');
-    const virtualContainer = document.getElementById('virtual-account-qr-container');
-    const paymentImg = document.getElementById('payment-qr-code');
-    const virtualImg = document.getElementById('virtual-account-qr-code');
-    
-    if (paymentQR && paymentImg) {
-        paymentImg.src = paymentQR;
-        paymentContainer.classList.remove('hidden');
-    }
-    
-    if (virtualAccountQR && virtualImg) {
-        virtualImg.src = virtualAccountQR;
-        virtualContainer.classList.remove('hidden');
-    }
-    
-    // Show QR section if we have any QR codes
-    if ((paymentQR && paymentImg) || (virtualAccountQR && virtualImg)) {
-        qrSection.classList.remove('hidden');
-    }
 }
 </script>
 {% endblock %}

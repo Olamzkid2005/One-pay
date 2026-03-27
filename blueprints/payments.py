@@ -429,6 +429,10 @@ def create_payment_link():
         db.flush()
         db.refresh(transaction)
 
+        # Build payment URL BEFORE generating QR codes
+        base_url    = request.host_url.rstrip("/")
+        payment_url = f"{base_url}/pay/{tx_ref}"
+
         # Generate QR codes
         try:
             # QR code for payment URL
@@ -450,6 +454,7 @@ def create_payment_link():
                     amount=str(amount)
                 )
             
+            db.flush()  # Save QR codes to database
             logger.debug("QR codes generated for transaction %s", tx_ref)
             
         except Exception as e:
@@ -458,9 +463,6 @@ def create_payment_link():
 
         log_event(db, "link.created", user_id=current_user_id(), tx_ref=tx_ref, ip_address=client_ip(), 
                   detail={"amount": str(amount), "currency": transaction.currency})
-
-        base_url    = request.host_url.rstrip("/")
-        payment_url = f"{base_url}/pay/{tx_ref}"
 
         logger.info("Payment link created | merchant=%s ref=%s amount=%s", current_username(), tx_ref, amount)
 
