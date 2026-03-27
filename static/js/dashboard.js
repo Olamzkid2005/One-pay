@@ -290,6 +290,21 @@ function showLinkResult(data) {
     document.getElementById('res-bank-amount').textContent = fmtAmount(data.amount, data.currency);
   }
 
+  // Show QR code status section
+  const qrSection = document.getElementById('res-qr-section');
+  const vaQrIndicator = document.getElementById('va-qr-indicator');
+  
+  if (qrSection) {
+    qrSection.classList.remove('hidden');
+    
+    // Show virtual account QR indicator if available
+    if (data.virtual_account_number && data.qr_code_virtual_account) {
+      vaQrIndicator.classList.remove('hidden');
+    } else {
+      vaQrIndicator.classList.add('hidden');
+    }
+  }
+
   // Start polling for live status updates
   updateLiveStatus('pending');
   startStatusPolling(data.tx_ref);
@@ -348,6 +363,7 @@ function resetCreate() {
   document.getElementById('link-result').classList.add('hidden');
   document.getElementById('res-bank-section').classList.add('hidden');
   document.getElementById('res-desc-row').classList.add('hidden');
+  document.getElementById('res-qr-section').classList.add('hidden');
 
   const btn = document.getElementById('create-btn');
   btn.disabled = false;

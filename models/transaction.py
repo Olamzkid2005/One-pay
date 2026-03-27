@@ -58,6 +58,10 @@ class Transaction(Base):
     virtual_account_name   = Column(String(255), nullable=True)
     transfer_confirmed     = Column(Boolean, default=False)
 
+    # QR Code data
+    qr_code_payment_url    = Column(Text, nullable=True)     # Base64 data URI for payment QR
+    qr_code_virtual_account = Column(Text, nullable=True)     # Base64 data URI for virtual account QR
+
     # Webhook delivery
     webhook_url            = Column(String(500), nullable=True)
     webhook_delivered      = Column(Boolean, default=False)
@@ -126,6 +130,8 @@ class Transaction(Base):
             "virtual_account_name":   self.virtual_account_name,
             "transfer_confirmed":     self.transfer_confirmed,
             "webhook_delivered":      self.webhook_delivered,
+            "qr_code_payment_url":     self.qr_code_payment_url,
+            "qr_code_virtual_account": self.qr_code_virtual_account,
         }
 
     def is_expired(self):

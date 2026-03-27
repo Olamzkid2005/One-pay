@@ -47,6 +47,8 @@ MIGRATIONS = [
     ("transactions", "webhook_delivered_at",  "TIMESTAMP"),
     ("transactions", "webhook_attempts",      "INTEGER DEFAULT 0"),
     ("transactions", "webhook_last_error",    "TEXT"),
+    ("transactions", "qr_code_payment_url",    "TEXT"),
+    ("transactions", "qr_code_virtual_account", "TEXT"),
 ]
 
 

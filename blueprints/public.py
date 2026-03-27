@@ -114,6 +114,8 @@ def get_preview(tx_ref):
             "virtual_bank_name":      t.virtual_bank_name,
             "virtual_account_name":   t.virtual_account_name,
             "transfer_confirmed":     t.transfer_confirmed,
+            "qr_code_payment_url":     t.qr_code_payment_url,
+            "qr_code_virtual_account": t.qr_code_virtual_account,
         })
 
 

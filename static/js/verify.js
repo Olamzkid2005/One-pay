@@ -159,6 +159,11 @@ async function loadPreview() {
       if (noBankNote) noBankNote.classList.remove('hidden');
     }
 
+    // Show QR codes if available
+    if (typeof showQRCodes === 'function') {
+      showQRCodes(data.qr_code_payment_url, data.qr_code_virtual_account);
+    }
+
     // Show the details panel and start countdown + polling
     showState('state-details');
     startCountdown(data.expires_at);

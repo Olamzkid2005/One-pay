@@ -196,6 +196,34 @@
                             </div>
                         </div>
                         
+                        <!-- QR Code Status Section -->
+                        <div id="res-qr-section" class="hidden bg-surface-container-lowest/50 rounded-2xl p-6 border border-outline-variant/5 space-y-4">
+                            <h4 class="text-sm font-bold text-on-surface uppercase tracking-wider">QR Codes Generated</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="text-center p-4 bg-green-50/10 rounded-xl border border-green-500/20">
+                                    <div class="w-8 h-8 mx-auto mb-2 bg-green-500/20 rounded-lg flex items-center justify-center">
+                                        <span class="material-symbols-outlined text-green-500 text-sm">qr_code_2</span>
+                                    </div>
+                                    <p class="text-xs text-green-500 font-medium">Payment QR Code</p>
+                                    <p class="text-xs text-outline mt-1">For mobile scanning</p>
+                                </div>
+                                <div id="va-qr-indicator" class="hidden text-center p-4 bg-blue-50/10 rounded-xl border border-blue-500/20">
+                                    <div class="w-8 h-8 mx-auto mb-2 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                                        <span class="material-symbols-outlined text-blue-500 text-sm">account_balance</span>
+                                    </div>
+                                    <p class="text-xs text-blue-500 font-medium">Bank Transfer QR</p>
+                                    <p class="text-xs text-outline mt-1">For direct transfer</p>
+                                </div>
+                            </div>
+                            <div class="text-center">
+                                <p class="text-xs text-outline mb-3">QR codes are available on customer payment page</p>
+                                <button onclick="window.open(document.getElementById('res-url').value, '_blank')" class="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 mx-auto">
+                                    <span class="material-symbols-outlined text-[16px]">visibility</span>
+                                    View Payment Page
+                                </button>
+                            </div>
+                        </div>
+                        
                         <div class="flex gap-3">
                             <button onclick="resetCreate()" class="flex-1 py-3 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-surface-container-highest transition-colors font-medium">
                                 Create Another

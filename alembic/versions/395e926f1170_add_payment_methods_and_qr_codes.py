@@ -19,8 +19,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    pass
+    # Add QR code columns to transactions table
+    op.add_column('transactions', sa.Column('qr_code_payment_url', sa.Text(), nullable=True))
+    op.add_column('transactions', sa.Column('qr_code_virtual_account', sa.Text(), nullable=True))
 
 
 def downgrade() -> None:
-    pass
+    # Remove QR code columns from transactions table
+    op.drop_column('transactions', 'qr_code_virtual_account')
+    op.drop_column('transactions', 'qr_code_payment_url')

@@ -22,6 +22,7 @@ from services.security import (
     generate_expiration_time, validate_return_url, validate_webhook_url,
 )
 from services.quickteller import quickteller, QuicktellerError
+from services.qr_code import qr_service
 from core.auth import (
     get_csrf_token, is_valid_csrf_token,
     current_user_id, current_username,
@@ -359,6 +360,8 @@ def create_payment_link():
                     "virtual_account_number": existing.virtual_account_number,
                     "virtual_bank_name":      existing.virtual_bank_name,
                     "virtual_account_name":   existing.virtual_account_name,
+                    "qr_code_payment_url":     existing.qr_code_payment_url,
+                    "qr_code_virtual_account": existing.qr_code_virtual_account,
                 }), 200
 
         # ── Validate amount ────────────────────────────────────────────────────
@@ -426,6 +429,33 @@ def create_payment_link():
         db.flush()
         db.refresh(transaction)
 
+        # Generate QR codes
+        try:
+            # QR code for payment URL
+            transaction.qr_code_payment_url = qr_service.generate_payment_qr(
+                payment_url=payment_url,
+                amount=str(amount),
+                description=description,
+                style="rounded"
+            )
+            
+            # QR code for virtual account (if available)
+            if (transaction.virtual_account_number and 
+                transaction.virtual_bank_name and 
+                transaction.virtual_account_name):
+                transaction.qr_code_virtual_account = qr_service.generate_virtual_account_qr(
+                    account_number=transaction.virtual_account_number,
+                    bank_name=transaction.virtual_bank_name,
+                    account_name=transaction.virtual_account_name,
+                    amount=str(amount)
+                )
+            
+            logger.debug("QR codes generated for transaction %s", tx_ref)
+            
+        except Exception as e:
+            logger.warning("QR code generation failed for %s: %s", tx_ref, e)
+            # Continue without QR codes - they're optional
+
         log_event(db, "link.created", user_id=current_user_id(), tx_ref=tx_ref, ip_address=client_ip(), 
                   detail={"amount": str(amount), "currency": transaction.currency})
 
@@ -446,6 +476,8 @@ def create_payment_link():
             "virtual_account_number": transaction.virtual_account_number,
             "virtual_bank_name":      transaction.virtual_bank_name,
             "virtual_account_name":   transaction.virtual_account_name,
+            "qr_code_payment_url":     transaction.qr_code_payment_url,
+            "qr_code_virtual_account": transaction.qr_code_virtual_account,
         }), 201
 
 
