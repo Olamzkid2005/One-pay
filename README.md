@@ -1,6 +1,16 @@
-# One-Pay
+# OnePay
 
-A secure payment verification and link generation platform that integrates with Quickteller API. The goal of this system is to eliminate fake payment confirmations by allowing users to generate secure, time-bound payment links and verify transactions directly from the payment infrastructure instead of relying on screenshots.
+A modern, secure payment verification and invoice management platform that integrates with Quickteller API. OnePay eliminates fake payment confirmations by allowing merchants to generate secure, time-bound payment links, automatically create professional invoices, and verify transactions directly from the payment infrastructure.
+
+## 🚀 Latest Updates (v1.2.0)
+
+- ✨ **Invoice System**: Automatic invoice generation with PDF export
+- 📧 **Email Notifications**: Payment alerts with invoice attachments
+- 🎨 **Light/Dark Mode**: Beautiful theme toggle with persistent preference
+- 📱 **Enhanced UI/UX**: Collapsible sidebar and improved accessibility
+- 🔒 **Security**: Enhanced audit logging and email validation
+
+See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
 ## Features
 
@@ -45,11 +55,23 @@ A secure payment verification and link generation platform that integrates with 
 - **API Integration**: Quickteller Payment Gateway
 - **Security**: CSRF protection, secure session management, IP tracking
 
+## 📸 Screenshots
+
+### Dashboard
+![Dashboard](https://via.placeholder.com/800x400?text=Dashboard+Screenshot)
+
+### Invoice Management
+![Invoices](https://via.placeholder.com/800x400?text=Invoice+Management)
+
+### Light/Dark Mode
+![Theme Toggle](https://via.placeholder.com/800x400?text=Light+Dark+Mode)
+
 ## Prerequisites
 
 - Python 3.8 or higher
 - pip (Python package manager)
 - Virtual environment (recommended)
+- SMTP server (optional, for email notifications)
 
 ## Installation
 
@@ -83,7 +105,7 @@ python generate_secrets.py
 
 6. Initialize the database:
 ```bash
-python migrate.py
+alembic upgrade head
 ```
 
 7. Run the application:
@@ -93,20 +115,70 @@ python app.py
 
 The application will be available at `http://localhost:5000`
 
-## Configuration
+## 🎯 Quick Start Guide
 
-Key environment variables in `.env`:
+### First Time Setup
 
-- `SECRET_KEY`: Flask secret key for session management
-- `DATABASE_URL`: Database connection string
-- `QUICKTELLER_MERCHANT_ID`: Your Quickteller merchant ID
-- `QUICKTELLER_API_KEY`: Your Quickteller API key
-- `QUICKTELLER_TERMINAL_ID`: Your Quickteller terminal ID
-- `MAIL_SERVER`: SMTP server for email notifications
-- `MAIL_USERNAME`: Email account username
-- `MAIL_PASSWORD`: Email account password
+1. **Register an Account**
+   - Navigate to `http://localhost:5000/register`
+   - Create your merchant account
 
-See `.env.example` for all available configuration options.
+2. **Configure Settings** (Optional)
+   - Go to Settings page
+   - Add your business name, logo, and tax ID
+   - Enable auto-send email for customer invoices
+
+3. **Create Your First Payment Link**
+   - Enter amount and description
+   - Click "Generate Payment Link"
+   - Share the link with your customer
+
+4. **View Invoice**
+   - Once payment is verified, invoice is auto-generated
+   - Download as PDF or send via email
+   - Track status in Invoices page
+
+## ⚙️ Configuration
+
+### Required Environment Variables
+
+Create a `.env` file with the following:
+
+```env
+# Flask Configuration
+SECRET_KEY=your-secret-key-here
+FLASK_ENV=development
+
+# Database
+DATABASE_URL=sqlite:///onepay.db
+
+# Quickteller API
+QUICKTELLER_MERCHANT_ID=your-merchant-id
+QUICKTELLER_API_KEY=your-api-key
+QUICKTELLER_TERMINAL_ID=your-terminal-id
+QUICKTELLER_BASE_URL=https://api.quickteller.com
+
+# Email Configuration (Optional)
+MAIL_SERVER=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USE_TLS=True
+MAIL_USERNAME=your-email@gmail.com
+MAIL_PASSWORD=your-app-password
+MAIL_DEFAULT_SENDER=noreply@onepay.com
+```
+
+### Email Setup
+
+For email notifications to work:
+
+1. **Gmail**: Use App Password (not your regular password)
+   - Enable 2FA on your Google account
+   - Generate App Password at https://myaccount.google.com/apppasswords
+   - Use the generated password in `MAIL_PASSWORD`
+
+2. **Other SMTP Providers**: Update `MAIL_SERVER` and `MAIL_PORT` accordingly
+
+See [EMAIL_SETUP_GUIDE.md](EMAIL_SETUP_GUIDE.md) for detailed instructions.
 
 ## Usage
 
@@ -173,47 +245,108 @@ One-pay/
 
 See [SECURITY.md](docs/SECURITY.md) for detailed security information.
 
-## Testing
+## 🧪 Testing
 
-Run the test suite:
+### Run Automated Tests
 ```bash
+# Run all tests
 pytest tests/
+
+# Run specific test file
+pytest tests/test_email_notifications.py
+
+# Run with coverage
+pytest --cov=. tests/
 ```
 
-For manual testing, see [MANUAL_TEST_GUIDE.md](docs/MANUAL_TEST_GUIDE.md)
+### Test Coverage
+- Email notifications: 11 tests
+- Invoice system: 20+ tests
+- PDF generation: Automated tests
+- Integration: End-to-end workflow tests
+
+For manual testing procedures, see [MANUAL_TEST_GUIDE.md](docs/MANUAL_TEST_GUIDE.md)
 
 ## Deployment
 
 See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment instructions.
 
-## Documentation
+## 📚 Documentation
 
-- [Security Guide](docs/SECURITY.md)
-- [Deployment Guide](docs/DEPLOYMENT.md)
-- [Test Plan](docs/TEST_PLAN.md)
-- [Upgrade Guide](docs/UPGRADE_GUIDE.md)
-- [Webhook Verification](docs/WEBHOOK_VERIFICATION.md)
+### User Guides
+- [Email Setup Guide](EMAIL_SETUP_GUIDE.md) - Configure email notifications
+- [Manual Test Guide](docs/MANUAL_TEST_GUIDE.md) - Testing procedures
 
-## Contributing
+### Technical Documentation
+- [Security Guide](docs/SECURITY.md) - Security features and best practices
+- [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment
+- [Test Plan](docs/TEST_PLAN.md) - Testing strategy
+- [Upgrade Guide](docs/UPGRADE_GUIDE.md) - Version upgrade instructions
+- [Webhook Verification](docs/WEBHOOK_VERIFICATION.md) - Webhook setup
+- [QR Code Feature](docs/QR_CODE_FEATURE.md) - QR code implementation
+
+### Development
+- [CHANGELOG.md](CHANGELOG.md) - Version history and changes
+- [API Documentation](docs/README.md) - API reference
+
+## 🤝 Contributing
+
+We welcome contributions! Please follow these steps:
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+3. Write tests for your changes
+4. Ensure all tests pass (`pytest tests/`)
+5. Commit your changes (`git commit -m 'feat: Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+### Commit Message Convention
+- `feat:` New feature
+- `fix:` Bug fix
+- `docs:` Documentation changes
+- `test:` Test additions or changes
+- `refactor:` Code refactoring
 
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Support
+## 📊 Project Status
 
-For issues and questions:
-- Open an issue on GitHub
-- Check the [documentation](docs/README.md)
+- **Version**: 1.2.0
+- **Status**: Active Development
+- **License**: MIT
+- **Python**: 3.8+
+- **Last Updated**: March 29, 2026
 
-## Acknowledgments
+## 🆘 Support
 
-- Quickteller API for payment processing
-- Flask framework and community
+### Getting Help
+- 📖 Check the [documentation](docs/README.md)
+- 🐛 [Open an issue](https://github.com/Olamzkid2005/One-pay/issues) on GitHub
+- 💬 Review [closed issues](https://github.com/Olamzkid2005/One-pay/issues?q=is%3Aissue+is%3Aclosed) for solutions
+
+### Reporting Bugs
+When reporting bugs, please include:
+- Python version
+- Operating system
+- Steps to reproduce
+- Error messages and logs
+- Expected vs actual behavior
+
+## 🙏 Acknowledgments
+
+- [Quickteller API](https://www.quickteller.com/) for payment processing
+- [Flask](https://flask.palletsprojects.com/) framework and community
+- [xhtml2pdf](https://github.com/xhtml2pdf/xhtml2pdf) for PDF generation
+- [Tailwind CSS](https://tailwindcss.com/) for styling
 - All contributors to this project
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+**Made with ❤️ by the OnePay Team**
