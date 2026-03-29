@@ -79,6 +79,11 @@ class BaseConfig:
     WEBHOOK_TIMEOUT_SECS = int(os.getenv("WEBHOOK_TIMEOUT_SECS", "10"))
     WEBHOOK_MAX_RETRIES  = int(os.getenv("WEBHOOK_MAX_RETRIES",  "3"))
 
+    # ── Google OAuth ──────────────────────────────────────────────────────────
+    GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    GOOGLE_REDIRECT_URI  = os.getenv("GOOGLE_REDIRECT_URI", "")
+
     @classmethod
     def validate(cls):
         """Enforce strong secrets in production. Called explicitly from app factory."""
@@ -112,6 +117,13 @@ class BaseConfig:
         
         # Check DEBUG mode in production
         app_env = _os.getenv("APP_ENV", "development").lower()
+        
+        # Check Google OAuth configuration in production
+        if app_env == "production" and cls.GOOGLE_CLIENT_ID:
+            if len(cls.GOOGLE_CLIENT_SECRET) < 32:
+                errors.append("GOOGLE_CLIENT_SECRET too short (minimum 32 characters)")
+            if cls.GOOGLE_REDIRECT_URI and not cls.GOOGLE_REDIRECT_URI.startswith("https://"):
+                errors.append("GOOGLE_REDIRECT_URI must use HTTPS in production")
         if app_env == "production" and cls.DEBUG:
             errors.append("DEBUG mode is enabled in production environment")
         

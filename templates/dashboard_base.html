@@ -141,9 +141,13 @@
     
     <div class="mt-auto p-4 bg-gray-100 dark:bg-surface-container-low rounded-2xl">
         <div class="flex items-center gap-3">
+            {% if profile_picture %}
+            <img src="{{ profile_picture }}" alt="{{ username }}" class="w-10 h-10 rounded-full border border-gray-300 dark:border-outline-variant/20 object-cover">
+            {% else %}
             <div class="w-10 h-10 rounded-full bg-gray-200 dark:bg-surface-container-highest flex items-center justify-center border border-gray-300 dark:border-outline-variant/20">
                 <span class="material-symbols-outlined text-primary">account_circle</span>
             </div>
+            {% endif %}
             <div class="overflow-hidden">
                 <p class="text-xs font-bold truncate text-gray-900 dark:text-white">{{ username }}</p>
                 <p class="text-[10px] text-gray-600 dark:text-outline truncate">Verified Merchant</p>

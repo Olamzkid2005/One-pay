@@ -95,9 +95,11 @@ def dashboard():
     with get_db() as db:
         user = db.query(User).filter(User.id == current_user_id()).first()
         webhook_url = user.webhook_url if user else ""
+        profile_picture = user.profile_picture_url if user else None
     return render_template(
         "index.html",
         username=current_username(),
+        profile_picture=profile_picture,
         csrf_token=get_csrf_token(),
         webhook_url=webhook_url or "",
         link_expiry_minutes=Config.LINK_EXPIRATION_MINUTES,
@@ -112,6 +114,7 @@ def settings():
     with get_db() as db:
         user = db.query(User).filter(User.id == current_user_id()).first()
         webhook_url = user.webhook_url if user else ""
+        profile_picture = user.profile_picture_url if user else None
         
         # Load invoice settings for current user (Requirement 11.1)
         invoice_settings = db.query(InvoiceSettings).filter(
@@ -122,6 +125,7 @@ def settings():
         return render_template(
             "settings.html",
             username=current_username(),
+            profile_picture=profile_picture,
             csrf_token=get_csrf_token(),
             webhook_url=webhook_url or "",
             invoice_settings=invoice_settings,
@@ -133,9 +137,13 @@ def settings():
 def check_status():
     if not current_user_id():
         return login_required_redirect()
+    with get_db() as db:
+        user = db.query(User).filter(User.id == current_user_id()).first()
+        profile_picture = user.profile_picture_url if user else None
     return render_template(
         "check_status.html",
         username=current_username(),
+        profile_picture=profile_picture,
         csrf_token=get_csrf_token(),
         active_page="check_status",
     )
@@ -145,9 +153,13 @@ def check_status():
 def history():
     if not current_user_id():
         return login_required_redirect()
+    with get_db() as db:
+        user = db.query(User).filter(User.id == current_user_id()).first()
+        profile_picture = user.profile_picture_url if user else None
     return render_template(
         "history.html",
         username=current_username(),
+        profile_picture=profile_picture,
         csrf_token=get_csrf_token(),
         active_page="history",
     )
@@ -157,9 +169,13 @@ def history():
 def invoices():
     if not current_user_id():
         return login_required_redirect()
+    with get_db() as db:
+        user = db.query(User).filter(User.id == current_user_id()).first()
+        profile_picture = user.profile_picture_url if user else None
     return render_template(
         "invoices.html",
         username=current_username(),
+        profile_picture=profile_picture,
         csrf_token=get_csrf_token(),
         active_page="invoices",
     )

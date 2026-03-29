@@ -225,21 +225,32 @@ def create_app() -> Flask:
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; "
+            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://accounts.google.com/gsi/ https://accounts.google.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://accounts.google.com; "
             "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com; "
             "img-src 'self' data: https://lh3.googleusercontent.com; "
-            "connect-src 'self'; "
+            "connect-src 'self' https://accounts.google.com https://*.google.com; "
+            "frame-src https://accounts.google.com https://*.google.com; "
+            "child-src https://accounts.google.com; "
             "frame-ancestors 'none'; "
             "base-uri 'self'; "
             "form-action 'self';",
         )
-        response.headers.setdefault("X-Frame-Options", "DENY")
+        
+        # X-Frame-Options: Don't set DENY on login/register pages (Google OAuth needs popups)
+        # CSP frame-ancestors 'none' provides equivalent protection
+        if request.endpoint not in ['auth.login_page', 'auth.register_page']:
+            response.headers.setdefault("X-Frame-Options", "DENY")
+        
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response.headers.setdefault("Permissions-Policy", 
             "geolocation=(), camera=(), microphone=(), payment=(), usb=(), magnetometer=()")
-        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        
+        # Cross-Origin-Opener-Policy: Don't use same-origin on login/register (blocks OAuth popups)
+        if request.endpoint not in ['auth.login_page', 'auth.register_page']:
+            response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        
         # Removed Cross-Origin-Embedder-Policy as it blocks CDN resources
         response.headers.setdefault("X-XSS-Protection", "1; mode=block")
         response.headers.setdefault("X-Download-Options", "noopen")
@@ -349,7 +360,13 @@ def create_app() -> Flask:
     from database import get_db
     from services.webhook import retry_failed_webhooks
     from services.security_monitor import detect_suspicious_activity
-    from app_cleanup import start_cleanup_threads
+    
+    try:
+        from app_cleanup import start_cleanup_threads
+    except ImportError:
+        # app_cleanup module not available (e.g., in test environment)
+        def start_cleanup_threads():
+            pass
     
     def _webhook_retry_loop():
         """Background thread that retries failed webhook deliveries."""

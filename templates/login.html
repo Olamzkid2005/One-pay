@@ -2,6 +2,11 @@
 
 {% block title %}OnePay — Merchant Login{% endblock %}
 
+{% block extra_head %}
+<!-- Google Identity Services -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+{% endblock %}
+
 {% block extra_styles %}
 <style>
     .editorial-shadow {
@@ -102,6 +107,26 @@
                     </p>
                 </div>
             </form>
+            
+            <!-- OAuth Separator -->
+            <div id="oauth-separator" class="hidden mt-8 mb-6">
+                <div class="relative">
+                    <div class="absolute inset-0 flex items-center">
+                        <div class="w-full border-t border-outline-variant/30"></div>
+                    </div>
+                    <div class="relative flex justify-center text-sm">
+                        <span class="px-4 bg-surface-container text-outline font-label uppercase tracking-wider text-xs">Or continue with</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Google Sign-In Button Container -->
+            <div id="google-signin-container" class="hidden">
+                <div id="google-signin-button" class="flex justify-center"></div>
+                <p class="text-center text-xs text-outline mt-3 font-body">
+                    Sign in with your Google account
+                </p>
+            </div>
         </div>
     </div>
 </main>
@@ -135,5 +160,127 @@ function togglePassword(inputId, iconId) {
         icon.textContent = 'visibility_off';
     }
 }
+
+// Google OAuth Integration
+let googleOAuthConfig = null;
+
+// Fetch OAuth configuration from backend
+async function fetchGoogleOAuthConfig() {
+    try {
+        const response = await fetch('/auth/google/config');
+        const config = await response.json();
+        return config;
+    } catch (error) {
+        console.error('Failed to fetch Google OAuth config:', error);
+        return { enabled: false };
+    }
+}
+
+// Initialize Google Sign-In
+async function initializeGoogleSignIn() {
+    googleOAuthConfig = await fetchGoogleOAuthConfig();
+    
+    if (!googleOAuthConfig.enabled) {
+        console.log('Google OAuth is not configured');
+        return;
+    }
+    
+    // Show OAuth UI elements
+    document.getElementById('oauth-separator').classList.remove('hidden');
+    document.getElementById('google-signin-container').classList.remove('hidden');
+    
+    // Initialize Google Identity Services
+    google.accounts.id.initialize({
+        client_id: googleOAuthConfig.client_id,
+        callback: handleGoogleCallback,
+        auto_select: false,
+        cancel_on_tap_outside: false
+    });
+    
+    // Display One Tap prompt
+    google.accounts.id.prompt((notification) => {
+        console.log('One Tap notification:', notification);
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            console.log('One Tap not displayed:', notification.getNotDisplayedReason());
+        }
+    });
+    
+    // Render the Google Sign-In button
+    google.accounts.id.renderButton(
+        document.getElementById('google-signin-button'),
+        {
+            theme: 'filled_blue',
+            size: 'large',
+            width: 400,
+            text: 'signin_with',
+            shape: 'rectangular',
+            logo_alignment: 'left'
+        }
+    );
+}
+
+// Handle Google OAuth callback
+async function handleGoogleCallback(response) {
+    console.log('Google callback triggered!', response);
+    try {
+        // Get CSRF token from page
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        console.log('Sending credential to backend...');
+        
+        // Send credential to backend
+        const result = await fetch('/auth/google/callback', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                credential: response.credential,
+                csrf_token: csrfToken
+            })
+        });
+        
+        console.log('Backend response status:', result.status);
+        const data = await result.json();
+        console.log('Backend response data:', data);
+        
+        if (data.success) {
+            console.log('Success! Redirecting to:', data.redirect_url);
+            // Redirect to dashboard
+            window.location.href = data.redirect_url;
+        } else {
+            console.error('Authentication failed:', data.message);
+            // Show error message
+            showGoogleError(data.message || 'Authentication failed. Please try again.');
+        }
+    } catch (error) {
+        console.error('Google OAuth error:', error);
+        showGoogleError('An error occurred. Please try again.');
+    }
+}
+
+// Show error message for Google OAuth
+function showGoogleError(message) {
+    // Create error message element
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'mt-4 p-4 rounded-xl bg-error-container/10 border border-error/20 text-error';
+    errorDiv.innerHTML = `
+        <div class="flex items-center gap-2 text-sm">
+            <span class="material-symbols-outlined text-lg">error</span>
+            <span>${message}</span>
+        </div>
+    `;
+    
+    // Insert after Google Sign-In container
+    const container = document.getElementById('google-signin-container');
+    container.parentNode.insertBefore(errorDiv, container.nextSibling);
+    
+    // Remove after 5 seconds
+    setTimeout(() => {
+        errorDiv.remove();
+    }, 5000);
+}
+
+// Initialize Google Sign-In when page loads
+window.addEventListener('load', initializeGoogleSignIn);
 </script>
 {% endblock %}

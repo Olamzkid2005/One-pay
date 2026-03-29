@@ -15,6 +15,7 @@ from models.user import User
 from services.rate_limiter import check_rate_limit
 from services.security import generate_reset_token, validate_webhook_url
 from services.email import send_password_reset
+from services.google_oauth import GoogleTokenValidator, GoogleProfileExtractor
 from core.auth import (
     get_csrf_token, is_valid_csrf_token,
     current_user_id, current_username,
@@ -363,4 +364,137 @@ def update_settings():
         logger.info("Webhook URL updated for merchant: %s", user.username)
 
     return jsonify({"success": True, "message": "Settings updated", "webhook_url": webhook_url})
+
+
+# ── Google OAuth ───────────────────────────────────────────────────────────────
+
+@auth_bp.route("/auth/google/config", methods=["GET"])
+def google_config():
+    """
+    Provide Google OAuth client configuration to frontend.
+    Returns enabled status and client_id if OAuth is configured.
+    """
+    client_id = Config.GOOGLE_CLIENT_ID
+    
+    if not client_id:
+        return jsonify({"enabled": False})
+    
+    return jsonify({
+        "enabled": True,
+        "client_id": client_id
+    })
+
+
+@auth_bp.route("/auth/google/callback", methods=["POST"])
+def google_callback():
+    """
+    Handle Google OAuth callback.
+    Receives ID token from frontend, validates it, and creates/links user account.
+    """
+    # Validate Content-Type
+    if request.content_type != 'application/json':
+        return error("Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415)
+    
+    data = request.get_json(silent=True) or {}
+    credential = data.get("credential", "").strip()
+    csrf_token = data.get("csrf_token", "")
+    
+    # Validate CSRF token
+    if not is_valid_csrf_token(csrf_token):
+        return error("Session expired. Please refresh and try again.", "CSRF_ERROR", 403)
+    
+    # Validate credential is present
+    if not credential:
+        return error("Missing credential", "INVALID_REQUEST", 400)
+    
+    with get_db() as db:
+        # Apply rate limiting (5 requests per IP per 60 seconds)
+        if not check_rate_limit(db, f"google_oauth:{client_ip()}", limit=5, window_secs=60, critical=True):
+            log_event(db, "oauth.rate_limit_exceeded", ip_address=client_ip(), 
+                     detail={"provider": "google"})
+            return error("Too many authentication attempts. Please wait and try again.", 
+                        "RATE_LIMIT_EXCEEDED", 429)
+        
+        try:
+            # Validate token
+            client_id = Config.GOOGLE_CLIENT_ID
+            if not client_id:
+                logger.error("Google OAuth not configured (missing GOOGLE_CLIENT_ID)")
+                return error("Google authentication is not available.", "SERVICE_UNAVAILABLE", 503)
+            
+            validator = GoogleTokenValidator(client_id)
+            token_payload = validator.validate_token(credential)
+            
+            # Extract profile
+            profile = GoogleProfileExtractor.extract_profile(token_payload)
+            
+            # Check if user exists by google_id
+            user = User.find_by_google_id(db, profile['google_id'])
+            
+            if user:
+                # User exists with this Google ID - log them in
+                _regenerate_session_secure(user.id, user.username)
+                log_event(db, "oauth.login", user_id=user.id, ip_address=client_ip(),
+                         detail={"provider": "google", "email": profile['email']})
+                logger.info("Google OAuth login: %s", user.username)
+                return jsonify({"success": True, "redirect_url": url_for("payments.dashboard")})
+            
+            # User doesn't exist by google_id - check by email
+            user = User.find_by_email(db, profile['email'])
+            
+            if user:
+                # Email exists - check if already linked to different Google account
+                if user.google_id and user.google_id != profile['google_id']:
+                    log_event(db, "oauth.account_conflict", user_id=user.id, ip_address=client_ip(),
+                             detail={"provider": "google", "email": profile['email']})
+                    return error("This email is already linked to a different Google account.", 
+                                "ACCOUNT_CONFLICT", 409)
+                
+                # Link Google account to existing user
+                user.link_google_account(
+                    profile['google_id'],
+                    profile['profile_picture_url'],
+                    profile['full_name']
+                )
+                db.flush()
+                
+                _regenerate_session_secure(user.id, user.username)
+                log_event(db, "oauth.account_linked", user_id=user.id, ip_address=client_ip(),
+                         detail={"provider": "google", "email": profile['email']})
+                logger.info("Google account linked to existing user: %s", user.username)
+                flash(f"Welcome back, {user.username}! Your Google account has been linked.", "success")
+                return jsonify({"success": True, "redirect_url": url_for("payments.dashboard")})
+            
+            # No existing user - create new account
+            user = User.create_from_google(db, profile)
+            db.flush()
+            db.refresh(user)
+            
+            _regenerate_session_secure(user.id, user.username)
+            log_event(db, "oauth.account_created", user_id=user.id, ip_address=client_ip(),
+                     detail={"provider": "google", "email": profile['email'], "username": user.username})
+            logger.info("New user created via Google OAuth: %s", user.username)
+            flash(f"Welcome, {user.username}! Your account has been created.", "success")
+            return jsonify({"success": True, "redirect_url": url_for("payments.dashboard")})
+            
+        except ValueError as e:
+            # Token validation or profile extraction failed
+            error_msg = str(e)
+            log_event(db, "oauth.authentication_failed", ip_address=client_ip(),
+                     detail={"provider": "google", "error": error_msg})
+            logger.warning("Google OAuth authentication failed: %s | ip=%s", error_msg, client_ip())
+            
+            # Return user-friendly error message
+            if "not verified" in error_msg.lower():
+                return error("Please verify your email address with Google before signing in.", 
+                            "UNVERIFIED_EMAIL", 401)
+            else:
+                return error("Authentication failed. Please try again.", "INVALID_TOKEN", 401)
+        
+        except Exception as e:
+            # Unexpected error
+            logger.error("Google OAuth unexpected error: %s | ip=%s", str(e), client_ip(), exc_info=True)
+            log_event(db, "oauth.internal_error", ip_address=client_ip(),
+                     detail={"provider": "google", "error": "Internal error"})
+            return error("An error occurred. Please try again later.", "INTERNAL_ERROR", 500)
 

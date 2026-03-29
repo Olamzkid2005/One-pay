@@ -1,5 +1,188 @@
 # OnePay Changelog
 
+## Version 1.3.0 - March 29, 2026
+
+### 🔐 Google OAuth Integration
+
+#### New Authentication Method
+- **Google Sign-In**: One-click registration and login using Google accounts
+- **Account Linking**: Existing users can link their Google accounts
+- **Seamless Experience**: No password required for Google-authenticated users
+- **Security First**: Token validation, CSRF protection, rate limiting
+
+#### Implementation Details
+- **Token Validation**: Complete ID token verification using Google's public keys
+  - Signature verification with google-auth library
+  - Audience, issuer, and expiration validation
+  - Email verification requirement enforced
+- **Profile Extraction**: Automatic profile data import
+  - Email (normalized to lowercase)
+  - Full name
+  - Profile picture URL
+  - Google user ID
+- **Account Management**:
+  - New account creation for first-time Google users
+  - Account linking for existing email addresses
+  - Conflict prevention (email already linked to different Google account)
+  - Username generation from email with collision handling
+- **Session Security**:
+  - CSRF token validation on OAuth callback
+  - Session regeneration after authentication
+  - IP and User-Agent binding (existing security)
+  - No OAuth tokens stored in database
+
+#### Frontend Integration
+- **Google Sign-In Button**: Professional Google-branded button on registration page
+- **Graceful Degradation**: Traditional registration still available
+- **Configuration Detection**: Button only appears when OAuth is configured
+- **Error Handling**: User-friendly error messages for all failure scenarios
+
+#### Security Features
+- **Rate Limiting**: 5 requests per IP per 60 seconds on OAuth callback
+- **CSRF Protection**: Token validation prevents forged requests
+- **Audit Logging**: All OAuth events logged (authentication, account creation, linking)
+- **Email Verification**: Only verified Google emails accepted
+- **No Token Storage**: OAuth tokens never stored in database
+- **Error Privacy**: Technical details hidden from users
+
+#### Configuration
+- **Environment Variables**:
+  - `GOOGLE_CLIENT_ID` - OAuth 2.0 client ID from Google Cloud Console
+  - `GOOGLE_CLIENT_SECRET` - OAuth 2.0 client secret
+  - `GOOGLE_REDIRECT_URI` - Callback URL for OAuth flow
+- **Production Requirements**:
+  - HTTPS enforced for OAuth redirect URI
+  - Client secret minimum length validation
+  - Graceful fallback when not configured
+
+### 📦 New Components
+
+#### Services
+- `services/google_oauth.py` - Google OAuth service layer
+  - `GoogleTokenValidator` - ID token validation
+  - `GoogleProfileExtractor` - Profile data extraction
+
+#### Database Changes
+- **User Model Extensions**:
+  - `google_id` - Google user identifier (unique, indexed)
+  - `profile_picture_url` - User's Google profile picture
+  - `full_name` - User's full name from Google
+  - `auth_provider` - Authentication method ('traditional', 'google', 'both')
+- **New Methods**:
+  - `User.find_by_google_id()` - Find user by Google ID
+  - `User.find_by_email()` - Find user by email
+  - `User.create_from_google()` - Create user from Google profile
+  - `User.link_google_account()` - Link Google account to existing user
+  - `User.generate_username_from_email()` - Generate unique username
+
+#### API Endpoints
+- `GET /auth/google/config` - OAuth configuration status
+- `POST /auth/google/callback` - OAuth callback handler
+
+#### Database Migrations
+- `alembic/versions/20260329140000_add_google_oauth_fields.py` - OAuth schema migration
+
+### 🧪 Testing
+
+#### Test Coverage
+- **Unit Tests**: 30+ tests for core OAuth logic
+  - Token validation (signature, audience, issuer, expiration)
+  - Profile extraction (email normalization, verification)
+  - Username generation (collision handling, special characters)
+  - Account creation and linking
+- **Integration Tests**: 15+ tests for complete OAuth flow
+  - New account creation flow
+  - Account linking flow
+  - Session management
+  - CSRF validation
+  - Rate limiting
+  - Error handling
+- **Manual Test Checklist**: Comprehensive end-to-end testing guide
+
+#### Test Files
+- `tests/integration/test_google_oauth_flow.py` - Integration tests
+- `tests/MANUAL_TESTING_CHECKLIST.md` - Manual testing procedures
+
+### 📚 Documentation
+
+#### New Documentation
+- `docs/GOOGLE_OAUTH_SETUP.md` - Complete setup guide
+  - Google Cloud Console configuration
+  - Environment variable setup
+  - Development and production setup
+  - Troubleshooting guide
+
+#### Updated Documentation
+- `README.md` - Added Google OAuth feature description
+- `CHANGELOG.md` - This version entry
+
+### 🔄 Migration Guide
+
+#### Upgrading from v1.2.5
+
+1. **Backup Database**:
+   ```bash
+   cp onepay.db onepay.db.backup
+   ```
+
+2. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Run Database Migration**:
+   ```bash
+   alembic upgrade head
+   ```
+
+4. **Configure Google OAuth** (Optional):
+   ```bash
+   # Add to .env
+   GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=your-client-secret
+   GOOGLE_REDIRECT_URI=http://localhost:5000/auth/google/callback
+   ```
+
+5. **Restart Application**:
+   ```bash
+   python app.py
+   ```
+
+6. **Verify Features**:
+   - Visit registration page
+   - Verify Google Sign-In button appears (if configured)
+   - Test Google authentication flow
+   - Verify account linking works
+
+### 🎯 Breaking Changes
+
+None. All changes are backward compatible. Traditional authentication continues to work unchanged.
+
+### 📝 Notes
+
+- Google OAuth is optional and can be disabled by not setting environment variables
+- Traditional registration and login remain fully functional
+- Existing users can link their Google accounts
+- No OAuth tokens are stored in the database
+- All OAuth events are logged for audit purposes
+
+### 🔒 Security Considerations
+
+- Only verified Google emails are accepted
+- CSRF protection prevents forged OAuth requests
+- Rate limiting prevents abuse of OAuth endpoint
+- Session security unchanged (IP/User-Agent binding)
+- No sensitive OAuth data stored in database
+- Audit logging captures all OAuth events
+
+### 🙏 Acknowledgments
+
+- Google Identity Services for OAuth 2.0 implementation
+- google-auth library for token validation
+- Community feedback on authentication improvements
+
+---
+
 ## Version 1.2.5 - March 29, 2026
 
 ### 🔒 Security Enhancements

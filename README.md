@@ -2,21 +2,25 @@
 
 A modern, secure payment verification and invoice management platform that integrates with Quickteller API. OnePay eliminates fake payment confirmations by allowing merchants to generate secure, time-bound payment links, automatically create professional invoices, and verify transactions directly from the payment infrastructure.
 
-## 🚀 Latest Updates (v1.2.5)
+## 🚀 Latest Updates (v1.3.0)
 
-### Security Enhancements
+### Google OAuth Integration
+- 🔐 **Google Sign-In**: One-click registration and login with Google accounts
+- 🔗 **Account Linking**: Connect existing accounts to Google for easier access
+- 🛡️ **Secure Authentication**: Token validation, CSRF protection, rate limiting
+- 👤 **Profile Import**: Automatic profile picture and name from Google
+- ✅ **Backward Compatible**: Traditional authentication still fully supported
+
+### Previous Updates (v1.2.5)
 - 🔒 **16/18 Vulnerabilities Resolved**: Comprehensive security audit completed
 - 🛡️ **Session Security**: IP and User-Agent binding prevents session hijacking
 - 🚫 **SSRF Protection**: Webhook blacklist prevents DNS rebinding attacks
-- 🔐 **Password Strength**: Enhanced validation with common password blocking
 - 📊 **Security Monitoring**: Real-time threat detection running every 5 minutes
-- ✅ **Production Ready**: All critical and high-severity vulnerabilities fixed
 
-### Previous Updates (v1.2.0)
+### Earlier Updates (v1.2.0)
 - ✨ **Invoice System**: Automatic invoice generation with PDF export
 - 📧 **Email Notifications**: Payment alerts with invoice attachments
 - 🎨 **Light/Dark Mode**: Beautiful theme toggle with persistent preference
-- 📱 **Enhanced UI/UX**: Collapsible sidebar and improved accessibility
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
@@ -50,6 +54,7 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
 ### Security & Performance
 - **User Authentication**: Secure registration and login with bcrypt password hashing (13 rounds)
+- **Google OAuth**: One-click sign-in with Google accounts (optional)
 - **Session Security**: IP and User-Agent binding prevents session fixation attacks
 - **Rate Limiting**: Protection against abuse with configurable rate limits
 - **Audit Logging**: Comprehensive logging with 90-day retention policy
@@ -135,6 +140,7 @@ The application will be available at `http://localhost:5000`
 
 1. **Register an Account**
    - Navigate to `http://localhost:5000/register`
+   - Choose traditional registration or Google Sign-In
    - Create your merchant account
 
 2. **Configure Settings** (Optional)
@@ -142,12 +148,17 @@ The application will be available at `http://localhost:5000`
    - Add your business name, logo, and tax ID
    - Enable auto-send email for customer invoices
 
-3. **Create Your First Payment Link**
+3. **Set Up Google OAuth** (Optional)
+   - See [Google OAuth Setup Guide](docs/GOOGLE_OAUTH_SETUP.md)
+   - Configure Google Cloud Console
+   - Add credentials to `.env` file
+
+4. **Create Your First Payment Link**
    - Enter amount and description
    - Click "Generate Payment Link"
    - Share the link with your customer
 
-4. **View Invoice**
+5. **View Invoice**
    - Once payment is verified, invoice is auto-generated
    - Download as PDF or send via email
    - Track status in Invoices page
@@ -179,6 +190,11 @@ MAIL_USE_TLS=True
 MAIL_USERNAME=your-email@gmail.com
 MAIL_PASSWORD=your-app-password
 MAIL_DEFAULT_SENDER=noreply@onepay.com
+
+# Google OAuth Configuration (Optional)
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+GOOGLE_REDIRECT_URI=http://localhost:5000/auth/google/callback
 ```
 
 ### Email Setup
@@ -194,11 +210,31 @@ For email notifications to work:
 
 See [EMAIL_SETUP_GUIDE.md](EMAIL_SETUP_GUIDE.md) for detailed instructions.
 
+### Google OAuth Setup
+
+For Google Sign-In to work:
+
+1. **Create Google Cloud Project**
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create a new project or select existing one
+   - Enable Google+ API
+
+2. **Configure OAuth Consent Screen**
+   - Set application name, logo, and support email
+   - Add authorized domains
+
+3. **Create OAuth 2.0 Credentials**
+   - Create OAuth 2.0 Client ID
+   - Add authorized redirect URIs
+   - Copy Client ID and Client Secret to `.env`
+
+See [docs/GOOGLE_OAUTH_SETUP.md](docs/GOOGLE_OAUTH_SETUP.md) for detailed instructions.
+
 ## Usage
 
 ### For Users
 
-1. **Register**: Create an account with email and password
+1. **Register**: Create an account with email and password, or use Google Sign-In
 2. **Configure Settings**: Add your business details, logo, and email preferences
 3. **Generate Payment Link**: Enter amount and description to create a secure payment link
 4. **Share Link**: Send the generated link to the payer (includes QR code)
@@ -234,7 +270,8 @@ One-pay/
 │   ├── qr_code.py        # QR code generation
 │   ├── webhook.py        # Webhook handler
 │   ├── rate_limiter.py   # Rate limiting
-│   └── security.py       # Security utilities
+│   ├── security.py       # Security utilities
+│   └── google_oauth.py   # Google OAuth service
 ├── core/                  # Core utilities
 │   ├── auth.py           # Authentication helpers
 │   ├── responses.py      # Response formatters
@@ -316,6 +353,7 @@ See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment instructions.
 
 ### User Guides
 - [Email Setup Guide](EMAIL_SETUP_GUIDE.md) - Configure email notifications
+- [Google OAuth Setup Guide](docs/GOOGLE_OAUTH_SETUP.md) - Configure Google Sign-In
 - [Manual Test Guide](docs/MANUAL_TEST_GUIDE.md) - Testing procedures
 
 ### Technical Documentation
@@ -355,10 +393,10 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 📊 Project Status
 
-- **Version**: 1.2.5
+- **Version**: 1.3.0
 - **Status**: Production Ready ✅
 - **Security**: 16/18 vulnerabilities resolved (89%)
-- **Test Coverage**: 24/24 security tests passing
+- **Test Coverage**: 45+ tests passing (security + OAuth)
 - **License**: MIT
 - **Python**: 3.8+
 - **Last Updated**: March 29, 2026
