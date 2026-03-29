@@ -16,6 +16,69 @@
     .primary-gradient {
         background: linear-gradient(135deg, #aac7ff 0%, #418fff 100%);
     }
+    
+    /* Input focus animations */
+    .input-focus-ring {
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .input-focus-ring:focus {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(170, 199, 255, 0.15);
+    }
+    
+    /* Custom Google button styling */
+    .google-btn-custom {
+        position: relative;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .google-btn-custom:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    }
+    
+    .google-btn-custom:active {
+        transform: translateY(0);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Hide the real Google button but keep it functional */
+    #google-signin-button {
+        pointer-events: auto;
+        cursor: pointer;
+    }
+    
+    #google-signin-button > div {
+        opacity: 0 !important;
+    }
+    
+    /* Enhanced gradient button */
+    .primary-gradient-btn {
+        background: linear-gradient(135deg, #aac7ff 0%, #418fff 50%, #aac7ff 100%);
+        background-size: 200% 200%;
+        animation: gradient-shift 3s ease infinite;
+        box-shadow: 0 8px 24px rgba(170, 199, 255, 0.25);
+    }
+    
+    .primary-gradient-btn:hover {
+        box-shadow: 0 12px 32px rgba(170, 199, 255, 0.35);
+    }
+    
+    @keyframes gradient-shift {
+        0%, 100% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+    }
+    
+    /* Logo hover animation */
+    .logo-hover {
+        transition: transform 0.3s ease;
+    }
+    
+    .logo-hover:hover {
+        transform: scale(1.1) rotate(5deg);
+    }
 </style>
 {% endblock %}
 
@@ -24,7 +87,7 @@
     <div class="w-full max-w-[400px]">
         <!-- Logo Section -->
         <div class="flex flex-col items-center mb-8">
-            <div class="w-12 h-12 primary-gradient rounded-xl flex items-center justify-center shadow-lg shadow-primary/20 mb-3">
+            <div class="w-12 h-12 primary-gradient rounded-xl flex items-center justify-center shadow-lg shadow-primary/20 mb-3 logo-hover">
                 <span class="material-symbols-outlined text-on-primary-container text-3xl" style="font-variation-settings: 'FILL' 1;">shield</span>
             </div>
             <h1 class="font-headline text-3xl font-extrabold tracking-tighter text-on-surface">OnePay</h1>
@@ -55,47 +118,47 @@
                 <!-- Username -->
                 <div class="space-y-1.5">
                     <label class="font-label text-xs font-semibold text-outline uppercase tracking-wider ml-1">Username</label>
-                    <div class="relative">
+                    <div class="relative group">
                         <input 
                             name="username"
                             type="text"
                             value="{{ username or '' }}"
-                            class="w-full h-14 bg-surface-container-high border-none rounded-xl px-4 text-on-surface placeholder:text-outline/50 focus:ring-2 focus:ring-primary/50 transition-all font-body text-sm" 
+                            class="input-focus-ring w-full h-14 bg-surface-container-high border-none rounded-xl px-4 text-on-surface placeholder:text-outline/50 focus:ring-2 focus:ring-primary/50 transition-all font-body text-sm" 
                             placeholder="3-30 chars, letters/digits"
                             required
                             autocomplete="username"
                             pattern="[a-zA-Z0-9_]{3,30}"
                         />
-                        <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline/40">person</span>
+                        <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline/40 transition-colors group-focus-within:text-primary">person</span>
                     </div>
                 </div>
                 
                 <!-- Email -->
                 <div class="space-y-1.5">
                     <label class="font-label text-xs font-semibold text-outline uppercase tracking-wider ml-1">Email address</label>
-                    <div class="relative">
+                    <div class="relative group">
                         <input 
                             name="email"
                             type="email"
                             value="{{ email or '' }}"
-                            class="w-full h-14 bg-surface-container-high border-none rounded-xl px-4 text-on-surface placeholder:text-outline/50 focus:ring-2 focus:ring-primary/50 transition-all font-body text-sm" 
+                            class="input-focus-ring w-full h-14 bg-surface-container-high border-none rounded-xl px-4 text-on-surface placeholder:text-outline/50 focus:ring-2 focus:ring-primary/50 transition-all font-body text-sm" 
                             placeholder="merchant@onepay.com"
                             required
                             autocomplete="email"
                         />
-                        <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline/40">mail</span>
+                        <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline/40 transition-colors group-focus-within:text-primary">mail</span>
                     </div>
                 </div>
                 
                 <!-- Password -->
                 <div class="space-y-1.5">
                     <label class="font-label text-xs font-semibold text-outline uppercase tracking-wider ml-1">Password</label>
-                    <div class="relative">
+                    <div class="relative group">
                         <input 
                             id="password"
                             name="password"
                             type="password"
-                            class="w-full h-14 bg-surface-container-high border-none rounded-xl px-4 pr-12 text-on-surface placeholder:text-outline/50 focus:ring-2 focus:ring-primary/50 transition-all font-body text-sm" 
+                            class="input-focus-ring w-full h-14 bg-surface-container-high border-none rounded-xl px-4 pr-12 text-on-surface placeholder:text-outline/50 focus:ring-2 focus:ring-primary/50 transition-all font-body text-sm" 
                             placeholder="Min 8 chars, letter + number"
                             required
                             autocomplete="new-password"
@@ -125,7 +188,7 @@
                             id="password2"
                             name="password2"
                             type="password"
-                            class="w-full h-14 bg-surface-container-high border-none rounded-xl px-4 pr-12 text-on-surface placeholder:text-outline/50 focus:ring-2 focus:ring-primary/50 transition-all font-body text-sm" 
+                            class="input-focus-ring w-full h-14 bg-surface-container-high border-none rounded-xl px-4 pr-12 text-on-surface placeholder:text-outline/50 focus:ring-2 focus:ring-primary/50 transition-all font-body text-sm" 
                             placeholder="Re-enter your password"
                             required
                             autocomplete="new-password"
@@ -140,7 +203,7 @@
                 <!-- Submit Button -->
                 <button 
                     type="submit"
-                    class="w-full h-14 primary-gradient text-on-primary-container font-headline font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all shadow-xl shadow-primary/20 mt-4"
+                    class="w-full h-14 primary-gradient-btn text-on-primary-container font-headline font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all mt-4"
                 >
                     Create Account
                     <span class="material-symbols-outlined">arrow_forward</span>
@@ -161,9 +224,23 @@
             
             <!-- Google Sign-In Button Container -->
             <div id="google-signin-container" class="hidden">
-                <div id="google-signin-button" class="flex justify-center"></div>
+                <div class="relative google-btn-custom">
+                    <!-- Real Google button (invisible but functional) -->
+                    <div id="google-signin-button" class="absolute inset-0 z-10"></div>
+                    
+                    <!-- Custom styled button (visual only) -->
+                    <button type="button" class="w-full h-14 bg-white text-gray-700 font-semibold rounded-xl flex items-center justify-center gap-3 border border-gray-200 shadow-md relative z-0 pointer-events-none">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M19.6 10.227c0-.709-.064-1.39-.182-2.045H10v3.868h5.382a4.6 4.6 0 01-1.996 3.018v2.51h3.232c1.891-1.742 2.982-4.305 2.982-7.35z" fill="#4285F4"/>
+                            <path d="M10 20c2.7 0 4.964-.895 6.618-2.423l-3.232-2.509c-.895.6-2.04.955-3.386.955-2.605 0-4.81-1.76-5.595-4.123H1.064v2.59A9.996 9.996 0 0010 20z" fill="#34A853"/>
+                            <path d="M4.405 11.9c-.2-.6-.314-1.24-.314-1.9 0-.66.114-1.3.314-1.9V5.51H1.064A9.996 9.996 0 000 10c0 1.614.386 3.14 1.064 4.49l3.34-2.59z" fill="#FBBC05"/>
+                            <path d="M10 3.977c1.468 0 2.786.505 3.823 1.496l2.868-2.868C14.959.99 12.695 0 10 0 6.09 0 2.71 2.24 1.064 5.51l3.34 2.59C5.19 5.736 7.395 3.977 10 3.977z" fill="#EA4335"/>
+                        </svg>
+                        <span>Continue with Google</span>
+                    </button>
+                </div>
                 <p class="text-center text-xs text-outline mt-3 font-body">
-                    Sign in with your Google account for quick registration
+                    Quick and secure authentication
                 </p>
             </div>
             

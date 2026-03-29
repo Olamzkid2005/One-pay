@@ -12,19 +12,92 @@
     .editorial-shadow {
         box-shadow: 0 64px 64px -12px rgba(10, 14, 20, 0.4);
     }
+    
+    /* Smooth hover animations */
+    .input-focus-ring {
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .input-focus-ring:focus {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(170, 199, 255, 0.15);
+    }
+    
+    /* Custom Google button styling */
+    .google-btn-custom {
+        position: relative;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .google-btn-custom:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    }
+    
+    .google-btn-custom:active {
+        transform: translateY(0);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Hide the real Google button but keep it functional */
+    #google-signin-button {
+        pointer-events: auto;
+        cursor: pointer;
+    }
+    
+    #google-signin-button > div {
+        opacity: 0 !important;
+    }
+    
+    /* Gradient animation */
+    @keyframes gradient-shift {
+        0%, 100% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+    }
+    
+    .gradient-cta {
+        background: linear-gradient(135deg, #aac7ff 0%, #418fff 50%, #aac7ff 100%);
+        background-size: 200% 200%;
+        animation: gradient-shift 3s ease infinite;
+        box-shadow: 0 8px 24px rgba(170, 199, 255, 0.25);
+    }
+    
+    .gradient-cta:hover {
+        box-shadow: 0 12px 32px rgba(170, 199, 255, 0.35);
+    }
+    
+    /* Floating animation for background elements */
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-20px); }
+    }
+    
+    .float-animation {
+        animation: float 6s ease-in-out infinite;
+    }
+    
+    /* Logo hover animation */
+    .logo-hover {
+        transition: transform 0.3s ease;
+    }
+    
+    .logo-hover:hover {
+        transform: scale(1.1) rotate(5deg);
+    }
 </style>
 {% endblock %}
 
 {% block body %}
 <main class="flex-grow flex items-center justify-center px-6 relative overflow-hidden">
-    <!-- Background Elements -->
-    <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px]"></div>
-    <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary-container/10 rounded-full blur-[120px]"></div>
+    <!-- Background Elements with animation -->
+    <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px] float-animation"></div>
+    <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary-container/10 rounded-full blur-[120px] float-animation" style="animation-delay: 3s;"></div>
     
     <div class="w-full max-w-[400px] z-10">
         <!-- Brand Identity -->
         <div class="flex flex-col items-center mb-10 text-center">
-            <div class="mb-6 flex items-center justify-center bg-surface-container-high w-16 h-16 rounded-xl editorial-shadow">
+            <div class="mb-6 flex items-center justify-center bg-surface-container-high w-16 h-16 rounded-xl editorial-shadow logo-hover">
                 <span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">shield</span>
             </div>
             <h1 class="font-headline text-3xl font-black tracking-tighter text-on-surface mb-2">OnePay</h1>
@@ -60,12 +133,12 @@
                             name="username" 
                             type="text" 
                             value="{{ username or '' }}"
-                            class="w-full h-14 bg-surface-container-high border-outline-variant/15 border rounded-xl px-4 py-3 text-on-surface placeholder:text-outline/50 focus:outline-none focus:border-primary focus:bg-surface-container-high transition-all font-body" 
+                            class="input-focus-ring w-full h-14 bg-surface-container-high border-outline-variant/15 border rounded-xl px-4 py-3 text-on-surface placeholder:text-outline/50 focus:outline-none focus:border-primary focus:bg-surface-container-high transition-all font-body" 
                             placeholder="Enter merchant ID"
                             required
                             autocomplete="username"
                         />
-                        <span class="material-symbols-outlined absolute right-4 top-4 text-outline/40">person</span>
+                        <span class="material-symbols-outlined absolute right-4 top-4 text-outline/40 transition-colors group-focus-within:text-primary">person</span>
                     </div>
                 </div>
                 
@@ -77,7 +150,7 @@
                             id="password"
                             name="password" 
                             type="password" 
-                            class="w-full h-14 bg-surface-container-high border-outline-variant/15 border rounded-xl px-4 pr-12 py-3 text-on-surface placeholder:text-outline/50 focus:outline-none focus:border-primary focus:bg-surface-container-high transition-all font-body" 
+                            class="input-focus-ring w-full h-14 bg-surface-container-high border-outline-variant/15 border rounded-xl px-4 pr-12 py-3 text-on-surface placeholder:text-outline/50 focus:outline-none focus:border-primary focus:bg-surface-container-high transition-all font-body" 
                             placeholder="••••••••"
                             required
                             autocomplete="current-password"
@@ -122,9 +195,23 @@
             
             <!-- Google Sign-In Button Container -->
             <div id="google-signin-container" class="hidden">
-                <div id="google-signin-button" class="flex justify-center"></div>
+                <div class="relative google-btn-custom">
+                    <!-- Real Google button (invisible but functional) -->
+                    <div id="google-signin-button" class="absolute inset-0 z-10"></div>
+                    
+                    <!-- Custom styled button (visual only) -->
+                    <button type="button" class="w-full h-14 bg-white text-gray-700 font-semibold rounded-xl flex items-center justify-center gap-3 border border-gray-200 shadow-md relative z-0 pointer-events-none">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M19.6 10.227c0-.709-.064-1.39-.182-2.045H10v3.868h5.382a4.6 4.6 0 01-1.996 3.018v2.51h3.232c1.891-1.742 2.982-4.305 2.982-7.35z" fill="#4285F4"/>
+                            <path d="M10 20c2.7 0 4.964-.895 6.618-2.423l-3.232-2.509c-.895.6-2.04.955-3.386.955-2.605 0-4.81-1.76-5.595-4.123H1.064v2.59A9.996 9.996 0 0010 20z" fill="#34A853"/>
+                            <path d="M4.405 11.9c-.2-.6-.314-1.24-.314-1.9 0-.66.114-1.3.314-1.9V5.51H1.064A9.996 9.996 0 000 10c0 1.614.386 3.14 1.064 4.49l3.34-2.59z" fill="#FBBC05"/>
+                            <path d="M10 3.977c1.468 0 2.786.505 3.823 1.496l2.868-2.868C14.959.99 12.695 0 10 0 6.09 0 2.71 2.24 1.064 5.51l3.34 2.59C5.19 5.736 7.395 3.977 10 3.977z" fill="#EA4335"/>
+                        </svg>
+                        <span>Continue with Google</span>
+                    </button>
+                </div>
                 <p class="text-center text-xs text-outline mt-3 font-body">
-                    Sign in with your Google account
+                    Quick and secure authentication
                 </p>
             </div>
         </div>
