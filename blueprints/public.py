@@ -29,15 +29,17 @@ public_bp = Blueprint("public", __name__)
 @public_bp.route("/pay/<tx_ref>")
 def pay_page(tx_ref):
     try:
-        print(f"DEBUG: pay_page called with tx_ref={tx_ref}")
+        logger.info("pay_page accessed | tx_ref=%s ip=%s", tx_ref, client_ip())
         return_url = ""
         link_error = ""
 
         if not valid_tx_ref(tx_ref):
             link_error = "Invalid transaction reference format."
-            print(f"DEBUG: Invalid tx_ref format: {tx_ref}")
+            logger.warning("Invalid tx_ref format | tx_ref=%s ip=%s", tx_ref, client_ip())
             return render_template("verify.html", tx_ref=tx_ref,
-                                   return_url=return_url, link_error=link_error)
+                                   return_url=return_url, link_error=link_error,
+                                   qr_code_payment_url=None,
+                                   qr_code_virtual_account=None)
 
         with get_db() as db:
             if not check_rate_limit(
@@ -46,9 +48,11 @@ def pay_page(tx_ref):
                 window_secs=Config.RATE_LIMIT_VERIFY_PAGE_WINDOW_SECS,
             ):
                 link_error = "Too many verification attempts — please wait and try again."
-                print(f"DEBUG: Rate limit exceeded for {tx_ref}")
+                logger.warning("Rate limit exceeded | tx_ref=%s ip=%s", tx_ref, client_ip())
                 return render_template("verify.html", tx_ref=tx_ref,
-                                       return_url=return_url, link_error=link_error)
+                                       return_url=return_url, link_error=link_error,
+                                       qr_code_payment_url=None,
+                                       qr_code_virtual_account=None)
 
             t = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
 
@@ -58,50 +62,51 @@ def pay_page(tx_ref):
 
             if not t:
                 link_error = "This payment link was not found. Please request a new one."
-                print(f"DEBUG: Transaction not found: {tx_ref}")
-                logger.warning("Transaction not found: %s", tx_ref)
+                logger.warning("Transaction not found | tx_ref=%s ip=%s", tx_ref, client_ip())
             else:
-                print(f"DEBUG: Transaction found: {t.tx_ref}")
-                logger.info("Transaction found: %s, user_id=%s", tx_ref, t.user_id)
+                logger.info("Transaction found | tx_ref=%s user_id=%s status=%s", 
+                           tx_ref, t.user_id, t.status.value if t.status else 'None')
                 # Store QR code values before session ends
                 qr_payment_url = t.qr_code_payment_url
                 qr_virtual_account = t.qr_code_virtual_account
                 
-                # Debug logging
-                print(f"DEBUG: Retrieved QR data - payment={len(qr_payment_url or '')}, va={len(qr_virtual_account or '')}")
-                logger.info("QR data for %s: payment=%s, va=%s", 
+                logger.debug("QR data for %s: payment=%s, va=%s", 
                            tx_ref, 
                            "Yes" if qr_payment_url else "No",
                            "Yes" if qr_virtual_account else "No")
                 
                 if t.return_url:
                     return_url = t.return_url
+                    
                 # Validate hash server-side — customer never sees it
-                if not verify_hash_token(tx_ref, t.amount, t.expires_at, t.hash_token):
+                hash_valid = verify_hash_token(tx_ref, t.amount, t.expires_at, t.hash_token)
+                logger.debug("Hash validation | tx_ref=%s valid=%s amount=%s expires=%s", 
+                            tx_ref, hash_valid, t.amount, t.expires_at)
+                
+                if not hash_valid:
                     link_error = "This payment link is invalid or has been tampered with."
-                    print(f"DEBUG: Hash validation failed for {tx_ref}")
+                    logger.warning("Hash validation failed | tx_ref=%s ip=%s amount=%s", 
+                                 tx_ref, client_ip(), t.amount)
                 elif t.is_expired():
                     link_error = "This payment link has expired. Please request a new one."
-                    print(f"DEBUG: Transaction expired for {tx_ref}")
+                    logger.info("Transaction expired | tx_ref=%s expires_at=%s", 
+                               tx_ref, t.expires_at)
                 else:
-                    print(f"DEBUG: Transaction valid for {tx_ref}")
+                    logger.info("Transaction valid | tx_ref=%s", tx_ref)
 
         if link_error:
-            print(f"DEBUG: Rendering with link_error: {link_error}")
-            logger.warning("Pay page rejected | ip=%s tx_ref=%s error=%s", client_ip(), tx_ref, link_error)
+            logger.warning("Pay page rejected | ip=%s tx_ref=%s error=%s", 
+                         client_ip(), tx_ref, link_error)
             return render_template("verify.html", tx_ref=tx_ref,
                                    return_url=return_url, link_error=link_error,
                                    qr_code_payment_url=None,
                                    qr_code_virtual_account=None)
         else:
-            print(f"DEBUG: Rendering success page")
             # Grant this browser session access to poll/preview this specific tx_ref
             session[f"pay_access_{tx_ref}"] = True
             logger.info("Pay page accepted | ip=%s tx_ref=%s", client_ip(), tx_ref)
 
-        # Debug: Log QR variables before template rendering
-        print(f"DEBUG: qr_payment_url={qr_payment_url is not None}, qr_virtual_account={qr_virtual_account is not None}")
-        logger.info("Before template rendering: payment_qr=%s, va_qr=%s", 
+        logger.debug("Rendering payment page | payment_qr=%s va_qr=%s", 
                    "Yes" if qr_payment_url else "No",
                    "Yes" if qr_virtual_account else "No")
 
@@ -111,9 +116,7 @@ def pay_page(tx_ref):
                                qr_code_virtual_account=qr_virtual_account)
     
     except Exception as e:
-        print(f"DEBUG: Exception in pay_page: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error("Exception in pay_page | tx_ref=%s error=%s", tx_ref, e, exc_info=True)
         # Fallback render
         return render_template("verify.html", tx_ref=tx_ref,
                                return_url="", link_error="Internal server error",
@@ -213,6 +216,10 @@ def transfer_status(tx_ref):
             if t.status != TransactionStatus.EXPIRED:
                 t.status = TransactionStatus.EXPIRED
                 db.flush()
+                
+                # Sync invoice status if invoice exists
+                from services.webhook import sync_invoice_on_transaction_update
+                sync_invoice_on_transaction_update(db, t)
             return jsonify({"success": False, "status": "expired", "tx_ref": tx_ref})
 
         if not quickteller.is_transfer_configured():
@@ -251,6 +258,17 @@ def transfer_status(tx_ref):
                 if t_locked.webhook_url and not t_locked.webhook_delivered:
                     from services.webhook import deliver_webhook
                     deliver_webhook(db, t_locked)
+                
+                # Sync invoice status if invoice exists
+                from services.webhook import sync_invoice_on_transaction_update
+                sync_invoice_on_transaction_update(db, t_locked)
+                
+                # Send payment notification emails (merchant + customer if enabled)
+                from services.webhook import send_payment_notification_emails
+                from models.user import User
+                user = db.query(User).filter(User.id == t_locked.user_id).first()
+                if user:
+                    send_payment_notification_emails(db, t_locked, user)
 
                 logger.info("transfer-status confirmed | ip=%s tx_ref=%s", ip, tx_ref)
                 return jsonify({"success": True, "status": "confirmed", "tx_ref": tx_ref})

@@ -2,7 +2,7 @@
 
 ## Overview
 
-QR code functionality has been successfully implemented in OnePay to provide customers with convenient scanning options for payment links and virtual account transfers.
+QR code functionality provides customers with convenient scanning options for payment links and virtual account transfers. QR codes are automatically generated when payment links are created.
 
 ## Features Implemented
 
@@ -138,22 +138,13 @@ QR codes are displayed as base64 data URIs, compatible with all modern browsers:
 - Minimal performance impact (<50ms generation time)
 - Optimized PNG compression for fast loading
 
-## Future Enhancements
-
-Potential improvements for QR code functionality:
-1. **Logo Integration**: Add OnePay logo to center of QR codes
-2. **Custom Colors**: Brand-specific QR code color schemes
-3. **Batch Generation**: Generate multiple QR codes for bulk payments
-4. **Analytics**: Track QR code scan rates and usage
-5. **Dynamic QR Codes**: Update QR code content without changing URL
-
 ## Troubleshooting
 
 ### Common Issues
 
 #### QR Code Not Displaying
-- Check if qrcode library is installed
-- Verify database migration completed
+- Check if qrcode library is installed: `pip install qrcode[pil]`
+- Verify database migration completed: `alembic upgrade head`
 - Check browser console for JavaScript errors
 
 #### QR Code Generation Failed
@@ -162,16 +153,6 @@ Potential improvements for QR code functionality:
 - Review application logs for error details
 
 #### Database Issues
-- Run migration script: `python migrate.py`
+- Run migration: `alembic upgrade head`
 - Verify new columns exist in transactions table
 - Check database permissions
-
-## Support
-
-For issues with QR code functionality:
-1. Check application logs
-2. Run test script for diagnostics
-3. Verify all dependencies are installed
-4. Ensure database migrations are applied
-
-The QR code feature is now fully integrated and ready for production use!

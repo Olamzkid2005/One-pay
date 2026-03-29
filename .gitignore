@@ -26,6 +26,9 @@ env/
 *.db-shm
 *.sqlite
 *.sqlite3
+*.db-shm
+*.db-wal
+
 
 # Test results
 test_results.json

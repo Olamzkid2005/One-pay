@@ -1,9 +1,20 @@
 <!DOCTYPE html>
-<html class="dark" lang="en">
+<html lang="en">
 <head>
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>{% block title %}OnePay{% endblock %}</title>
+    
+    <!-- Initialize theme before page renders to prevent flash -->
+    <script>
+        // Check localStorage for theme preference, default to dark
+        const theme = localStorage.getItem('theme') || 'dark';
+        if (theme === 'dark') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
     
     <!-- Tailwind CSS with inline config -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
@@ -104,7 +115,7 @@
     
     {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-background text-on-surface font-body min-h-screen flex flex-col selection:bg-primary/30 antialiased">
+<body class="bg-gray-50 dark:bg-background text-gray-900 dark:text-on-surface font-body min-h-screen flex flex-col selection:bg-primary/30 antialiased">
     {% block body %}{% endblock %}
     
     {% block scripts %}{% endblock %}

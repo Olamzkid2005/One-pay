@@ -4,14 +4,37 @@ A secure payment verification and link generation platform that integrates with 
 
 ## Features
 
+### Core Payment Features
 - **Secure Payment Links**: Generate time-bound, single-use payment links with automatic expiration
 - **Direct API Verification**: Verify transactions directly from Quickteller API, eliminating screenshot fraud
-- **User Authentication**: Secure registration and login with bcrypt password hashing
+- **QR Code Generation**: Automatic QR codes for easy mobile payments
 - **Transaction History**: Track all payment links and their verification status
 - **Webhook Integration**: Real-time payment notifications via Quickteller webhooks
+
+### Invoice & Receipt System
+- **Automated Invoice Generation**: Auto-create invoices for verified payments
+- **Professional PDF Invoices**: Download invoices and receipts as PDF
+- **Invoice Management**: Web interface to view, download, and send invoices
+- **Business Branding**: Add your logo, tax ID, and payment terms
+- **Invoice Status Tracking**: Track invoice lifecycle (DRAFT, SENT, PAID, EXPIRED, CANCELLED)
+
+### Email Notifications
+- **Payment Alerts**: Automatic email notifications for verified payments
+- **Merchant Notifications**: Receive payment confirmations with invoice attachments
+- **Customer Invoices**: Optionally send invoices to customers via email
+- **Retry Logic**: Automatic retry with exponential backoff for failed emails
+
+### UI/UX Features
+- **Light/Dark Mode**: Toggle between light and dark themes with persistent preference
+- **Collapsible Sidebar**: Responsive sidebar with smooth animations
+- **Modern Design**: Clean, professional interface with Material Design icons
+- **Mobile Responsive**: Optimized for all screen sizes
+
+### Security & Performance
+- **User Authentication**: Secure registration and login with bcrypt password hashing
 - **Rate Limiting**: Protection against abuse with configurable rate limits
 - **Audit Logging**: Comprehensive logging of all security-relevant actions
-- **Email Notifications**: Automated email alerts for payment events
+- **CSRF Protection**: Secure session management and form protection
 
 ## Tech Stack
 
@@ -90,9 +113,12 @@ See `.env.example` for all available configuration options.
 ### For Users
 
 1. **Register**: Create an account with email and password
-2. **Generate Payment Link**: Enter amount and description to create a secure payment link
-3. **Share Link**: Send the generated link to the payer
-4. **Verify Payment**: Check transaction status in your dashboard
+2. **Configure Settings**: Add your business details, logo, and email preferences
+3. **Generate Payment Link**: Enter amount and description to create a secure payment link
+4. **Share Link**: Send the generated link to the payer (includes QR code)
+5. **Receive Notifications**: Get email alerts when payments are confirmed
+6. **Manage Invoices**: View, download, and send professional invoices
+7. **Track History**: Monitor all transactions and invoices in your dashboard
 
 ### For Developers
 
@@ -117,6 +143,9 @@ One-pay/
 ├── services/              # Business logic
 │   ├── quickteller.py    # Quickteller API integration
 │   ├── email.py          # Email service
+│   ├── invoice.py        # Invoice generation
+│   ├── pdf_receipt.py    # PDF generation
+│   ├── qr_code.py        # QR code generation
 │   ├── webhook.py        # Webhook handler
 │   ├── rate_limiter.py   # Rate limiting
 │   └── security.py       # Security utilities

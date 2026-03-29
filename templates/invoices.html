@@ -1,16 +1,16 @@
 {% extends "dashboard_base.html" %}
 
-{% block title %}Transaction History - OnePay{% endblock %}
+{% block title %}Invoices - OnePay{% endblock %}
 
 {% block dashboard_content %}
 <div class="px-12 max-w-7xl mx-auto w-full">
     <!-- Header Section -->
     <header class="mb-12 flex justify-between items-start">
         <div>
-            <h2 class="text-4xl font-headline font-extrabold tracking-tight text-gray-800 dark:text-primary mb-2">Transaction History</h2>
-            <p class="text-gray-700 dark:text-on-surface-variant text-lg max-w-2xl font-body">View and manage all your payment transactions.</p>
+            <h2 class="text-4xl font-headline font-extrabold tracking-tight text-gray-800 dark:text-primary mb-2">Invoices</h2>
+            <p class="text-gray-700 dark:text-on-surface-variant text-lg max-w-2xl font-body">View and manage all your invoices.</p>
         </div>
-        <button onclick="exportTransactions()" class="flex items-center gap-2 px-6 py-3 bg-surface-container-high rounded-xl text-on-surface hover:bg-surface-container-highest transition-colors font-medium">
+        <button onclick="exportInvoices()" class="flex items-center gap-2 px-6 py-3 bg-surface-container-high rounded-xl text-on-surface hover:bg-surface-container-highest transition-colors font-medium">
             <span class="material-symbols-outlined text-sm">download</span>
             Export CSV
         </button>
@@ -20,47 +20,48 @@
     <div class="mb-8 flex gap-4 items-center">
         <div class="relative flex-1 max-w-md">
             <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-sm">search</span>
-            <input id="searchInput" class="w-full bg-surface-container-high border-none rounded-xl pl-11 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary text-on-surface" placeholder="Search by reference, amount, or description..." type="text"/>
+            <input id="searchInput" class="w-full bg-surface-container-high border-none rounded-xl pl-11 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary text-on-surface" placeholder="Search by invoice number or customer email..." type="text"/>
         </div>
         
         <select id="statusFilter" class="bg-surface-container-high border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary text-on-surface">
             <option value="">All Statuses</option>
-            <option value="verified">Verified</option>
-            <option value="pending">Pending</option>
+            <option value="draft">Draft</option>
+            <option value="sent">Sent</option>
+            <option value="paid">Paid</option>
             <option value="expired">Expired</option>
-            <option value="failed">Failed</option>
+            <option value="cancelled">Cancelled</option>
         </select>
     </div>
     
-    <!-- Transactions Table -->
+    <!-- Invoices Table -->
     <div class="overflow-hidden border border-outline-variant/10 rounded-2xl bg-surface-container-low shadow-xl">
         <table class="w-full text-left border-collapse">
             <thead>
                 <tr class="bg-surface-container-highest/30 border-b border-outline-variant/10">
                     <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Status</th>
-                    <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Reference</th>
+                    <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Invoice Number</th>
+                    <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Customer</th>
                     <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Amount</th>
-                    <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Description</th>
                     <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Created</th>
                     <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest text-right">Actions</th>
                 </tr>
             </thead>
-            <tbody id="transactionsBody" class="divide-y divide-outline-variant/5">
-                <!-- Transactions will be loaded here -->
+            <tbody id="invoicesBody" class="divide-y divide-outline-variant/5">
+                <!-- Invoices will be loaded here -->
             </tbody>
         </table>
         
         <!-- Loading State -->
         <div id="loadingState" class="p-12 text-center">
             <div class="inline-block w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin"></div>
-            <p class="mt-4 text-sm text-outline">Loading transactions...</p>
+            <p class="mt-4 text-sm text-outline">Loading invoices...</p>
         </div>
         
         <!-- Empty State -->
         <div id="emptyState" class="p-12 text-center hidden">
             <span class="material-symbols-outlined text-6xl text-outline/30 mb-4">receipt_long</span>
-            <h3 class="text-lg font-bold text-on-surface mb-2">No Transactions Found</h3>
-            <p class="text-sm text-outline">Create your first payment link to get started.</p>
+            <h3 class="text-lg font-bold text-on-surface mb-2">No Invoices Found</h3>
+            <p class="text-sm text-outline">Create your first payment link to generate an invoice.</p>
         </div>
     </div>
     
@@ -84,23 +85,29 @@
 <script>
 let currentPage = 1;
 let totalPages = 1;
-let allTransactions = [];
+let allInvoices = [];
 
-// Load transactions on page load
+// Load invoices on page load
 document.addEventListener('DOMContentLoaded', () => {
-    loadTransactions();
+    loadInvoices();
     
-    // Auto-refresh every 10 seconds while page is open
-    setInterval(() => loadTransactions(currentPage), 10000);
+    // Auto-refresh every 30 seconds while page is open
+    setInterval(() => loadInvoices(currentPage), 30000);
     
     // Setup search and filter
-    document.getElementById('searchInput').addEventListener('input', debounce(filterTransactions, 300));
-    document.getElementById('statusFilter').addEventListener('change', filterTransactions);
+    document.getElementById('searchInput').addEventListener('input', debounce(filterInvoices, 300));
+    document.getElementById('statusFilter').addEventListener('change', filterInvoices);
 });
 
-async function loadTransactions(page = 1) {
+async function loadInvoices(page = 1) {
     try {
-        const response = await fetch(`/api/payments/history?page=${page}`);
+        const statusFilter = document.getElementById('statusFilter').value;
+        let url = `/api/invoices?page=${page}`;
+        if (statusFilter) {
+            url += `&status=${statusFilter}`;
+        }
+        
+        const response = await fetch(url);
         
         // Session expired — redirect to login
         if (response.status === 401 || response.status === 403) {
@@ -111,27 +118,27 @@ async function loadTransactions(page = 1) {
         const data = await response.json();
         
         if (data.success) {
-            allTransactions = data.transactions;
+            allInvoices = data.invoices;
             currentPage = data.pagination.page;
             totalPages = data.pagination.total_pages;
             
-            displayTransactions(allTransactions);
+            displayInvoices(allInvoices);
             updatePagination(data.pagination);
         }
     } catch (error) {
-        console.error('Failed to load transactions:', error);
+        console.error('Failed to load invoices:', error);
         showEmptyState();
     }
 }
 
-function displayTransactions(transactions) {
-    const tbody = document.getElementById('transactionsBody');
+function displayInvoices(invoices) {
+    const tbody = document.getElementById('invoicesBody');
     const loadingState = document.getElementById('loadingState');
     const emptyState = document.getElementById('emptyState');
     
     loadingState.classList.add('hidden');
     
-    if (!transactions || transactions.length === 0) {
+    if (!invoices || invoices.length === 0) {
         tbody.innerHTML = '';
         emptyState.classList.remove('hidden');
         return;
@@ -139,19 +146,20 @@ function displayTransactions(transactions) {
     
     emptyState.classList.add('hidden');
     
-    tbody.innerHTML = transactions.map(tx => {
+    tbody.innerHTML = invoices.map(inv => {
         const statusConfig = {
-            'verified': { style: 'background:rgba(170,199,255,.15);color:#aac7ff;border:1px solid rgba(170,199,255,.3)', text: 'Verified' },
-            'pending':  { style: 'background:rgba(193,199,208,.12);color:#c1c7d0;border:1px solid rgba(193,199,208,.25)', text: 'Pending' },
-            'expired':  { style: 'background:rgba(139,145,159,.12);color:#8b919f;border:1px solid rgba(139,145,159,.25)', text: 'Expired' },
-            'failed':   { style: 'background:rgba(255,180,171,.12);color:#ffb4ab;border:1px solid rgba(255,180,171,.25)', text: 'Failed' }
+            'draft':     { style: 'background:rgba(193,199,208,.12);color:#c1c7d0;border:1px solid rgba(193,199,208,.25)', text: 'Draft' },
+            'sent':      { style: 'background:rgba(170,199,255,.15);color:#aac7ff;border:1px solid rgba(170,199,255,.3)', text: 'Sent' },
+            'paid':      { style: 'background:rgba(45,164,78,.15);color:#2da44e;border:1px solid rgba(45,164,78,.3)', text: 'Paid' },
+            'expired':   { style: 'background:rgba(251,133,0,.12);color:#fb8500;border:1px solid rgba(251,133,0,.25)', text: 'Expired' },
+            'cancelled': { style: 'background:rgba(207,34,46,.12);color:#cf222e;border:1px solid rgba(207,34,46,.25)', text: 'Cancelled' }
         };
         
         // Normalize status to lowercase and trim whitespace
-        const normalizedStatus = (tx.status || 'pending').toLowerCase().trim();
-        const status = statusConfig[normalizedStatus] || statusConfig['pending'];
-        const amount = parseFloat(tx.amount).toLocaleString('en-NG', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        const created = new Date(tx.created_at).toLocaleString('en-NG', {
+        const normalizedStatus = (inv.status || 'draft').toLowerCase().trim();
+        const status = statusConfig[normalizedStatus] || statusConfig['draft'];
+        const amount = parseFloat(inv.amount).toLocaleString('en-NG', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const created = new Date(inv.created_at).toLocaleString('en-NG', {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
         });
         
@@ -162,21 +170,21 @@ function displayTransactions(transactions) {
                 </td>
                 <td class="px-6 py-4">
                     <div class="flex items-center gap-2">
-                        <span class="font-mono text-sm text-on-surface">${tx.tx_ref}</span>
-                        <button onclick="copyToClipboard('${tx.tx_ref}')" class="material-symbols-outlined text-[14px] text-outline opacity-0 group-hover:opacity-100 cursor-pointer hover:text-primary transition-all">content_copy</button>
+                        <span class="font-mono text-sm text-on-surface">${inv.invoice_number}</span>
+                        <button onclick="copyToClipboard('${inv.invoice_number}')" class="material-symbols-outlined text-[14px] text-outline opacity-0 group-hover:opacity-100 cursor-pointer hover:text-primary transition-all">content_copy</button>
                     </div>
                 </td>
-                <td class="px-6 py-4 font-label font-bold text-on-surface">₦ ${amount}</td>
-                <td class="px-6 py-4 text-sm text-on-surface-variant max-w-xs truncate">${tx.description || 'No description'}</td>
+                <td class="px-6 py-4 text-sm text-on-surface-variant max-w-xs truncate">${inv.customer_email || 'N/A'}</td>
+                <td class="px-6 py-4 font-label font-bold text-on-surface">${inv.currency || 'NGN'} ${amount}</td>
                 <td class="px-6 py-4 font-label text-xs text-outline">${created}</td>
                 <td class="px-6 py-4 text-right">
                     <div class="flex items-center justify-end gap-2">
-                        <button onclick="viewTransaction('${tx.tx_ref}')" class="p-2 hover:bg-surface-container-highest rounded-lg transition-colors" title="View Details">
-                            <span class="material-symbols-outlined text-sm text-on-surface">visibility</span>
+                        <button onclick="downloadInvoice('${inv.invoice_number}')" class="p-2 hover:bg-surface-container-highest rounded-lg transition-colors" title="Download PDF">
+                            <span class="material-symbols-outlined text-sm text-primary">download</span>
                         </button>
-                        ${tx.status === 'expired' ? `
-                        <button onclick="reissueTransaction('${tx.tx_ref}')" class="p-2 hover:bg-surface-container-highest rounded-lg transition-colors" title="Re-issue Link">
-                            <span class="material-symbols-outlined text-sm text-primary">refresh</span>
+                        ${inv.status !== 'paid' && inv.customer_email ? `
+                        <button onclick="resendInvoice('${inv.invoice_number}')" class="p-2 hover:bg-surface-container-highest rounded-lg transition-colors" title="Resend Email">
+                            <span class="material-symbols-outlined text-sm text-on-surface">send</span>
                         </button>
                         ` : ''}
                     </div>
@@ -220,41 +228,66 @@ function updatePagination(pagination) {
 
 function loadPage(page) {
     if (page < 1 || page > totalPages) return;
-    loadTransactions(page);
+    loadInvoices(page);
 }
 
-function filterTransactions() {
+function filterInvoices() {
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
     const statusFilter = document.getElementById('statusFilter').value;
     
-    let filtered = allTransactions;
+    let filtered = allInvoices;
     
     if (searchTerm) {
-        filtered = filtered.filter(tx => 
-            tx.tx_ref.toLowerCase().includes(searchTerm) ||
-            (tx.description && tx.description.toLowerCase().includes(searchTerm)) ||
-            tx.amount.toString().includes(searchTerm)
+        filtered = filtered.filter(inv => 
+            inv.invoice_number.toLowerCase().includes(searchTerm) ||
+            (inv.customer_email && inv.customer_email.toLowerCase().includes(searchTerm))
         );
     }
     
     if (statusFilter) {
-        filtered = filtered.filter(tx => tx.status === statusFilter);
+        filtered = filtered.filter(inv => inv.status === statusFilter);
     }
     
-    displayTransactions(filtered);
+    displayInvoices(filtered);
 }
 
-function viewTransaction(txRef) {
-    window.location.href = `/check-status?ref=${txRef}`;
+async function downloadInvoice(invoiceNumber) {
+    try {
+        const response = await fetch(`/api/invoices/${invoiceNumber}/download`);
+        
+        if (response.status === 401 || response.status === 403) {
+            window.location.href = '/login';
+            return;
+        }
+        
+        if (!response.ok) {
+            alert('Failed to download invoice');
+            return;
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${invoiceNumber}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    } catch (error) {
+        console.error('Failed to download invoice:', error);
+        alert('Failed to download invoice');
+    }
 }
 
-async function reissueTransaction(txRef) {
-    if (!confirm('Are you sure you want to re-issue this payment link?')) return;
+async function resendInvoice(invoiceNumber) {
+    if (!confirm('Are you sure you want to resend this invoice?')) return;
     
     try {
-        const response = await fetch(`/api/payments/reissue/${txRef}`, {
+        const response = await fetch(`/api/invoices/${invoiceNumber}/send`, {
             method: 'POST',
             headers: {
+                'Content-Type': 'application/json',
                 'X-CSRF-Token': '{{ csrf_token }}'
             }
         });
@@ -262,13 +295,14 @@ async function reissueTransaction(txRef) {
         const data = await response.json();
         
         if (data.success) {
-            alert(`New payment link created!\n\nReference: ${data.tx_ref}\nURL: ${data.payment_url}`);
-            loadTransactions(currentPage);
+            alert('Invoice sent successfully!');
+            loadInvoices(currentPage);
         } else {
             alert('Error: ' + data.message);
         }
     } catch (error) {
-        alert('Failed to re-issue link');
+        console.error('Failed to resend invoice:', error);
+        alert('Failed to resend invoice');
     }
 }
 
@@ -284,14 +318,14 @@ function copyToClipboard(text) {
     });
 }
 
-function exportTransactions() {
-    window.location.href = '/api/payments/export';
+function exportInvoices() {
+    window.location.href = '/api/invoices/export';
 }
 
 function showEmptyState() {
     document.getElementById('loadingState').classList.add('hidden');
     document.getElementById('emptyState').classList.remove('hidden');
-    document.getElementById('transactionsBody').innerHTML = '';
+    document.getElementById('invoicesBody').innerHTML = '';
 }
 
 function debounce(func, wait) {

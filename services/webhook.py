@@ -250,3 +250,286 @@ def retry_failed_webhooks(db):
         except Exception as e:
             logger.error("Webhook retry error | tx_ref=%s error=%s", transaction.tx_ref, e)
             db.rollback()
+
+
+def sync_invoice_on_transaction_update(db, transaction):
+    """
+    Synchronize invoice status when transaction status changes.
+    Called from webhook handler after transaction update.
+    
+    Updates invoice status based on transaction status:
+    - verified → paid (with paid_at timestamp)
+    - expired → expired
+    
+    Args:
+        db: Database session
+        transaction: Transaction object with updated status
+    """
+    from models.invoice import Invoice, InvoiceStatus
+    from models.transaction import TransactionStatus
+    from core.audit import log_event
+    
+    # Query invoice by transaction_id
+    invoice = db.query(Invoice).filter(
+        Invoice.transaction_id == transaction.id
+    ).first()
+    
+    if not invoice:
+        # No invoice for this transaction - this is normal
+        return
+    
+    old_status = invoice.status
+    
+    # Update invoice status based on transaction status
+    if transaction.status == TransactionStatus.VERIFIED:
+        invoice.status = InvoiceStatus.PAID
+        if not invoice.paid_at:
+            invoice.paid_at = datetime.now(timezone.utc)
+    elif transaction.status == TransactionStatus.EXPIRED:
+        invoice.status = InvoiceStatus.EXPIRED
+    
+    # Only log if status changed
+    if invoice.status != old_status:
+        db.flush()
+        
+        # Add audit logging
+        log_event(
+            db,
+            "invoice.status_synced",
+            user_id=transaction.user_id,
+            tx_ref=transaction.tx_ref,
+            detail={
+                "invoice_number": invoice.invoice_number,
+                "old_status": old_status.value,
+                "new_status": invoice.status.value,
+            }
+        )
+        
+        logger.info(
+            "Invoice status synced | invoice_number=%s tx_ref=%s old_status=%s new_status=%s",
+            invoice.invoice_number, transaction.tx_ref, old_status.value, invoice.status.value
+        )
+
+
+
+def send_payment_notification_emails(db, transaction, user):
+    """
+    Send payment notification emails after payment confirmation.
+    
+    Orchestrates email sending for both merchant and customer:
+    1. Check if invoice exists, create if not
+    2. Generate invoice PDF
+    3. Send merchant notification email (always)
+    4. Send customer invoice email (if auto_send_email enabled and customer_email exists)
+    5. Update invoice status to paid
+    
+    Args:
+        db: Database session
+        transaction: Transaction object (verified payment)
+        user: User object (merchant)
+        
+    Side Effects:
+        - Creates invoice if not exists
+        - Sends merchant notification email
+        - Sends customer invoice email (conditionally)
+        - Updates invoice status to paid
+        - Logs all operations
+        
+    Error Handling:
+        - All operations wrapped in try-except to prevent blocking payment
+        - Errors logged but not raised
+        - Graceful degradation on PDF generation failure
+    """
+    from models.invoice import Invoice, InvoiceSettings
+    from services.invoice import invoice_service
+    from services.email import send_merchant_notification_email, send_invoice_email
+    from core.audit import log_event
+    
+    try:
+        # Step 1: Check if invoice exists for this transaction
+        invoice = db.query(Invoice).filter(
+            Invoice.transaction_id == transaction.id
+        ).first()
+        
+        # Step 2: Create invoice if not exists
+        if not invoice:
+            try:
+                invoice = invoice_service.create_invoice(
+                    db=db,
+                    transaction=transaction,
+                    user=user,
+                    settings=None  # Will be fetched inside create_invoice
+                )
+                db.commit()
+                
+                log_event(
+                    db,
+                    "invoice.auto_created",
+                    user_id=user.id,
+                    tx_ref=transaction.tx_ref,
+                    detail={"invoice_number": invoice.invoice_number}
+                )
+                
+                logger.info(
+                    "Invoice auto-created for payment | invoice_number=%s tx_ref=%s",
+                    invoice.invoice_number, transaction.tx_ref
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to create invoice for payment | tx_ref=%s error=%s",
+                    transaction.tx_ref, e
+                )
+                db.rollback()
+                # Continue without invoice - merchant still gets notification
+                invoice = None
+        
+        # Step 3: Generate invoice PDF (graceful degradation on failure)
+        pdf_bytes = None
+        if invoice:
+            try:
+                # Generate payment URL for invoice (use transaction's existing payment URL if available)
+                payment_url = None
+                if hasattr(transaction, 'payment_url') and transaction.payment_url:
+                    payment_url = transaction.payment_url
+                
+                pdf_bytes = invoice_service.generate_invoice_pdf(
+                    invoice=invoice,
+                    transaction=transaction,
+                    payment_url=payment_url
+                )
+                
+                logger.info(
+                    "Invoice PDF generated | invoice_number=%s size=%d bytes",
+                    invoice.invoice_number, len(pdf_bytes)
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to generate invoice PDF | invoice_number=%s error=%s",
+                    invoice.invoice_number if invoice else "N/A", e
+                )
+                # Continue without PDF - emails will be sent without attachment
+                pdf_bytes = None
+        
+        # Step 4: Send merchant notification email (always)
+        try:
+            merchant_email_sent = send_merchant_notification_email(
+                to_email=user.email,
+                transaction=transaction,
+                invoice=invoice,
+                pdf_bytes=pdf_bytes
+            )
+            
+            if merchant_email_sent:
+                log_event(
+                    db,
+                    "email.merchant_notification_sent",
+                    user_id=user.id,
+                    tx_ref=transaction.tx_ref,
+                    detail={
+                        "invoice_number": invoice.invoice_number if invoice else None,
+                        "merchant_email": user.email
+                    }
+                )
+                logger.info(
+                    "Merchant notification email sent | tx_ref=%s merchant_email=%s",
+                    transaction.tx_ref, user.email
+                )
+            else:
+                logger.warning(
+                    "Merchant notification email failed | tx_ref=%s merchant_email=%s",
+                    transaction.tx_ref, user.email
+                )
+        except Exception as e:
+            logger.error(
+                "Exception sending merchant notification | tx_ref=%s error=%s",
+                transaction.tx_ref, e
+            )
+            # Continue - don't block payment confirmation
+        
+        # Step 5: Send customer invoice email (if auto_send_email enabled and customer_email exists)
+        if invoice and transaction.customer_email:
+            try:
+                # Check auto_send_email setting
+                settings = db.query(InvoiceSettings).filter(
+                    InvoiceSettings.user_id == user.id
+                ).first()
+                
+                if settings and settings.auto_send_email:
+                    # Generate payment URL (use transaction's existing payment URL if available)
+                    payment_url = None
+                    if hasattr(transaction, 'payment_url') and transaction.payment_url:
+                        payment_url = transaction.payment_url
+                    
+                    # Generate QR code data URI if available
+                    qr_code_data_uri = None
+                    if transaction.qr_code_payment_url:
+                        qr_code_data_uri = transaction.qr_code_payment_url
+                    
+                    customer_email_sent = send_invoice_email(
+                        to_email=transaction.customer_email,
+                        invoice=invoice,
+                        pdf_bytes=pdf_bytes,
+                        payment_url=payment_url,
+                        qr_code_data_uri=qr_code_data_uri,
+                        merchant_email=user.email  # BCC merchant
+                    )
+                    
+                    if customer_email_sent:
+                        log_event(
+                            db,
+                            "email.customer_invoice_sent",
+                            user_id=user.id,
+                            tx_ref=transaction.tx_ref,
+                            detail={
+                                "invoice_number": invoice.invoice_number,
+                                "customer_email": transaction.customer_email
+                            }
+                        )
+                        logger.info(
+                            "Customer invoice email sent | tx_ref=%s customer_email=%s",
+                            transaction.tx_ref, transaction.customer_email
+                        )
+                    else:
+                        logger.warning(
+                            "Customer invoice email failed | tx_ref=%s customer_email=%s",
+                            transaction.tx_ref, transaction.customer_email
+                        )
+                else:
+                    logger.debug(
+                        "Customer email not sent (auto_send_email disabled) | tx_ref=%s",
+                        transaction.tx_ref
+                    )
+            except Exception as e:
+                logger.error(
+                    "Exception sending customer invoice | tx_ref=%s error=%s",
+                    transaction.tx_ref, e
+                )
+                # Continue - don't block payment confirmation
+        
+        # Step 6: Update invoice status to paid
+        if invoice:
+            try:
+                from models.invoice import InvoiceStatus
+                invoice.status = InvoiceStatus.PAID
+                if not invoice.paid_at:
+                    invoice.paid_at = datetime.now(timezone.utc)
+                db.commit()
+                
+                logger.info(
+                    "Invoice status updated to paid | invoice_number=%s",
+                    invoice.invoice_number
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to update invoice status | invoice_number=%s error=%s",
+                    invoice.invoice_number if invoice else "N/A", e
+                )
+                db.rollback()
+                # Continue - don't block payment confirmation
+    
+    except Exception as e:
+        logger.error(
+            "Unexpected error in send_payment_notification_emails | tx_ref=%s error=%s",
+            transaction.tx_ref, e
+        )
+        # Don't raise - payment confirmation should not be blocked by email failures

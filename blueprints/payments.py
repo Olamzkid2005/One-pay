@@ -23,6 +23,9 @@ from services.security import (
 )
 from services.quickteller import quickteller, QuicktellerError
 from services.qr_code import qr_service
+from services.invoice import invoice_service
+from services.email import send_invoice_email
+from models.invoice import InvoiceSettings
 from core.auth import (
     get_csrf_token, is_valid_csrf_token,
     current_user_id, current_username,
@@ -104,13 +107,21 @@ def settings():
     with get_db() as db:
         user = db.query(User).filter(User.id == current_user_id()).first()
         webhook_url = user.webhook_url if user else ""
-    return render_template(
-        "settings.html",
-        username=current_username(),
-        csrf_token=get_csrf_token(),
-        webhook_url=webhook_url or "",
-        active_page="settings",
-    )
+        
+        # Load invoice settings for current user (Requirement 11.1)
+        invoice_settings = db.query(InvoiceSettings).filter(
+            InvoiceSettings.user_id == current_user_id()
+        ).first()
+        
+        # Render template while session is still active
+        return render_template(
+            "settings.html",
+            username=current_username(),
+            csrf_token=get_csrf_token(),
+            webhook_url=webhook_url or "",
+            invoice_settings=invoice_settings,
+            active_page="settings",
+        )
 
 
 @payments_bp.route("/check-status")
@@ -134,6 +145,18 @@ def history():
         username=current_username(),
         csrf_token=get_csrf_token(),
         active_page="history",
+    )
+
+
+@payments_bp.route("/invoices")
+def invoices():
+    if not current_user_id():
+        return login_required_redirect()
+    return render_template(
+        "invoices.html",
+        username=current_username(),
+        csrf_token=get_csrf_token(),
+        active_page="invoices",
     )
 
 
@@ -461,12 +484,86 @@ def create_payment_link():
             logger.warning("QR code generation failed for %s: %s", tx_ref, e)
             # Continue without QR codes - they're optional
 
+        # ── Invoice Creation (Requirement 10.1, 10.2) ──────────────────────────
+        invoice_number = None
+        try:
+            # Check if user has invoice settings
+            invoice_settings = db.query(InvoiceSettings).filter(
+                InvoiceSettings.user_id == current_user_id()
+            ).first()
+            
+            if invoice_settings:
+                # Create invoice automatically
+                invoice = invoice_service.create_invoice(
+                    db=db,
+                    transaction=transaction,
+                    user=user,
+                    settings=invoice_settings
+                )
+                invoice_number = invoice.invoice_number
+                
+                logger.info(
+                    "Invoice created automatically | invoice_number=%s tx_ref=%s",
+                    invoice_number, tx_ref
+                )
+                
+                # If auto_send_email enabled and customer_email provided, send invoice
+                if invoice_settings.auto_send_email and transaction.customer_email:
+                    try:
+                        # Generate PDF
+                        pdf_bytes = invoice_service.generate_invoice_pdf(
+                            invoice=invoice,
+                            transaction=transaction,
+                            payment_url=payment_url
+                        )
+                        
+                        # Send email with payment_url and QR code
+                        email_sent = send_invoice_email(
+                            to_email=transaction.customer_email,
+                            invoice=invoice,
+                            pdf_bytes=pdf_bytes,
+                            payment_url=payment_url,
+                            qr_code_data_uri=transaction.qr_code_payment_url
+                        )
+                        
+                        if email_sent:
+                            from models.invoice import InvoiceStatus
+                            invoice.status = InvoiceStatus.SENT
+                            invoice.email_sent = True
+                            invoice.email_sent_at = datetime.now(timezone.utc)
+                            invoice.sent_at = datetime.now(timezone.utc)
+                            db.flush()
+                            
+                            logger.info(
+                                "Invoice emailed automatically | invoice_number=%s to=%s",
+                                invoice_number, transaction.customer_email
+                            )
+                        else:
+                            logger.warning(
+                                "Invoice email failed | invoice_number=%s to=%s",
+                                invoice_number, transaction.customer_email
+                            )
+                    except Exception as email_error:
+                        # Log error but don't fail payment link creation
+                        logger.error(
+                            "Invoice email generation/sending failed | invoice_number=%s error=%s",
+                            invoice_number, email_error
+                        )
+                        # Continue - invoice created, email failed
+        except Exception as invoice_error:
+            # Log error but don't fail payment link creation (graceful degradation)
+            logger.error(
+                "Invoice creation failed for tx_ref=%s | error=%s",
+                tx_ref, invoice_error
+            )
+            # Continue without invoice - payment link still works
+
         log_event(db, "link.created", user_id=current_user_id(), tx_ref=tx_ref, ip_address=client_ip(), 
                   detail={"amount": str(amount), "currency": transaction.currency})
 
         logger.info("Payment link created | merchant=%s ref=%s amount=%s", current_username(), tx_ref, amount)
 
-        return jsonify({
+        response_data = {
             "success":     True,
             "message":     "Payment link created successfully",
             "tx_ref":      tx_ref,
@@ -480,7 +577,13 @@ def create_payment_link():
             "virtual_account_name":   transaction.virtual_account_name,
             "qr_code_payment_url":     transaction.qr_code_payment_url,
             "qr_code_virtual_account": transaction.qr_code_virtual_account,
-        }), 201
+        }
+        
+        # Include invoice_number in response if invoice was created
+        if invoice_number:
+            response_data["invoice_number"] = invoice_number
+        
+        return jsonify(response_data), 201
 
 
 # ── Transaction status ─────────────────────────────────────────────────────────
@@ -729,12 +832,57 @@ def download_receipt(tx_ref):
         if transaction.user_id != current_user_id():
             return error("Transaction not found", "NOT_FOUND", 404)
         
-        # Generate HTML receipt
+        # Generate PDF receipt
+        from services.pdf_receipt import generate_receipt_pdf
+        from flask import make_response, send_file
+        import io
+        
+        try:
+            pdf_bytes = generate_receipt_pdf(transaction)
+            
+            # Create response with PDF
+            response = make_response(pdf_bytes)
+            response.headers["Content-Type"] = "application/pdf"
+            response.headers["Content-Disposition"] = f"attachment; filename=OnePay_Receipt_{tx_ref}.pdf"
+            
+            logger.info("PDF receipt downloaded | user=%s tx_ref=%s", current_username(), tx_ref)
+            return response
+            
+        except Exception as e:
+            logger.error("PDF receipt generation failed | user=%s tx_ref=%s error=%s", 
+                        current_username(), tx_ref, e)
+            return error("Failed to generate receipt", "PDF_GENERATION_ERROR", 500)
+
+
+@payments_bp.route("/api/payments/receipt/<tx_ref>/preview", methods=["GET"])
+def preview_receipt_html(tx_ref):
+    """Generate and return HTML preview of receipt (for debugging/testing)"""
+    if not current_user_id():
+        return error("Authentication required", "UNAUTHENTICATED", 401)
+    
+    if not valid_tx_ref(tx_ref):
+        return error("Invalid transaction reference format", "INVALID_REF", 400)
+    
+    with get_db() as db:
+        transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
+        
+        if not transaction:
+            return error("Transaction not found", "NOT_FOUND", 404)
+        
+        if transaction.user_id != current_user_id():
+            return error("Transaction not found", "NOT_FOUND", 404)
+        
+        from services.pdf_receipt import generate_receipt_html
         from flask import make_response
-        html = render_template("receipt.html", tx=transaction)
         
-        response = make_response(html)
-        response.headers["Content-Type"] = "text/html"
-        response.headers["Content-Disposition"] = f"inline; filename=OnePay_Receipt_{tx_ref}.html"
-        
-        return response
+        try:
+            html = generate_receipt_html(transaction)
+            
+            response = make_response(html)
+            response.headers["Content-Type"] = "text/html"
+            return response
+            
+        except Exception as e:
+            logger.error("Receipt HTML preview failed | user=%s tx_ref=%s error=%s",
+                        current_username(), tx_ref, e)
+            return error("Failed to generate preview", "PREVIEW_ERROR", 500)

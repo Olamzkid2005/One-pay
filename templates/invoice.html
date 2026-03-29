@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice {{ invoice.invoice_number }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+            background: #fff;
+        }
+
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+
+        .invoice-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        /* Header */
+        .invoice-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e5e5e5;
+        }
+
+        .branding {
+            flex: 1;
+        }
+
+        .onepay-logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: #0969da;
+            margin-bottom: 8px;
+        }
+
+        .merchant-logo {
+            max-width: 150px;
+            max-height: 80px;
+            margin-top: 12px;
+        }
+
+        .invoice-meta {
+            text-align: right;
+        }
+
+        .invoice-number {
+            font-size: 20px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .invoice-date {
+            color: #666;
+            font-size: 13px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .status-draft { background: #f6f8fa; color: #6c757d; }
+        .status-sent { background: #ddf4ff; color: #0969da; }
+        .status-paid { background: #dafbe1; color: #2da44e; }
+        .status-expired { background: #fff8c5; color: #fb8500; }
+        .status-cancelled { background: #ffebe9; color: #cf222e; }
+
+        /* Details Section */
+        .details-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+        }
+
+        .details-box {
+            flex: 1;
+        }
+
+        .details-box + .details-box {
+            margin-left: 40px;
+        }
+
+        .details-title {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #666;
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        .details-content {
+            color: #333;
+        }
+
+        .details-content div {
+            margin-bottom: 4px;
+        }
+
+        /* Invoice Items */
+        .invoice-items {
+            margin-bottom: 40px;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .items-table thead {
+            background: #f6f8fa;
+        }
+
+        .items-table th {
+            text-align: left;
+            padding: 12px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #666;
+            letter-spacing: 0.5px;
+        }
+
+        .items-table td {
+            padding: 16px 12px;
+            border-bottom: 1px solid #e5e5e5;
+        }
+
+        .items-table .amount-col {
+            text-align: right;
+            font-weight: 600;
+        }
+
+        /* Payment Section */
+        .payment-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 40px;
+            padding: 24px;
+            background: #f6f8fa;
+            border-radius: 8px;
+        }
+
+        .payment-info {
+            flex: 1;
+        }
+
+        .total-amount {
+            font-size: 32px;
+            font-weight: 700;
+            color: #0969da;
+            margin-bottom: 8px;
+        }
+
+        .payment-link {
+            display: inline-block;
+            margin-top: 12px;
+            padding: 10px 20px;
+            background: #0969da;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .qr-code-container {
+            text-align: center;
+        }
+
+        .qr-code {
+            width: 150px;
+            height: 150px;
+            border: 2px solid #e5e5e5;
+            border-radius: 8px;
+            padding: 8px;
+            background: #fff;
+        }
+
+        .qr-label {
+            font-size: 11px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        /* Footer */
+        .invoice-footer {
+            margin-top: 40px;
+            padding-top: 24px;
+            border-top: 2px solid #e5e5e5;
+        }
+
+        .payment-terms {
+            margin-bottom: 20px;
+        }
+
+        .payment-terms-title {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #666;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .payment-terms-content {
+            color: #666;
+            font-size: 13px;
+        }
+
+        .powered-by {
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+            margin-top: 24px;
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                background: #fff;
+            }
+
+            .invoice-container {
+                padding: 0;
+            }
+
+            .invoice-header,
+            .details-section,
+            .invoice-items,
+            .payment-section,
+            .invoice-footer {
+                page-break-inside: avoid;
+            }
+
+            .payment-link {
+                color: #0969da;
+                background: transparent;
+                border: 2px solid #0969da;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice-container">
+        <!-- Header -->
+        <div class="invoice-header">
+            <div class="branding">
+                <div class="onepay-logo">OnePay</div>
+                {% if logo_data_uri %}
+                <img src="{{ logo_data_uri }}" alt="Business Logo" class="merchant-logo">
+                {% endif %}
+            </div>
+            <div class="invoice-meta">
+                <div class="invoice-number">{{ invoice.invoice_number }}</div>
+                <div class="invoice-date">{{ invoice.created_at.strftime('%B %d, %Y') if invoice.created_at else '' }}</div>
+                <span class="status-badge status-{{ invoice.status.value }}">
+                    {{ invoice.status.value.upper() }}
+                </span>
+            </div>
+        </div>
+
+        <!-- Details Section -->
+        <div class="details-section">
+            <div class="details-box">
+                <div class="details-title">From</div>
+                <div class="details-content">
+                    {% if invoice.business_name %}
+                    <div><strong>{{ invoice.business_name }}</strong></div>
+                    {% endif %}
+                    {% if invoice.business_address %}
+                    <div>{{ invoice.business_address }}</div>
+                    {% endif %}
+                    {% if invoice.business_tax_id %}
+                    <div>Tax ID: {{ invoice.business_tax_id }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="details-box">
+                <div class="details-title">To</div>
+                <div class="details-content">
+                    {% if invoice.customer_email %}
+                    <div>{{ invoice.customer_email }}</div>
+                    {% endif %}
+                    {% if invoice.customer_phone %}
+                    <div>{{ invoice.customer_phone }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Invoice Items -->
+        <div class="invoice-items">
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th class="amount-col">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{{ invoice.description or 'Payment' }}</td>
+                        <td class="amount-col">{{ invoice.currency }} {{ '{:,.2f}'.format(invoice.amount) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Payment Section -->
+        <div class="payment-section">
+            <div class="payment-info">
+                <div style="font-size: 14px; color: #666; margin-bottom: 4px;">Total Amount</div>
+                <div class="total-amount">{{ invoice.currency }} {{ '{:,.2f}'.format(invoice.amount) }}</div>
+                {% if payment_url and invoice.status.value != 'paid' %}
+                <a href="{{ payment_url }}" class="payment-link">Pay Now</a>
+                {% endif %}
+            </div>
+            {% if qr_code_data_uri %}
+            <div class="qr-code-container">
+                <img src="{{ qr_code_data_uri }}" alt="Payment QR Code" class="qr-code">
+                <div class="qr-label">Scan to Pay</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Footer -->
+        <div class="invoice-footer">
+            {% if invoice.payment_terms %}
+            <div class="payment-terms">
+                <div class="payment-terms-title">Payment Terms</div>
+                <div class="payment-terms-content">{{ invoice.payment_terms }}</div>
+            </div>
+            {% endif %}
+            <div class="powered-by">
+                Powered by OnePay — Secure Payment Processing
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -6,12 +6,86 @@
         background: rgba(28, 32, 38, 0.7);
         backdrop-filter: blur(20px);
     }
+    
+    /* Toggle button styles */
+    .toggle-btn {
+        position: fixed;
+        top: 10px;
+        z-index: 100;
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+    }
+    
+    .toggle-btn:hover {
+        transform: scale(1.05);
+    }
+    
+    .toggle-btn:active {
+        transform: scale(0.95);
+    }
+    
+    /* Sidebar toggle */
+    #sidebarToggle {
+        left: 35px;
+        background: rgba(170, 199, 255, 0.1);
+        border: 1px solid rgba(170, 199, 255, 0.2);
+        color: #aac7ff;
+    }
+    
+    /* Theme toggle */
+    #themeToggle {
+        left: 93px;
+        background: rgba(170, 199, 255, 0.1);
+        border: 1px solid rgba(170, 199, 255, 0.2);
+        color: #aac7ff;
+    }
+    
+    /* Light mode adjustments */
+    html:not(.dark) #sidebarToggle,
+    html:not(.dark) #themeToggle {
+        background: rgba(0, 92, 186, 0.1);
+        border: 1px solid rgba(0, 92, 186, 0.2);
+        color: #005cba;
+    }
+    
+    /* Sidebar transition */
+    aside {
+        transition: transform 0.3s ease;
+    }
+    
+    aside.sidebar-hidden {
+        transform: translateX(-100%);
+    }
+    
+    main {
+        transition: margin-left 0.3s ease;
+    }
+    
+    main.sidebar-hidden {
+        margin-left: 0;
+    }
 </style>
 {% endblock %}
 
 {% block body %}
+<!-- Toggle Buttons -->
+<button id="sidebarToggle" class="toggle-btn" title="Toggle Sidebar">
+    <span class="material-symbols-outlined">menu</span>
+</button>
+
+<button id="themeToggle" class="toggle-btn" title="Toggle Theme">
+    <span class="material-symbols-outlined">light_mode</span>
+</button>
+
 <!-- Top Status Bar -->
-<div class="w-full bg-surface-container-lowest py-2 px-10 flex justify-between items-center text-[10px] font-label tracking-[0.2em] text-outline uppercase border-b border-outline-variant/10">
+<div class="w-full bg-black py-2 px-10 flex justify-between items-center text-[10px] font-label tracking-[0.2em] text-white uppercase border-b border-white/10">
     <div class="flex items-center gap-4">
         <span class="flex items-center gap-1.5 text-primary">
             <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
@@ -29,45 +103,50 @@
 </div>
 
 <!-- Side Navigation -->
-<aside class="h-screen w-64 fixed left-0 top-0 bg-[#10141a] flex flex-col p-6 gap-4 z-50 pt-16">
+<aside class="h-screen w-64 fixed left-0 top-0 bg-gray-50 dark:bg-[#10141a] flex flex-col p-6 gap-4 z-50 pt-16 border-r border-gray-200 dark:border-transparent">
     <div class="mb-8 px-4">
         <div class="flex items-center gap-2 mb-1">
             <span class="material-symbols-outlined text-primary text-2xl" style="font-variation-settings: 'FILL' 1;">shield</span>
-            <h1 class="text-lg font-bold text-[#dfe2eb] font-headline">OnePay</h1>
+            <h1 class="text-lg font-bold text-gray-900 dark:text-[#dfe2eb] font-headline">OnePay</h1>
         </div>
-        <p class="text-xs text-outline font-label mt-1">{{ username }}</p>
+        <p class="text-xs text-gray-600 dark:text-outline font-label mt-1">{{ username }}</p>
     </div>
     
     <nav class="flex flex-col gap-2">
-        <a class="{% if active_page == 'create' %}bg-gradient-to-r from-[#aac7ff] to-[#418fff] text-[#10141a]{% else %}text-[#909196] hover:text-[#dfe2eb] hover:bg-[#181c22]{% endif %} rounded-xl px-4 py-3 font-bold font-manrope font-medium text-sm flex items-center gap-3 active:scale-98 transition-transform" href="{{ url_for('payments.dashboard') }}">
+        <a class="{% if active_page == 'create' %}bg-gradient-to-r from-[#aac7ff] to-[#418fff] text-[#10141a]{% else %}text-gray-600 dark:text-[#909196] hover:text-gray-900 dark:hover:text-[#dfe2eb] hover:bg-gray-100 dark:hover:bg-[#181c22]{% endif %} rounded-xl px-4 py-3 font-bold font-manrope font-medium text-sm flex items-center gap-3 active:scale-98 transition-transform" href="{{ url_for('payments.dashboard') }}">
             <span class="material-symbols-outlined" {% if active_page == 'create' %}style="font-variation-settings: 'FILL' 1;"{% endif %}>link</span>
             Create Link
         </a>
         
-        <a class="{% if active_page == 'check_status' %}bg-gradient-to-r from-[#aac7ff] to-[#418fff] text-[#10141a]{% else %}text-[#909196] hover:text-[#dfe2eb] hover:bg-[#181c22]{% endif %} rounded-xl px-4 py-3 font-manrope font-medium text-sm flex items-center gap-3 active:scale-98 transition-transform" href="{{ url_for('payments.check_status') }}">
+        <a class="{% if active_page == 'check_status' %}bg-gradient-to-r from-[#aac7ff] to-[#418fff] text-[#10141a]{% else %}text-gray-600 dark:text-[#909196] hover:text-gray-900 dark:hover:text-[#dfe2eb] hover:bg-gray-100 dark:hover:bg-[#181c22]{% endif %} rounded-xl px-4 py-3 font-manrope font-medium text-sm flex items-center gap-3 active:scale-98 transition-transform" href="{{ url_for('payments.check_status') }}">
             <span class="material-symbols-outlined" {% if active_page == 'check_status' %}style="font-variation-settings: 'FILL' 1;"{% endif %}>rule</span>
             Check Status
         </a>
         
-        <a class="{% if active_page == 'history' %}bg-gradient-to-r from-[#aac7ff] to-[#418fff] text-[#10141a]{% else %}text-[#909196] hover:text-[#dfe2eb] hover:bg-[#181c22]{% endif %} rounded-xl px-4 py-3 font-manrope font-medium text-sm flex items-center gap-3 active:scale-98 transition-transform" href="{{ url_for('payments.history') }}">
+        <a class="{% if active_page == 'history' %}bg-gradient-to-r from-[#aac7ff] to-[#418fff] text-[#10141a]{% else %}text-gray-600 dark:text-[#909196] hover:text-gray-900 dark:hover:text-[#dfe2eb] hover:bg-gray-100 dark:hover:bg-[#181c22]{% endif %} rounded-xl px-4 py-3 font-manrope font-medium text-sm flex items-center gap-3 active:scale-98 transition-transform" href="{{ url_for('payments.history') }}">
             <span class="material-symbols-outlined" {% if active_page == 'history' %}style="font-variation-settings: 'FILL' 1;"{% endif %}>history</span>
             History
         </a>
         
-        <a class="{% if active_page == 'settings' %}bg-gradient-to-r from-[#aac7ff] to-[#418fff] text-[#10141a]{% else %}text-[#909196] hover:text-[#dfe2eb] hover:bg-[#181c22]{% endif %} rounded-xl px-4 py-3 font-manrope font-medium text-sm flex items-center gap-3 active:scale-98 transition-transform" href="{{ url_for('payments.settings') }}">
+        <a class="{% if active_page == 'invoices' %}bg-gradient-to-r from-[#aac7ff] to-[#418fff] text-[#10141a]{% else %}text-gray-600 dark:text-[#909196] hover:text-gray-900 dark:hover:text-[#dfe2eb] hover:bg-gray-100 dark:hover:bg-[#181c22]{% endif %} rounded-xl px-4 py-3 font-manrope font-medium text-sm flex items-center gap-3 active:scale-98 transition-transform" href="{{ url_for('payments.invoices') }}">
+            <span class="material-symbols-outlined" {% if active_page == 'invoices' %}style="font-variation-settings: 'FILL' 1;"{% endif %}>receipt_long</span>
+            Invoices
+        </a>
+        
+        <a class="{% if active_page == 'settings' %}bg-gradient-to-r from-[#aac7ff] to-[#418fff] text-[#10141a]{% else %}text-gray-600 dark:text-[#909196] hover:text-gray-900 dark:hover:text-[#dfe2eb] hover:bg-gray-100 dark:hover:bg-[#181c22]{% endif %} rounded-xl px-4 py-3 font-manrope font-medium text-sm flex items-center gap-3 active:scale-98 transition-transform" href="{{ url_for('payments.settings') }}">
             <span class="material-symbols-outlined" {% if active_page == 'settings' %}style="font-variation-settings: 'FILL' 1;"{% endif %}>settings</span>
             Settings
         </a>
     </nav>
     
-    <div class="mt-auto p-4 bg-surface-container-low rounded-2xl">
+    <div class="mt-auto p-4 bg-gray-100 dark:bg-surface-container-low rounded-2xl">
         <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center border border-outline-variant/20">
+            <div class="w-10 h-10 rounded-full bg-gray-200 dark:bg-surface-container-highest flex items-center justify-center border border-gray-300 dark:border-outline-variant/20">
                 <span class="material-symbols-outlined text-primary">account_circle</span>
             </div>
             <div class="overflow-hidden">
-                <p class="text-xs font-bold truncate">{{ username }}</p>
-                <p class="text-[10px] text-outline truncate">Verified Merchant</p>
+                <p class="text-xs font-bold truncate text-gray-900 dark:text-white">{{ username }}</p>
+                <p class="text-[10px] text-gray-600 dark:text-outline truncate">Verified Merchant</p>
             </div>
         </div>
         <a href="{{ url_for('auth.logout') }}" class="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl text-error hover:bg-error-container/10 transition-colors font-medium text-sm w-full justify-center">
@@ -78,17 +157,58 @@
 </aside>
 
 <!-- Main Content -->
-<main class="ml-64 min-h-screen flex flex-col pt-12">
+<main class="ml-64 min-h-screen flex flex-col pt-12" id="mainContent">
     {% block dashboard_content %}{% endblock %}
     
     <!-- Footer -->
-    <footer class="max-w-7xl mx-auto flex justify-between items-center px-10 mt-12 opacity-15 border-t border-[#dfe2eb] w-full py-8 font-inter text-xs tracking-wide text-[#909196]">
+    <footer class="max-w-7xl mx-auto flex justify-between items-center px-10 mt-12 opacity-15 border-t border-outline-variant w-full py-8 font-inter text-xs tracking-wide text-outline">
         <p>Powered by Interswitch · HMAC-SHA256 secured</p>
         <div class="flex gap-6">
-            <a class="hover:text-[#388bfd] transition-colors" href="#">Privacy</a>
-            <a class="hover:text-[#388bfd] transition-colors" href="#">Security</a>
-            <a class="hover:text-[#388bfd] transition-colors" href="#">Terms</a>
+            <a class="hover:text-primary transition-colors" href="#">Privacy</a>
+            <a class="hover:text-primary transition-colors" href="#">Security</a>
+            <a class="hover:text-primary transition-colors" href="#">Terms</a>
         </div>
     </footer>
 </main>
+
+<script>
+// Sidebar toggle functionality
+const sidebarToggle = document.getElementById('sidebarToggle');
+const sidebar = document.querySelector('aside');
+const mainContent = document.getElementById('mainContent');
+
+sidebarToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('sidebar-hidden');
+    mainContent.classList.toggle('sidebar-hidden');
+});
+
+// Theme toggle functionality
+const themeToggle = document.getElementById('themeToggle');
+const html = document.documentElement;
+const themeIcon = themeToggle.querySelector('.material-symbols-outlined');
+
+// Initialize theme icon based on current state
+function updateThemeIcon() {
+    if (html.classList.contains('dark')) {
+        themeIcon.textContent = 'light_mode';
+    } else {
+        themeIcon.textContent = 'dark_mode';
+    }
+}
+
+// Set initial icon state
+updateThemeIcon();
+
+// Toggle theme on button click
+themeToggle.addEventListener('click', () => {
+    if (html.classList.contains('dark')) {
+        html.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+    } else {
+        html.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+    }
+    updateThemeIcon();
+});
+</script>
 {% endblock %}

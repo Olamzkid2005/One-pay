@@ -16,6 +16,7 @@ from database import init_db
 from blueprints.auth import auth_bp
 from blueprints.payments import payments_bp
 from blueprints.public import public_bp
+from blueprints.invoices import invoices_bp
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 
@@ -219,6 +220,7 @@ def create_app() -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(payments_bp)
     app.register_blueprint(public_bp)
+    app.register_blueprint(invoices_bp)
 
     # ── Error handlers ─────────────────────────────────────────────────────────
     @app.errorhandler(404)

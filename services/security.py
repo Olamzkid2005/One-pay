@@ -18,9 +18,10 @@ from config import Config
 def generate_tx_reference() -> str:
     """
     Generate a cryptographically strong transaction reference.
-    Format: ONEPAY-{40 hex chars}  — 160 bits of entropy, unguessable.
+    Format: ONEPAY-{16 hex chars}  — 64 bits of entropy, unguessable.
+    Shortened for better UX while maintaining security.
     """
-    return f"ONEPAY-{secrets.token_hex(20).upper()}"
+    return f"ONEPAY-{secrets.token_hex(8).upper()}"
 
 
 def _normalize_expires_for_signing(expires_at: datetime) -> str:

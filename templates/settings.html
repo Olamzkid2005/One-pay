@@ -6,8 +6,8 @@
 <div class="px-12 max-w-6xl mx-auto w-full">
     <!-- Header Section -->
     <header class="mb-12">
-        <h2 class="text-4xl font-headline font-extrabold tracking-tight text-on-surface mb-2">Merchant Settings</h2>
-        <p class="text-on-surface-variant text-lg max-w-2xl font-body">Configure your merchant profile, manage API integrations, and set up real-time webhook notifications for your payment vault.</p>
+        <h2 class="text-4xl font-headline font-extrabold tracking-tight text-gray-800 dark:text-primary mb-2">Merchant Settings</h2>
+        <p class="text-gray-700 dark:text-on-surface-variant text-lg max-w-2xl font-body">Configure your merchant profile, manage API integrations, and set up real-time webhook notifications for your payment vault.</p>
     </header>
     
     <!-- Bento Grid Layout for Content -->
@@ -64,6 +64,147 @@
                     <div class="flex justify-end pt-4">
                         <button type="submit" class="h-[56px] px-10 bg-gradient-to-br from-primary to-primary-container text-on-primary-container font-bold rounded-xl hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-primary/10">
                             Save Settings
+                        </button>
+                    </div>
+                </form>
+                
+                <!-- Subtle background decoration -->
+                <div class="absolute -top-24 -right-24 w-64 h-64 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-colors duration-700"></div>
+            </div>
+            
+            <!-- Invoice Settings Card -->
+            <div class="bg-surface-container-low p-8 rounded-xl shadow-2xl relative overflow-hidden group border border-outline-variant/10">
+                <div class="flex items-center gap-3 mb-6">
+                    <span class="material-symbols-outlined text-primary">receipt_long</span>
+                    <h3 class="text-xl font-headline font-bold text-on-surface">Invoice Settings</h3>
+                </div>
+                
+                <form id="invoiceSettingsForm" class="space-y-6 relative z-10">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
+                    
+                    <!-- Business Name -->
+                    <div class="space-y-2">
+                        <label class="block text-sm font-label font-medium text-on-surface-variant" for="business_name">Business Name</label>
+                        <div class="relative group">
+                            <input 
+                                class="w-full bg-surface-container-highest border-outline-variant/20 border rounded-xl py-4 px-5 text-on-surface focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none font-body" 
+                                id="business_name" 
+                                name="business_name"
+                                placeholder="Your Business Name" 
+                                type="text"
+                                value="{{ invoice_settings.business_name if invoice_settings else '' }}"
+                                maxlength="255"
+                            />
+                            <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">business</span>
+                        </div>
+                        <p class="text-sm text-outline font-body flex items-start gap-2 mt-2">
+                            <span class="material-symbols-outlined text-[16px] mt-0.5">info</span>
+                            This name will appear on all generated invoices.
+                        </p>
+                    </div>
+                    
+                    <!-- Business Address -->
+                    <div class="space-y-2">
+                        <label class="block text-sm font-label font-medium text-on-surface-variant" for="business_address">Business Address</label>
+                        <textarea 
+                            class="w-full bg-surface-container-highest border-outline-variant/20 border rounded-xl py-4 px-5 text-on-surface focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none font-body resize-none" 
+                            id="business_address" 
+                            name="business_address"
+                            placeholder="123 Main Street, Lagos, Nigeria" 
+                            rows="3"
+                            maxlength="1000"
+                        >{{ invoice_settings.business_address if invoice_settings else '' }}</textarea>
+                        <p class="text-sm text-outline font-body flex items-start gap-2 mt-2">
+                            <span class="material-symbols-outlined text-[16px] mt-0.5">info</span>
+                            Your business address for invoice documentation.
+                        </p>
+                    </div>
+                    
+                    <!-- Business Tax ID -->
+                    <div class="space-y-2">
+                        <label class="block text-sm font-label font-medium text-on-surface-variant" for="business_tax_id">Tax ID / Registration Number</label>
+                        <div class="relative group">
+                            <input 
+                                class="w-full bg-surface-container-highest border-outline-variant/20 border rounded-xl py-4 px-5 text-on-surface focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none font-body" 
+                                id="business_tax_id" 
+                                name="business_tax_id"
+                                placeholder="12345678-0001" 
+                                type="text"
+                                value="{{ invoice_settings.business_tax_id if invoice_settings else '' }}"
+                                maxlength="100"
+                            />
+                            <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">badge</span>
+                        </div>
+                        <p class="text-sm text-outline font-body flex items-start gap-2 mt-2">
+                            <span class="material-symbols-outlined text-[16px] mt-0.5">info</span>
+                            Optional tax identification number for your business.
+                        </p>
+                    </div>
+                    
+                    <!-- Business Logo URL -->
+                    <div class="space-y-2">
+                        <label class="block text-sm font-label font-medium text-on-surface-variant" for="business_logo_url">Business Logo URL</label>
+                        <div class="relative group">
+                            <input 
+                                class="w-full bg-surface-container-highest border-outline-variant/20 border rounded-xl py-4 px-5 text-on-surface focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none font-body" 
+                                id="business_logo_url" 
+                                name="business_logo_url"
+                                placeholder="https://example.com/logo.png" 
+                                type="url"
+                                value="{{ invoice_settings.business_logo_url if invoice_settings else '' }}"
+                                maxlength="500"
+                            />
+                            <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">image</span>
+                        </div>
+                        <p class="text-sm text-outline font-body flex items-start gap-2 mt-2">
+                            <span class="material-symbols-outlined text-[16px] mt-0.5">info</span>
+                            URL to your business logo (PNG, JPG, or SVG format).
+                        </p>
+                        <!-- Logo Preview -->
+                        <div id="logoPreview" class="hidden mt-4 p-4 bg-surface-container-highest rounded-xl border border-outline-variant/20">
+                            <p class="text-xs font-label font-medium text-on-surface-variant mb-2">Logo Preview:</p>
+                            <img id="logoPreviewImage" src="" alt="Logo preview" class="max-h-24 rounded-lg" />
+                        </div>
+                    </div>
+                    
+                    <!-- Default Payment Terms -->
+                    <div class="space-y-2">
+                        <label class="block text-sm font-label font-medium text-on-surface-variant" for="default_payment_terms">Default Payment Terms</label>
+                        <textarea 
+                            class="w-full bg-surface-container-highest border-outline-variant/20 border rounded-xl py-4 px-5 text-on-surface focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none font-body resize-none" 
+                            id="default_payment_terms" 
+                            name="default_payment_terms"
+                            placeholder="Payment due upon receipt" 
+                            rows="2"
+                            maxlength="500"
+                        >{{ invoice_settings.default_payment_terms if invoice_settings else 'Payment due upon receipt' }}</textarea>
+                        <p class="text-sm text-outline font-body flex items-start gap-2 mt-2">
+                            <span class="material-symbols-outlined text-[16px] mt-0.5">info</span>
+                            Default payment terms that will appear on invoices.
+                        </p>
+                    </div>
+                    
+                    <!-- Auto-send Email -->
+                    <div class="space-y-2">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                id="auto_send_email" 
+                                name="auto_send_email"
+                                class="w-5 h-5 rounded border-outline-variant/20 bg-surface-container-highest text-primary focus:ring-2 focus:ring-primary focus:ring-offset-0 cursor-pointer"
+                                {{ 'checked' if invoice_settings and invoice_settings.auto_send_email else '' }}
+                            />
+                            <span class="text-sm font-label font-medium text-on-surface-variant">Automatically email invoices to customers</span>
+                        </label>
+                        <p class="text-sm text-outline font-body flex items-start gap-2 mt-2 ml-8">
+                            <span class="material-symbols-outlined text-[16px] mt-0.5">info</span>
+                            When enabled, invoices will be automatically sent to customer email addresses.
+                        </p>
+                    </div>
+                    
+                    <div class="flex justify-end pt-4">
+                        <button type="submit" class="h-[56px] px-10 bg-gradient-to-br from-primary to-primary-container text-on-primary-container font-bold rounded-xl hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-primary/10">
+                            Save Invoice Settings
                         </button>
                     </div>
                 </form>
@@ -128,6 +269,7 @@
 </div>
 
 <script>
+// Webhook form submission
 document.getElementById('webhookForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -160,5 +302,140 @@ document.getElementById('webhookForm').addEventListener('submit', async (e) => {
         alert('Failed to save settings');
     }
 });
+
+// Invoice settings form submission
+document.getElementById('invoiceSettingsForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData);
+    
+    // Convert checkbox to boolean
+    data.auto_send_email = document.getElementById('auto_send_email').checked;
+    
+    // Client-side validation
+    if (data.business_name && data.business_name.length > 255) {
+        alert('Business name must be 255 characters or less');
+        return;
+    }
+    
+    if (data.business_address && data.business_address.length > 1000) {
+        alert('Business address must be 1000 characters or less');
+        return;
+    }
+    
+    if (data.business_tax_id && data.business_tax_id.length > 100) {
+        alert('Tax ID must be 100 characters or less');
+        return;
+    }
+    
+    if (data.business_logo_url && data.business_logo_url.length > 500) {
+        alert('Logo URL must be 500 characters or less');
+        return;
+    }
+    
+    if (data.default_payment_terms && data.default_payment_terms.length > 500) {
+        alert('Payment terms must be 500 characters or less');
+        return;
+    }
+    
+    // Validate logo URL format if provided
+    if (data.business_logo_url && data.business_logo_url.trim()) {
+        try {
+            new URL(data.business_logo_url);
+        } catch (e) {
+            alert('Please enter a valid URL for the business logo');
+            return;
+        }
+    }
+    
+    try {
+        const response = await fetch('/api/invoices/settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': data.csrf_token
+            },
+            body: JSON.stringify({
+                business_name: data.business_name || null,
+                business_address: data.business_address || null,
+                business_tax_id: data.business_tax_id || null,
+                business_logo_url: data.business_logo_url || null,
+                default_payment_terms: data.default_payment_terms || 'Payment due upon receipt',
+                auto_send_email: data.auto_send_email
+            })
+        });
+        
+        // Session expired — redirect to login
+        if (response.status === 401 || response.status === 403) {
+            alert('Session expired. Redirecting to login...');
+            window.location.href = '/login';
+            return;
+        }
+        
+        const result = await response.json();
+        if (result.success) {
+            alert('Invoice settings saved successfully!');
+        } else {
+            alert('Error: ' + (result.message || result.error || 'Failed to save settings'));
+        }
+    } catch (error) {
+        console.error('Error saving invoice settings:', error);
+        alert('Failed to save invoice settings');
+    }
+});
+
+// Logo preview functionality
+const logoUrlInput = document.getElementById('business_logo_url');
+const logoPreview = document.getElementById('logoPreview');
+const logoPreviewImage = document.getElementById('logoPreviewImage');
+
+let logoPreviewTimeout;
+
+logoUrlInput.addEventListener('input', (e) => {
+    const url = e.target.value.trim();
+    
+    // Clear previous timeout
+    if (logoPreviewTimeout) {
+        clearTimeout(logoPreviewTimeout);
+    }
+    
+    // Hide preview if URL is empty
+    if (!url) {
+        logoPreview.classList.add('hidden');
+        return;
+    }
+    
+    // Validate URL format
+    try {
+        new URL(url);
+    } catch (err) {
+        logoPreview.classList.add('hidden');
+        return;
+    }
+    
+    // Debounce preview loading (wait 500ms after user stops typing)
+    logoPreviewTimeout = setTimeout(() => {
+        logoPreviewImage.src = url;
+        logoPreviewImage.onerror = () => {
+            logoPreview.classList.add('hidden');
+        };
+        logoPreviewImage.onload = () => {
+            logoPreview.classList.remove('hidden');
+        };
+    }, 500);
+});
+
+// Show preview on page load if logo URL exists
+if (logoUrlInput.value.trim()) {
+    try {
+        new URL(logoUrlInput.value.trim());
+        logoPreviewImage.src = logoUrlInput.value.trim();
+        logoPreviewImage.onload = () => {
+            logoPreview.classList.remove('hidden');
+        };
+    } catch (e) {
+        // Invalid URL, don't show preview
+    }
+}
 </script>
 {% endblock %}
