@@ -6,7 +6,7 @@ No login required — these are customer-facing routes.
 import logging
 from datetime import datetime, timezone
 
-from flask import Blueprint, request, jsonify, render_template, session
+from flask import Blueprint, request, jsonify, render_template, session, make_response
 
 from config import Config
 from database import engine, get_db
@@ -110,10 +110,28 @@ def pay_page(tx_ref):
                    "Yes" if qr_payment_url else "No",
                    "Yes" if qr_virtual_account else "No")
 
-        return render_template("verify.html", tx_ref=tx_ref,
+        # VULN-018 fix: Allow embedding only from merchant's return_url domain
+        response = make_response(render_template("verify.html", tx_ref=tx_ref,
                                return_url=return_url, link_error=link_error,
                                qr_code_payment_url=qr_payment_url,
-                               qr_code_virtual_account=qr_virtual_account)
+                               qr_code_virtual_account=qr_virtual_account))
+        
+        # If transaction has return_url, allow framing from that domain only
+        if return_url:
+            from urllib.parse import urlparse
+            try:
+                parsed = urlparse(return_url)
+                if parsed.netloc:
+                    # Override global X-Frame-Options for this specific page
+                    response.headers["X-Frame-Options"] = f"ALLOW-FROM https://{parsed.netloc}"
+                    # Modern browsers use CSP frame-ancestors
+                    response.headers["Content-Security-Policy"] = \
+                        f"frame-ancestors 'self' https://{parsed.netloc}"
+                    logger.debug("Clickjacking protection: allowing frames from %s", parsed.netloc)
+            except Exception as e:
+                logger.warning("Failed to parse return_url for frame protection: %s", e)
+        
+        return response
     
     except Exception as e:
         logger.error("Exception in pay_page | tx_ref=%s error=%s", tx_ref, e, exc_info=True)

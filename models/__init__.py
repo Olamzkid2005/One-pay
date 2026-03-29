@@ -9,6 +9,7 @@ from models.user import User          # noqa: F401
 from models.rate_limit import RateLimit  # noqa: F401
 from models.audit_log import AuditLog  # noqa: F401
 from models.invoice import Invoice, InvoiceSettings, InvoiceStatus  # noqa: F401
+from models.webhook_blacklist import WebhookBlacklist  # noqa: F401
 
 __all__ = [
     "Base",
@@ -20,4 +21,5 @@ __all__ = [
     "Invoice",
     "InvoiceSettings",
     "InvoiceStatus",
+    "WebhookBlacklist",
 ]

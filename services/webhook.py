@@ -48,25 +48,70 @@ def _sign_payload(payload_bytes: bytes) -> str:
     return f"sha256={sig}"
 
 
+def _blacklist_webhook(url: str, reason: str):
+    """Add webhook URL to blacklist."""
+    try:
+        from models.webhook_blacklist import WebhookBlacklist
+        from database import get_db
+        
+        with get_db() as db:
+            existing = db.query(WebhookBlacklist).filter(
+                WebhookBlacklist.url == url
+            ).first()
+            
+            if existing:
+                existing.attempts += 1
+                existing.reason = reason
+            else:
+                blacklist_entry = WebhookBlacklist(
+                    url=url,
+                    reason=reason
+                )
+                db.add(blacklist_entry)
+            
+            logger.warning("Webhook blacklisted | url=%s reason=%s", url, reason)
+    except Exception as e:
+        logger.error("Failed to blacklist webhook | url=%s error=%s", url, e)
+
+
 def _send_with_retries(url: str, payload_bytes: bytes, headers: dict, tx_ref: str) -> bool:
     """
     POST payload to url with exponential backoff retries.
     Returns True on success (HTTP < 300), False after all attempts fail.
     
     Security: Validates URL and DNS on EVERY attempt to prevent DNS rebinding attacks.
+    Maintains permanent blacklist of malicious URLs.
     """
     from services.security import validate_webhook_url
     from urllib.parse import urlparse
+    from models.webhook_blacklist import WebhookBlacklist
+    from database import get_db
     import socket
     import ipaddress
     
+    # Check blacklist FIRST
+    try:
+        with get_db() as db:
+            blacklisted = db.query(WebhookBlacklist).filter(
+                WebhookBlacklist.url == url
+            ).first()
+            if blacklisted:
+                logger.error("Webhook URL is blacklisted | tx_ref=%s url=%s reason=%s",
+                            tx_ref, url, blacklisted.reason)
+                return False
+    except Exception as e:
+        logger.error("Blacklist check failed: %s", e)
+        # Continue - don't block legitimate webhooks on DB errors
+    
     # Initial URL validation
     if not validate_webhook_url(url):
+        _blacklist_webhook(url, "Failed URL validation")
         logger.error("Webhook URL failed security validation | tx_ref=%s url=%s", tx_ref, url)
         return False
     
     hostname = urlparse(url).hostname
     if not hostname:
+        _blacklist_webhook(url, "No hostname")
         logger.error("Webhook URL has no hostname | tx_ref=%s url=%s", tx_ref, url)
         return False
     
@@ -76,13 +121,21 @@ def _send_with_retries(url: str, payload_bytes: bytes, headers: dict, tx_ref: st
             # DNS rebinding protection: resolve and validate DNS on EVERY attempt
             ip = socket.gethostbyname(hostname)
             ip_obj = ipaddress.ip_address(ip)
-            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_multicast:
-                logger.error("Webhook DNS rebinding detected | tx_ref=%s url=%s ip=%s attempt=%d", 
+            
+            if (ip_obj.is_private or ip_obj.is_loopback or
+                ip_obj.is_link_local or ip_obj.is_multicast):
+                logger.error("DNS rebinding detected | tx_ref=%s url=%s ip=%s attempt=%d",
                             tx_ref, url, ip, attempt)
-                last_error = f"DNS rebinding detected: {ip}"
-                if attempt < Config.WEBHOOK_MAX_RETRIES:
-                    time.sleep(2 ** attempt)  # Longer backoff after security violation
-                continue
+                # CRITICAL: Blacklist immediately on DNS rebinding
+                _blacklist_webhook(url, f"DNS rebinding detected: {ip}")
+                return False  # ABORT IMMEDIATELY
+            
+            # Additional check: AWS metadata endpoint
+            if ip.startswith("169.254."):
+                logger.error("AWS metadata access attempt | tx_ref=%s url=%s ip=%s",
+                            tx_ref, url, ip)
+                _blacklist_webhook(url, f"AWS metadata access: {ip}")
+                return False
             
             logger.debug("Webhook DNS validated | tx_ref=%s hostname=%s ip=%s attempt=%d", 
                         tx_ref, hostname, ip, attempt)
@@ -96,6 +149,16 @@ def _send_with_retries(url: str, payload_bytes: bytes, headers: dict, tx_ref: st
                 allow_redirects=False,  # Prevent redirect-based SSRF
                 stream=True  # Stream response to check size
             )
+            
+            # Check for redirect to internal IP
+            if 300 <= resp.status_code < 400:
+                location = resp.headers.get('Location', '')
+                if location:
+                    logger.warning("Webhook redirect detected | tx_ref=%s url=%s location=%s",
+                                  tx_ref, url, location)
+                    _blacklist_webhook(url, f"Redirect to {location}")
+                    resp.close()
+                    return False
             
             # Check response size before reading
             content_length = resp.headers.get('Content-Length')
@@ -119,6 +182,7 @@ def _send_with_retries(url: str, payload_bytes: bytes, headers: dict, tx_ref: st
         except socket.gaierror as e:
             last_error = f"DNS resolution failed: {e}"
             logger.warning("Webhook DNS error attempt %d | tx_ref=%s error=%s", attempt, tx_ref, e)
+            # Don't blacklist on DNS errors - could be temporary
         except requests.exceptions.RequestException as e:
             last_error = str(e)
             logger.warning("Webhook attempt %d error | tx_ref=%s error=%s", attempt, tx_ref, e)

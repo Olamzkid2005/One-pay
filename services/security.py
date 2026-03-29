@@ -104,6 +104,8 @@ def validate_return_url(value: str) -> str | None:
     - Block javascript:, data:, file:, etc.
     - Block localhost / loopback / private IP literals
     - Block credentials and fragments in URL
+    
+    VULN-008 FIX: Check length BEFORE parsing, reject if exceeds 500 chars.
     """
     if not value:
         return None
@@ -111,13 +113,17 @@ def validate_return_url(value: str) -> str | None:
     url = value.strip()
     if not url:
         return None
+    
+    # VULN-008 FIX: Reject if exceeds max length (don't truncate)
+    if len(url) > 500:
+        return None
 
     if url.startswith("/"):
         # Block protocol-relative URLs like //evil.com
         # which browsers resolve as https://evil.com
         if url.startswith("//"):
             return None
-        return url[:500]
+        return url
 
     parsed = urlparse(url)
 
@@ -142,7 +148,7 @@ def validate_return_url(value: str) -> str | None:
     except ValueError:
         pass
 
-    return url[:500]
+    return url
 
 
 def validate_hash_token_format(hash_token: str) -> bool:
@@ -157,10 +163,17 @@ def validate_webhook_url(value: str) -> str | None:
     Validate a merchant webhook URL.
     Must be an absolute HTTPS URL pointing to a public host.
     Same rules as validate_return_url but no relative paths allowed.
+    
+    VULN-008 FIX: Check length BEFORE parsing, reject if exceeds 500 chars.
     """
     if not value:
         return None
     url = value.strip()
+    
+    # VULN-008 FIX: Reject if exceeds max length (don't truncate)
+    if len(url) > 500:
+        return None
+    
     parsed = urlparse(url)
     if parsed.scheme != "https":
         return None
@@ -177,7 +190,7 @@ def validate_webhook_url(value: str) -> str | None:
             return None
     except ValueError:
         pass
-    return url[:500]
+    return url
 
 
 

@@ -45,46 +45,76 @@ class QRCodeService:
             
         Returns:
             Base64-encoded PNG image data URI
+            
+        VULN-009 FIX: Added timeout protection for QR generation.
         """
         try:
-            # Enhanced QR data with payment information
-            qr_data = self._build_payment_data(payment_url, amount, description)
+            # VULN-009 FIX: Use threading timeout for cross-platform compatibility
+            import threading
             
-            # Configure QR code
-            qr = qrcode.QRCode(
-                version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_M,
-                box_size=self.default_box_size,
-                border=self.default_border,
-            )
+            result = [None]
+            error = [None]
             
-            qr.add_data(qr_data)
-            qr.make(fit=True)
+            def generate_qr():
+                try:
+                    # Enhanced QR data with payment information
+                    qr_data = self._build_payment_data(payment_url, amount, description)
+                    
+                    # Configure QR code
+                    qr = qrcode.QRCode(
+                        version=1,
+                        error_correction=qrcode.constants.ERROR_CORRECT_M,
+                        box_size=self.default_box_size,
+                        border=self.default_border,
+                    )
+                    
+                    qr.add_data(qr_data)
+                    qr.make(fit=True)
+                    
+                    # Create image with style
+                    if style == "rounded":
+                        img = qr.make_image(
+                            fill_color=self.default_fill_color,
+                            back_color=self.default_back_color,
+                            image_factory=StyledPilImage,
+                            module_drawer=RoundedModuleDrawer()
+                        )
+                    else:
+                        img = qr.make_image(
+                            fill_color=self.default_fill_color,
+                            back_color=self.default_back_color
+                        )
+                    
+                    # Convert to base64
+                    buffer = io.BytesIO()
+                    img.save(buffer, format='PNG', optimize=True)
+                    buffer.seek(0)
+                    
+                    img_base64 = base64.b64encode(buffer.getvalue()).decode()
+                    data_uri = f"data:image/png;base64,{img_base64}"
+                    
+                    result[0] = data_uri
+                except Exception as e:
+                    error[0] = e
             
-            # Create image with style
-            if style == "rounded":
-                img = qr.make_image(
-                    fill_color=self.default_fill_color,
-                    back_color=self.default_back_color,
-                    image_factory=StyledPilImage,
-                    module_drawer=RoundedModuleDrawer()
-                )
+            # Run with 5 second timeout
+            thread = threading.Thread(target=generate_qr)
+            thread.daemon = True
+            thread.start()
+            thread.join(timeout=5.0)
+            
+            if thread.is_alive():
+                logger.error("QR code generation timeout after 5 seconds")
+                raise TimeoutError("QR generation timeout")
+            
+            if error[0]:
+                raise error[0]
+            
+            if result[0]:
+                logger.debug("QR code generated successfully for payment URL")
+                return result[0]
             else:
-                img = qr.make_image(
-                    fill_color=self.default_fill_color,
-                    back_color=self.default_back_color
-                )
-            
-            # Convert to base64
-            buffer = io.BytesIO()
-            img.save(buffer, format='PNG', optimize=True)
-            buffer.seek(0)
-            
-            img_base64 = base64.b64encode(buffer.getvalue()).decode()
-            data_uri = f"data:image/png;base64,{img_base64}"
-            
-            logger.debug("QR code generated successfully for payment URL")
-            return data_uri
+                raise RuntimeError("QR generation failed without error")
             
         except Exception as e:
             logger.error("Failed to generate QR code: %s", e)

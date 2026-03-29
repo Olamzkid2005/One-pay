@@ -35,6 +35,8 @@ def _regenerate_session_secure(user_id: int, username: str):
     Flask's default signed cookie sessions don't have server-side state,
     so we ensure the session ID changes by clearing and adding a unique
     regeneration token that forces a new signature.
+    
+    Additionally binds session to IP and User-Agent for defense-in-depth.
     """
     from flask import current_app
     
@@ -58,6 +60,10 @@ def _regenerate_session_secure(user_id: int, username: str):
     session["_boot"] = current_app.config.get("BOOT_TIME")
     session["_created"] = datetime.now(timezone.utc).isoformat()
     session["_last_activity"] = datetime.now(timezone.utc).isoformat()
+    
+    # Bind session to IP and User-Agent (defense-in-depth against session fixation)
+    session["_ip"] = client_ip()
+    session["_user_agent"] = request.headers.get("User-Agent", "")[:200]
 
 
 # ── Register ───────────────────────────────────────────────────────────────────
@@ -87,30 +93,11 @@ def register_page():
         flash("Please enter a valid email address.", "error")
         return render_template("register.html", username=username, email=email, csrf_token=get_csrf_token())
 
-    if len(password) < 12:
-        flash("Password must be at least 12 characters.", "error")
-        return render_template("register.html", username=username, email=email, csrf_token=get_csrf_token())
-
-    if len(password) > 1000:
-        flash("Password is too long (max 1000 characters).", "error")
-        return render_template("register.html", username=username, email=email, csrf_token=get_csrf_token())
-
-    # Require uppercase, lowercase, number, special char
-    if not (re.search(r'[a-z]', password) and 
-            re.search(r'[A-Z]', password) and
-            re.search(r'[0-9]', password) and
-            re.search(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/~`]', password)):
-        flash("Password must contain uppercase, lowercase, number, and special character.", "error")
-        return render_template("register.html", username=username, email=email, csrf_token=get_csrf_token())
-    
-    # Check against common passwords
-    COMMON_PASSWORDS = {
-        'password123', 'admin123', '12345678', 'qwerty123', 'password1',
-        'welcome123', 'letmein123', 'monkey123', 'dragon123', 'master123',
-        'password1234', 'admin1234', '123456789', 'qwerty1234', 'password12'
-    }
-    if password.lower() in COMMON_PASSWORDS:
-        flash("This password is too common. Please choose a stronger password.", "error")
+    # Validate password strength (VULN-006 fix)
+    from services.password_validator import validate_password_strength
+    is_valid, error_msg = validate_password_strength(password)
+    if not is_valid:
+        flash(error_msg, "error")
         return render_template("register.html", username=username, email=email, csrf_token=get_csrf_token())
 
     if password != password2:
@@ -212,11 +199,14 @@ def login_page():
 
 @auth_bp.route("/logout")
 def logout():
+    from flask import make_response
     username = current_username()
     session.clear()
     logger.info("Merchant logged out: %s", username)
     flash("You have been logged out.", "info")
-    return redirect(url_for("auth.login_page"))
+    response = make_response(redirect(url_for("auth.login_page")))
+    response.headers["Clear-Site-Data"] = '"cache", "cookies", "storage"'
+    return response
 
 
 # ── Forgot password ────────────────────────────────────────────────────────────
@@ -233,20 +223,21 @@ def forgot_password():
     username = (request.form.get("username") or "").strip()
 
     with get_db() as db:
-        # Global rate limit to prevent distributed attacks
-        if not check_rate_limit(db, "reset:global", limit=100, window_secs=3600):
+        # Global rate limit to prevent distributed attacks (VULN-004 fix - stricter)
+        if not check_rate_limit(db, "reset:global", limit=50, window_secs=3600):
             flash("Service temporarily unavailable — please try again later.", "error")
             return render_template("forgot_password.html", csrf_token=get_csrf_token())
         
-        # IP-based rate limit (prevents email bombing from single source)
-        if not check_rate_limit(db, f"reset:{client_ip()}", limit=3, window_secs=300):
-            flash("Too many reset attempts — please wait before trying again.", "error")
+        # IP-based rate limit (VULN-004 fix - stricter: 2 per 10 minutes)
+        if not check_rate_limit(db, f"reset:{client_ip()}", limit=2, window_secs=600):
+            flash("Too many reset attempts. Please wait 10 minutes.", "error")
             return render_template("forgot_password.html", csrf_token=get_csrf_token())
         
-        # Username-based rate limit (prevents targeted account harassment)
-        if username and not check_rate_limit(db, f"reset:user:{username}", limit=2, window_secs=3600):
-            flash("Too many reset attempts for this account — please wait before trying again.", "error")
-            return render_template("forgot_password.html", csrf_token=get_csrf_token())
+        # Username-based rate limit (VULN-004 fix - stricter: 1 per hour to prevent enumeration)
+        if username and not check_rate_limit(db, f"reset:user:{username}", limit=1, window_secs=3600):
+            # CRITICAL: Same message as success to prevent enumeration
+            flash("If that username exists, a reset link has been sent to the registered email address.", "info")
+            return redirect(url_for("auth.login_page"))
 
         user = db.query(User).filter(User.username == username).first()
         if user and user.is_active:
@@ -261,6 +252,7 @@ def forgot_password():
             else:
                 logger.info("Password reset link for %s (no email): %s", username, reset_url)
 
+    # CRITICAL: Always same message to prevent user enumeration (VULN-004 fix)
     flash("If that username exists, a reset link has been sent to the registered email address.", "info")
     return redirect(url_for("auth.login_page"))
 
@@ -298,30 +290,11 @@ def reset_password(token: str):
     password  = request.form.get("password") or ""
     password2 = request.form.get("password2") or ""
 
-    if len(password) < 12:
-        flash("Password must be at least 12 characters.", "error")
-        return render_template("reset_password.html", token=token, csrf_token=get_csrf_token())
-
-    if len(password) > 1000:
-        flash("Password is too long (max 1000 characters).", "error")
-        return render_template("reset_password.html", token=token, csrf_token=get_csrf_token())
-
-    # Require uppercase, lowercase, number, special char
-    if not (re.search(r'[a-z]', password) and 
-            re.search(r'[A-Z]', password) and
-            re.search(r'[0-9]', password) and
-            re.search(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/~`]', password)):
-        flash("Password must contain uppercase, lowercase, number, and special character.", "error")
-        return render_template("reset_password.html", token=token, csrf_token=get_csrf_token())
-    
-    # Check against common passwords
-    COMMON_PASSWORDS = {
-        'password123', 'admin123', '12345678', 'qwerty123', 'password1',
-        'welcome123', 'letmein123', 'monkey123', 'dragon123', 'master123',
-        'password1234', 'admin1234', '123456789', 'qwerty1234', 'password12'
-    }
-    if password.lower() in COMMON_PASSWORDS:
-        flash("This password is too common. Please choose a stronger password.", "error")
+    # Validate password strength (VULN-006 fix)
+    from services.password_validator import validate_password_strength
+    is_valid, error_msg = validate_password_strength(password)
+    if not is_valid:
+        flash(error_msg, "error")
         return render_template("reset_password.html", token=token, csrf_token=get_csrf_token())
 
     if password != password2:

@@ -44,8 +44,10 @@ MAX_EXPORT_ROWS = 1000
 
 def _safe(val, maxlen=255):
     """
-    Strip, escape HTML, remove control characters, and truncate a string value.
-    Returns None if empty after sanitization.
+    Strip, escape HTML, remove control characters, and validate length.
+    Returns None if empty after sanitization or exceeds max length.
+    
+    VULN-008 FIX: Reject if exceeds maxlen instead of truncating.
     """
     if not val:
         return None
@@ -53,14 +55,17 @@ def _safe(val, maxlen=255):
     # Convert to string and strip whitespace
     sanitized = str(val).strip()
     
+    # VULN-008 FIX: Reject if exceeds max length (don't truncate)
+    if len(sanitized) > maxlen:
+        return None
+    
     # Remove null bytes and other control characters (except newlines/tabs)
     sanitized = ''.join(c for c in sanitized if c == '\n' or c == '\t' or (ord(c) >= 32 and ord(c) != 127))
     
     # HTML escape
     sanitized = html.escape(sanitized)
     
-    # Truncate to max length
-    return sanitized[:maxlen] if sanitized else None
+    return sanitized if sanitized else None
 
 
 _EMAIL_RE = re.compile(r'^[^@\s]{1,64}@[^@\s]+\.[^@\s]{2,}$')
@@ -164,6 +169,9 @@ def invoices():
 
 @payments_bp.route("/api/settings/webhook", methods=["POST"])
 def update_webhook_settings():
+    # VULN-007 FIX: Validate Content-Type for JSON API
+    if request.content_type != 'application/json':
+        return error("Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415)
     if not current_user_id():
         return unauthenticated()
     
@@ -336,6 +344,9 @@ def payment_summary():
 
 @payments_bp.route("/api/payments/link", methods=["POST"])
 def create_payment_link():
+    # VULN-007 FIX: Validate Content-Type for JSON API
+    if request.content_type != 'application/json':
+        return error("Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415)
     if not current_user_id():
         return unauthenticated()
 
@@ -595,17 +606,25 @@ def transaction_status(tx_ref):
     if not valid_tx_ref(tx_ref):
         return error("Invalid transaction reference format", "INVALID_REF", 400)
 
+    # Add random jitter to mask timing differences (VULN-005 fix)
+    import time
+    import secrets
+    jitter = secrets.randbelow(40) / 1000.0  # 0-40ms
+    time.sleep(0.01 + jitter)  # Base 10ms + jitter
+
     with get_db() as db:
-        t = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
+        # Rate limit status checks to prevent enumeration (VULN-005 fix)
+        if not check_rate_limit(db, f"status:{current_user_id()}", limit=100, window_secs=60):
+            return rate_limited()
         
-        # Use constant-time checks to prevent transaction enumeration
-        # Force evaluation of both conditions using bitwise OR (not short-circuit)
-        is_not_found = (t is None)
-        is_unauthorized = (t is not None) and (t.user_id is not None) and (t.user_id != current_user_id())
+        # Query with user_id filter to prevent enumeration (VULN-005 fix)
+        t = db.query(Transaction).filter(
+            Transaction.tx_ref == tx_ref,
+            Transaction.user_id == current_user_id()  # Filter in query
+        ).first()
         
-        # Bitwise OR forces evaluation of both operands (constant-time)
-        if is_not_found | is_unauthorized:
-            # Same error message for both cases to prevent enumeration
+        if not t:
+            # Same error for both "not found" and "unauthorized"
             return error("Transaction not found", "NOT_FOUND", 404)
         
         return jsonify({"success": True, **t.to_dict()})
@@ -657,6 +676,9 @@ def transaction_history():
 
 @payments_bp.route("/api/payments/reissue/<tx_ref>", methods=["POST"])
 def reissue_payment_link(tx_ref):
+    # VULN-007 FIX: Validate Content-Type for JSON API
+    if request.content_type != 'application/json':
+        return error("Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415)
     if not current_user_id():
         return unauthenticated()
 

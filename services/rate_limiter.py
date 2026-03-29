@@ -25,6 +25,10 @@ _memory_cache = {}
 _cache_lock = threading.Lock()
 _cache_cleanup_last = time.time()
 
+# Pre-compile regex at module level to prevent ReDoS (VULN-016)
+import re
+_KEY_PATTERN = re.compile(r'^[a-zA-Z0-9:._-]{1,255}$')
+
 
 def check_rate_limit(db, key: str, limit: int, window_secs: int = 60, critical: bool = False) -> bool:
     """
@@ -50,14 +54,18 @@ def check_rate_limit(db, key: str, limit: int, window_secs: int = 60, critical: 
         logger.warning("Invalid rate limit key type: %s", type(key))
         return True  # fail open
     
-    # Validate key format
-    import re
-    if not re.match(r'^[a-zA-Z0-9:._-]{1,255}$', key):
+    # Length check BEFORE regex (faster, prevents ReDoS)
+    if len(key) > 255:
+        logger.warning("Rate limit key too long: %d chars", len(key))
+        return True  # fail open
+    
+    # Use pre-compiled regex to prevent ReDoS
+    if not _KEY_PATTERN.match(key):
         logger.warning("Invalid rate limit key format: %s", key[:50])
         return True  # fail open
     
-    # Truncate and remove any null bytes
-    key = key[:255].replace('\x00', '')
+    # Remove any null bytes
+    key = key.replace('\x00', '')
     
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(seconds=window_secs)

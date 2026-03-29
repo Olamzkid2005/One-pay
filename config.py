@@ -116,25 +116,24 @@ class BaseConfig:
             errors.append("DEBUG mode is enabled in production environment")
         
         # Check HTTPS enforcement in production
-        if not cls.DEBUG and not cls.TESTING:
+        if app_env == "production":
             if not cls.ENFORCE_HTTPS:
-                warnings.append("ENFORCE_HTTPS is disabled in production")
+                errors.append("ENFORCE_HTTPS must be true in production")
             if "sqlite" in cls.DATABASE_URL.lower():
-                warnings.append("Using SQLite in production (use PostgreSQL)")
+                errors.append("SQLite not allowed in production (use PostgreSQL)")
         
         # Log warnings
         for warning in warnings:
             _logger.warning("SECURITY WARNING: %s", warning)
         
-        # Abort on errors
+        # CRITICAL: Abort on errors in ALL environments
         if errors:
             _logger.critical(
                 "STARTUP ABORTED: Security validation failed:\n  - %s\n"
                 "Generate strong secrets with: python -c \"import secrets; print(secrets.token_hex(32))\"",
                 "\n  - ".join(errors)
             )
-            if not cls.DEBUG:
-                _sys.exit(1)
+            _sys.exit(1)  # Exit unconditionally
 
 
 class DevelopmentConfig(BaseConfig):

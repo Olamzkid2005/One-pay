@@ -102,6 +102,16 @@ def create_app() -> Flask:
     BOOT_TIME = datetime.now(timezone.utc).isoformat()
     app.config["BOOT_TIME"] = BOOT_TIME
 
+    # ── Production config verification ────────────────────────────────────────
+    @app.before_request
+    def verify_production_config():
+        """Runtime assertion to prevent DEBUG in production."""
+        import os
+        if os.getenv("APP_ENV") == "production":
+            assert not app.config["DEBUG"], "DEBUG must be False in production"
+            assert app.config["SESSION_COOKIE_SECURE"], "SESSION_COOKIE_SECURE must be True in production"
+            assert Config.ENFORCE_HTTPS, "HTTPS must be enforced in production"
+
     # ── Request ID tracing ─────────────────────────────────────────────────────
     @app.before_request
     def inject_request_id():
@@ -153,6 +163,31 @@ def create_app() -> Flask:
         
         # Update last activity timestamp for all sessions
         session["_last_activity"] = datetime.now(timezone.utc).isoformat()
+
+    # ── Session binding validation (defense-in-depth against session fixation) ─
+    @app.before_request
+    def validate_session_binding():
+        """Validate session is bound to same IP and User-Agent."""
+        from core.ip import client_ip
+        
+        if "user_id" in session:
+            # Check IP binding
+            session_ip = session.get("_ip")
+            current_ip = client_ip()
+            if session_ip and session_ip != current_ip:
+                logger.warning("Session IP mismatch | user=%s session_ip=%s current_ip=%s",
+                              session.get("username"), session_ip, current_ip)
+                session.clear()
+                return redirect("/login")
+            
+            # Check User-Agent binding
+            session_ua = session.get("_user_agent")
+            current_ua = request.headers.get("User-Agent", "")[:200]
+            if session_ua and session_ua != current_ua:
+                logger.warning("Session User-Agent mismatch | user=%s",
+                              session.get("username"))
+                session.clear()
+                return redirect("/login")
 
     # ── HTTPS enforcement ──────────────────────────────────────────────────────
     @app.before_request
@@ -213,6 +248,13 @@ def create_app() -> Flask:
         # Additional headers for maximum compatibility
         response.headers.setdefault("X-Content-Security-Policy", response.headers.get("Content-Security-Policy", ""))
         response.headers.setdefault("Expect-CT", "max-age=86400, enforce")
+        
+        # HSTS header (defense-in-depth, also set by Talisman)
+        if Config.ENFORCE_HTTPS:
+            response.headers.setdefault(
+                "Strict-Transport-Security",
+                "max-age=31536000; includeSubDomains; preload"
+            )
         
         return response
 
@@ -306,6 +348,7 @@ def create_app() -> Flask:
     import time
     from database import get_db
     from services.webhook import retry_failed_webhooks
+    from services.security_monitor import detect_suspicious_activity
     from app_cleanup import start_cleanup_threads
     
     def _webhook_retry_loop():
@@ -320,6 +363,21 @@ def create_app() -> Flask:
                 logger.error("Webhook retry loop error: %s", e)
             time.sleep(60)
     
+    def _security_monitor_loop():
+        """Background thread that monitors for suspicious activity patterns."""
+        # Wait a bit for DB to be fully initialized
+        time.sleep(10)
+        while True:
+            try:
+                with get_db() as db:
+                    alerts = detect_suspicious_activity(db)
+                    # Alerts are automatically logged by detect_suspicious_activity
+                    if alerts:
+                        logger.info("Security monitoring detected %d alerts", len(alerts))
+            except Exception as e:
+                logger.error("Security monitoring error: %s", e)
+            time.sleep(300)  # Every 5 minutes
+    
     webhook_thread = threading.Thread(
         target=_webhook_retry_loop,
         daemon=True,
@@ -327,6 +385,15 @@ def create_app() -> Flask:
     )
     webhook_thread.start()
     logger.info("Webhook retry thread started")
+    
+    # Start security monitoring thread (VULN-011 fix)
+    security_monitor_thread = threading.Thread(
+        target=_security_monitor_loop,
+        daemon=True,
+        name="security-monitor"
+    )
+    security_monitor_thread.start()
+    logger.info("Security monitoring thread started")
     
     # Start cleanup threads for audit logs and rate limits
     start_cleanup_threads()
