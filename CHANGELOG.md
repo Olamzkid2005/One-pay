@@ -1,5 +1,153 @@
 # OnePay Changelog
 
+## Version 1.5.0 - March 31, 2026
+
+### 💳 KoraPay Integration - Major Payment Provider Migration
+
+#### Migration from Quickteller to KoraPay
+- **KoraPay Gateway**: Complete migration from Quickteller to KoraPay API
+- **Virtual Accounts**: Generate virtual bank accounts for seamless payments
+- **Enhanced Security**: Improved webhook signature verification
+- **Fault Tolerance**: Circuit breaker pattern prevents cascading failures
+- **Testing Support**: Mock mode for integration testing without live credentials
+
+#### Implementation Details
+- **New Payment Service**: `services/korapay.py`
+  - Virtual account creation
+  - Transfer confirmation
+  - Webhook handling
+  - HMAC-SHA256 signature verification
+  - Automatic retry with exponential backoff
+  - Connection pooling for optimal performance
+- **Circuit Breaker Pattern**:
+  - Closed/Open/Half-Open states
+  - Configurable failure thresholds
+  - Automatic recovery timeout
+  - Thread-safe implementation
+- **Mock Mode**:
+  - Activates when `KORAPAY_SECRET_KEY` is empty or < 32 characters
+  - Simulates all API responses for testing
+  - No external API calls in mock mode
+
+#### New Services
+- **Redis Caching**: `services/cache.py`
+  - Intelligent caching layer for API responses
+  - Configurable TTL per cache key
+  - Cache invalidation on payment updates
+- **SLA Monitoring**: `services/sla_monitor.py`
+  - Real-time performance tracking
+  - Latency percentiles (p50, p95, p99)
+  - Throughput monitoring
+  - Alerting on SLA breaches
+
+#### Database Changes
+- **Transaction Model**: Added KoraPay-specific fields
+  - `korapay_reference` - KoraPay transaction reference
+  - `virtual_account_number` - Generated virtual account
+  - `payment_status` - KoraPay payment status
+  - `verified_at` - Verification timestamp
+- **New Refund Model**: `models/refund.py`
+  - Full and partial refund support
+  - Refund status tracking
+  - Audit trail
+- **Database Migrations**:
+  - `20260401000000_add_korapay_fields.py` - KoraPay fields migration
+  - `20260401000001_add_refunds_table.py` - Refunds table migration
+
+#### Configuration Updates
+- **New Environment Variables**:
+  - `KORAPAY_SECRET_KEY` - KoraPay API secret key
+  - `KORAPAY_WEBHOOK_SECRET` - Webhook signature secret
+  - `KORAPAY_BASE_URL` - API base URL
+  - `KORAPAY_USE_SANDBOX` - Sandbox mode toggle
+  - `KORAPAY_TIMEOUT_SECONDS` - Request timeout
+  - `KORAPAY_CONNECT_TIMEOUT` - Connection timeout
+  - `KORAPAY_MAX_RETRIES` - Retry attempts
+  - `REDIS_URL` - Redis connection URL
+  - `CACHE_ENABLED` - Cache toggle
+  - `CACHE_DEFAULT_TTL` - Default cache TTL
+
+#### Monitoring & Observability
+- **Prometheus Metrics**: `prometheus/`
+  - Request latency and throughput
+  - Payment transaction metrics
+  - Cache hit/miss rates
+  - Circuit breaker state
+- **Grafana Dashboards**: `grafana/`
+  - Payment flow monitoring
+  - System performance
+  - Error rates and alerting
+  - SLA compliance tracking
+
+#### Testing Infrastructure
+- **Comprehensive Test Suite**:
+  - Unit tests for KoraPay service
+  - Integration tests for payment flow
+  - Security tests for webhook verification
+  - Property-based tests for edge cases
+- **Final Testing Script**: `scripts/final_testing.py`
+  - Complete validation suite
+  - Coverage reporting
+
+#### Documentation
+- **New Documentation**:
+  - `docs/KORAPAY_SETUP.md` - Complete KoraPay setup guide
+  - `docs/ROLLBACK.md` - Rollback procedures to Quickteller
+  - `docs/Korapay Integration Summary.md` - Integration overview
+
+### 🔄 Migration Guide
+
+#### Upgrading from v1.3.0
+
+1. **Backup Database**:
+   ```bash
+   cp onepay.db onepay.db.backup
+   ```
+
+2. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Configure KoraPay**:
+   ```bash
+   # Add to .env
+   KORAPAY_SECRET_KEY=sk_test_your_key_here
+   KORAPAY_WEBHOOK_SECRET=your_webhook_secret
+   KORAPAY_BASE_URL=https://api.korapay.com/merchant/api/v1
+   KORAPAY_USE_SANDBOX=true
+   ```
+
+4. **Run Database Migration**:
+   ```bash
+   alembic upgrade head
+   ```
+
+5. **Restart Application**:
+   ```bash
+   python app.py
+   ```
+
+### 🎯 Breaking Changes
+
+- **Payment Provider Change**: Quickteller API removed, KoraPay is now the sole payment provider
+- **Environment Variables**: Previous Quickteller variables (`QUICKTELLER_*`) are no longer used
+- **Database Schema**: New fields added to transaction table
+
+### 📝 Rollback Procedures
+
+If rollback is needed, see [docs/ROLLBACK.md](docs/ROLLBACK.md) for detailed procedures.
+
+### 🔒 Security Considerations
+
+- HMAC-SHA256 webhook signature verification
+- Constant-time comparison to prevent timing attacks
+- Circuit breaker prevents cascading failures
+- No sensitive data logged
+- Environment variables for all secrets
+
+---
+
 ## Version 1.3.0 - March 29, 2026
 
 ### 🔐 Google OAuth Integration
