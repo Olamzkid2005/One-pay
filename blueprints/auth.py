@@ -394,9 +394,12 @@ def update_settings():
     if request.content_type != 'application/json':
         return error("Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415)
 
-    csrf_header = request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token")
-    if not is_valid_csrf_token(csrf_header):
-        return error("CSRF validation failed", "CSRF_ERROR", 403)
+    # Skip CSRF for API key authenticated requests
+    from core.api_auth import is_api_key_authenticated
+    if not is_api_key_authenticated():
+        csrf_header = request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token")
+        if not is_valid_csrf_token(csrf_header):
+            return error("CSRF validation failed", "CSRF_ERROR", 403)
 
     data        = request.get_json(silent=True) or {}
     raw_webhook = data.get("webhook_url", "")
