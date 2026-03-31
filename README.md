@@ -1,26 +1,28 @@
 # OnePay
 
-A modern, secure payment verification and invoice management platform that integrates with Quickteller API. OnePay eliminates fake payment confirmations by allowing merchants to generate secure, time-bound payment links, automatically create professional invoices, and verify transactions directly from the payment infrastructure.
+A modern, secure payment verification and invoice management platform that integrates with KoraPay API. OnePay eliminates fake payment confirmations by allowing merchants to generate secure, time-bound payment links, automatically create professional invoices, and verify transactions directly from the payment infrastructure.
 
-## 🚀 Latest Updates (v1.3.0)
+## 🚀 Latest Updates (v1.5.0)
 
-### Google OAuth Integration
+### KoraPay Integration - Major Payment Provider Migration
+- 💳 **KoraPay Gateway**: Migrated from Quickteller to KoraPay for enhanced payment processing
+- 🔒 **Virtual Accounts**: Generate virtual bank accounts for seamless payments
+- ⚡ **Circuit Breaker**: Fault-tolerant architecture prevents cascading failures
+- 🎯 **Mock Mode**: Test integration without live credentials
+- 📊 **SLA Monitoring**: Real-time performance tracking and alerting
+- 🗄️ **Redis Caching**: Optimized performance with intelligent caching layer
+
+### Previous Updates (v1.3.0)
 - 🔐 **Google Sign-In**: One-click registration and login with Google accounts
 - 🔗 **Account Linking**: Connect existing accounts to Google for easier access
 - 🛡️ **Secure Authentication**: Token validation, CSRF protection, rate limiting
 - 👤 **Profile Import**: Automatic profile picture and name from Google
-- ✅ **Backward Compatible**: Traditional authentication still fully supported
 
-### Previous Updates (v1.2.5)
-- 🔒 **16/18 Vulnerabilities Resolved**: Comprehensive security audit completed
+### Earlier Updates (v1.2.5)
+- 🔒 **Security Audit**: 16/18 vulnerabilities resolved
 - 🛡️ **Session Security**: IP and User-Agent binding prevents session hijacking
 - 🚫 **SSRF Protection**: Webhook blacklist prevents DNS rebinding attacks
 - 📊 **Security Monitoring**: Real-time threat detection running every 5 minutes
-
-### Earlier Updates (v1.2.0)
-- ✨ **Invoice System**: Automatic invoice generation with PDF export
-- 📧 **Email Notifications**: Payment alerts with invoice attachments
-- 🎨 **Light/Dark Mode**: Beautiful theme toggle with persistent preference
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
@@ -28,10 +30,12 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
 ### Core Payment Features
 - **Secure Payment Links**: Generate time-bound, single-use payment links with automatic expiration
-- **Direct API Verification**: Verify transactions directly from Quickteller API, eliminating screenshot fraud
+- **KoraPay Integration**: Direct API verification with virtual account generation
 - **QR Code Generation**: Automatic QR codes for easy mobile payments
 - **Transaction History**: Track all payment links and their verification status
-- **Webhook Integration**: Real-time payment notifications via Quickteller webhooks
+- **Webhook Integration**: Real-time payment notifications via KoraPay webhooks
+- **Circuit Breaker Pattern**: Fault tolerance with automatic failover
+- **Mock Mode**: Full testing capability without live credentials
 
 ### Invoice & Receipt System
 - **Automated Invoice Generation**: Auto-create invoices for verified payments
@@ -39,6 +43,18 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 - **Invoice Management**: Web interface to view, download, and send invoices
 - **Business Branding**: Add your logo, tax ID, and payment terms
 - **Invoice Status Tracking**: Track invoice lifecycle (DRAFT, SENT, PAID, EXPIRED, CANCELLED)
+
+### Refund Management
+- **Partial Refunds**: Support for partial refund amounts
+- **Full Refunds**: Complete refund capability
+- **Refund Tracking**: Monitor refund status and history
+- **Automated Processing**: Streamlined refund workflows
+
+### Performance & Reliability
+- **Redis Caching**: Intelligent caching for optimal performance
+- **SLA Monitoring**: Real-time performance metrics and alerting
+- **Circuit Breaker**: Automatic circuit breaking for fault tolerance
+- **Connection Pooling**: Efficient HTTP connection management
 
 ### Email Notifications
 - **Payment Alerts**: Automatic email notifications for verified payments
@@ -53,17 +69,17 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 - **Mobile Responsive**: Optimized for all screen sizes
 
 ### Security & Performance
-- **User Authentication**: Secure registration and login with bcrypt password hashing (13 rounds)
+- **User Authentication**: Secure registration and login with bcrypt password hashing
 - **Google OAuth**: One-click sign-in with Google accounts (optional)
 - **Session Security**: IP and User-Agent binding prevents session fixation attacks
 - **Rate Limiting**: Protection against abuse with configurable rate limits
-- **Audit Logging**: Comprehensive logging with 90-day retention policy
+- **Audit Logging**: Comprehensive logging with retention policy
 - **CSRF Protection**: Secure session management and form protection
 - **SSRF Prevention**: Webhook blacklist with DNS rebinding detection
-- **Security Monitoring**: Real-time threat detection (brute force, spam, anomalies)
+- **Security Monitoring**: Real-time threat detection
 - **Input Validation**: Comprehensive validation and sanitization
-- **Password Strength**: 12+ characters with complexity requirements
-- **Production Hardening**: SQLite blocked, HTTPS enforced, secrets validated
+- **Password Strength**: Complexity requirements enforced
+- **Production Hardening**: HTTPS enforced, secrets validated
 
 ## Tech Stack
 
@@ -71,25 +87,17 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 - **Database**: SQLite (development), PostgreSQL (production ready)
 - **ORM**: SQLAlchemy with Alembic migrations
 - **Authentication**: Flask-Login, bcrypt
-- **API Integration**: Quickteller Payment Gateway
+- **Cache**: Redis
+- **API Integration**: KoraPay Payment Gateway
+- **Monitoring**: Prometheus metrics, Grafana dashboards
 - **Security**: CSRF protection, secure session management, IP tracking
-
-## 📸 Screenshots
-
-### Dashboard
-![Dashboard](https://via.placeholder.com/800x400?text=Dashboard+Screenshot)
-
-### Invoice Management
-![Invoices](https://via.placeholder.com/800x400?text=Invoice+Management)
-
-### Light/Dark Mode
-![Theme Toggle](https://via.placeholder.com/800x400?text=Light+Dark+Mode)
 
 ## Prerequisites
 
 - Python 3.8 or higher
 - pip (Python package manager)
 - Virtual environment (recommended)
+- Redis server (optional, for caching)
 - SMTP server (optional, for email notifications)
 
 ## Installation
@@ -153,12 +161,17 @@ The application will be available at `http://localhost:5000`
    - Configure Google Cloud Console
    - Add credentials to `.env` file
 
-4. **Create Your First Payment Link**
+4. **Set Up KoraPay** (Required for payments)
+   - See [KoraPay Setup Guide](docs/KORAPAY_SETUP.md)
+   - Create KoraPay merchant account
+   - Add API keys to `.env` file
+
+5. **Create Your First Payment Link**
    - Enter amount and description
    - Click "Generate Payment Link"
    - Share the link with your customer
 
-5. **View Invoice**
+6. **View Invoice**
    - Once payment is verified, invoice is auto-generated
    - Download as PDF or send via email
    - Track status in Invoices page
@@ -177,11 +190,19 @@ FLASK_ENV=development
 # Database
 DATABASE_URL=sqlite:///onepay.db
 
-# Quickteller API
-QUICKTELLER_MERCHANT_ID=your-merchant-id
-QUICKTELLER_API_KEY=your-api-key
-QUICKTELLER_TERMINAL_ID=your-terminal-id
-QUICKTELLER_BASE_URL=https://api.quickteller.com
+# KoraPay API Configuration
+KORAPAY_SECRET_KEY=sk_test_your_secret_key_here
+KORAPAY_WEBHOOK_SECRET=your_webhook_secret_here
+KORAPAY_BASE_URL=https://api.korapay.com/merchant/api/v1
+KORAPAY_USE_SANDBOX=true
+KORAPAY_TIMEOUT_SECONDS=30
+KORAPAY_CONNECT_TIMEOUT=10
+KORAPAY_MAX_RETRIES=3
+
+# Redis Cache (Optional)
+REDIS_URL=redis://localhost:6379/0
+CACHE_ENABLED=true
+CACHE_DEFAULT_TTL=300
 
 # Email Configuration (Optional)
 MAIL_SERVER=smtp.gmail.com
@@ -196,6 +217,26 @@ GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret
 GOOGLE_REDIRECT_URI=http://localhost:5000/auth/google/callback
 ```
+
+### KoraPay Setup
+
+For KoraPay integration to work:
+
+1. **Create KoraPay Account**
+   - Sign up at [KoraPay Dashboard](https://dashboard.korapay.com)
+   - Navigate to Settings → API Keys
+   - Generate or use existing API key
+
+2. **Configure Webhooks**
+   - Go to Settings → Webhooks
+   - Add webhook URL: `https://api.onepay.ng/api/webhooks/korapay`
+   - Generate and save webhook secret
+
+3. **Environment Configuration**
+   - Use `sk_test_` keys for sandbox testing
+   - Use `sk_live_` keys for production
+
+See [docs/KORAPAY_SETUP.md](docs/KORAPAY_SETUP.md) for detailed instructions.
 
 ### Email Setup
 
@@ -260,12 +301,15 @@ One-pay/
 ├── models/                # Database models
 │   ├── user.py           # User model
 │   ├── transaction.py    # Transaction model
+│   ├── refund.py         # Refund model
 │   ├── audit_log.py      # Audit log model
 │   └── rate_limit.py     # Rate limit model
 ├── services/              # Business logic
-│   ├── quickteller.py    # Quickteller API integration
+│   ├── korapay.py        # KoraPay API integration
+│   ├── cache.py          # Redis caching service
+│   ├── sla_monitor.py    # SLA monitoring service
 │   ├── email.py          # Email service
-│   ├── invoice.py        # Invoice generation
+│   ├── invoice.py         # Invoice generation
 │   ├── pdf_receipt.py    # PDF generation
 │   ├── qr_code.py        # QR code generation
 │   ├── webhook.py        # Webhook handler
@@ -279,6 +323,8 @@ One-pay/
 ├── templates/             # HTML templates
 ├── static/                # CSS, JS, images
 ├── alembic/               # Database migrations
+├── prometheus/            # Prometheus metrics configuration
+├── grafana/               # Grafana dashboards
 ├── tests/                 # Test suite
 └── docs/                  # Documentation
 ```
@@ -288,9 +334,9 @@ One-pay/
 OnePay implements comprehensive security controls across all layers:
 
 ### Authentication & Authorization
-- **Password Security**: bcrypt hashing (13 rounds), 12+ character minimum, complexity requirements
-- **Session Management**: IP/User-Agent binding, 30-minute inactivity timeout, 7-day maximum
-- **Account Protection**: 5-attempt lockout, rate limiting on login and password reset
+- **Password Security**: bcrypt hashing, 12+ character minimum, complexity requirements
+- **Session Management**: IP/User-Agent binding, configurable timeout
+- **Account Protection**: Lockout protection, rate limiting on login and password reset
 - **CSRF Protection**: Token validation on all state-changing operations
 
 ### Data Protection
@@ -300,15 +346,16 @@ OnePay implements comprehensive security controls across all layers:
 - **Secrets Management**: Environment variables only, startup validation enforced
 
 ### API Security
-- **Rate Limiting**: Per-endpoint limits (10/min payment links, 100/min status checks)
+- **Rate Limiting**: Per-endpoint limits
 - **SSRF Prevention**: Webhook blacklist, DNS rebinding detection, AWS metadata blocking
 - **Webhook Security**: HMAC-SHA256 signatures, constant-time comparison
-- **Timing Attack Prevention**: Random jitter delays on sensitive operations
+- **Circuit Breaker**: Automatic protection against downstream service failures
 
 ### Monitoring & Logging
 - **Security Monitoring**: Background thread detecting brute force, spam, anomalies
-- **Audit Logging**: All security events logged with 90-day retention
-- **Alert System**: Critical alerts for immediate threats (ready for email/Slack integration)
+- **SLA Monitoring**: Real-time performance metrics with Prometheus
+- **Audit Logging**: All security events logged with retention
+- **Grafana Dashboards**: Visual monitoring of system health
 
 ### Production Hardening
 - **Secret Validation**: Application refuses to start with weak secrets
@@ -316,12 +363,21 @@ OnePay implements comprehensive security controls across all layers:
 - **Database Security**: PostgreSQL required in production (SQLite blocked)
 - **Security Headers**: Comprehensive CSP, X-Frame-Options, X-Content-Type-Options
 
-**Security Status**: 16/18 vulnerabilities resolved (89%)
-- ✅ 0 Critical vulnerabilities remaining
-- ✅ 0 High severity vulnerabilities remaining  
-- ✅ 0 Medium severity vulnerabilities remaining
+## Monitoring & Observability
 
-See [docs/SECURITY.md](docs/SECURITY.md) for detailed security documentation.
+### Prometheus Metrics
+Access metrics at `/metrics` endpoint:
+- Request latency and throughput
+- Payment transaction metrics
+- Cache hit/miss rates
+- Circuit breaker state
+
+### Grafana Dashboards
+Pre-configured dashboards for:
+- Payment flow monitoring
+- System performance
+- Error rates and alerting
+- SLA compliance tracking
 
 ## 🧪 Testing
 
@@ -330,39 +386,41 @@ See [docs/SECURITY.md](docs/SECURITY.md) for detailed security documentation.
 # Run all tests
 pytest tests/
 
-# Run specific test file
-pytest tests/test_email_notifications.py
+# Run specific test categories
+pytest tests/unit/
+pytest tests/integration/
+pytest tests/security/
 
 # Run with coverage
 pytest --cov=. tests/
 ```
 
-### Test Coverage
-- Email notifications: 11 tests
-- Invoice system: 20+ tests
-- PDF generation: Automated tests
-- Integration: End-to-end workflow tests
-
-For manual testing procedures, see [MANUAL_TEST_GUIDE.md](docs/MANUAL_TEST_GUIDE.md)
+### Manual Testing
+For manual testing procedures, see [tests/MANUAL_TESTING_CHECKLIST.md](tests/MANUAL_TESTING_CHECKLIST.md)
 
 ## Deployment
 
 See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment instructions.
 
+## Rollback Procedures
+
+If you need to rollback to Quickteller:
+See [docs/ROLLBACK.md](docs/ROLLBACK.md) for detailed procedures.
+
 ## 📚 Documentation
 
 ### User Guides
+- [KoraPay Setup Guide](docs/KORAPAY_SETUP.md) - Configure KoraPay integration
+- [Rollback Guide](docs/ROLLBACK.md) - Rollback procedures
 - [Email Setup Guide](EMAIL_SETUP_GUIDE.md) - Configure email notifications
 - [Google OAuth Setup Guide](docs/GOOGLE_OAUTH_SETUP.md) - Configure Google Sign-In
 - [Manual Test Guide](docs/MANUAL_TEST_GUIDE.md) - Testing procedures
 
 ### Technical Documentation
+- [Korapay Integration Summary](docs/Korapay%20Integration%20Summary.md) - Integration details
 - [Security Guide](docs/SECURITY.md) - Security features and best practices
 - [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment
-- [Test Plan](docs/TEST_PLAN.md) - Testing strategy
-- [Upgrade Guide](docs/UPGRADE_GUIDE.md) - Version upgrade instructions
 - [Webhook Verification](docs/WEBHOOK_VERIFICATION.md) - Webhook setup
-- [QR Code Feature](docs/QR_CODE_FEATURE.md) - QR code implementation
 
 ### Development
 - [CHANGELOG.md](CHANGELOG.md) - Version history and changes
@@ -393,41 +451,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 📊 Project Status
 
-- **Version**: 1.3.0
+- **Version**: 1.5.0
 - **Status**: Production Ready ✅
-- **Security**: 16/18 vulnerabilities resolved (89%)
-- **Test Coverage**: 45+ tests passing (security + OAuth)
-- **License**: MIT
-- **Python**: 3.8+
-- **Last Updated**: March 29, 2026
-
-## 🆘 Support
-
-### Getting Help
-- 📖 Check the [documentation](docs/README.md)
-- 🐛 [Open an issue](https://github.com/Olamzkid2005/One-pay/issues) on GitHub
-- 💬 Review [closed issues](https://github.com/Olamzkid2005/One-pay/issues?q=is%3Aissue+is%3Aclosed) for solutions
-
-### Reporting Bugs
-When reporting bugs, please include:
-- Python version
-- Operating system
-- Steps to reproduce
-- Error messages and logs
-- Expected vs actual behavior
-
-## 🙏 Acknowledgments
-
-- [Quickteller API](https://www.quickteller.com/) for payment processing
-- [Flask](https://flask.palletsprojects.com/) framework and community
-- [xhtml2pdf](https://github.com/xhtml2pdf/xhtml2pdf) for PDF generation
-- [Tailwind CSS](https://tailwindcss.com/) for styling
-- All contributors to this project
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-**Made with ❤️ by the OnePay Team**
+- **Payment Provider**: KoraPay ✅
+- **Test Coverage**: Comprehensive test suite ✅
