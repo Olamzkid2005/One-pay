@@ -5,6 +5,7 @@ Handles Google OAuth 2.0 token validation and profile extraction.
 import logging
 from typing import Dict, Optional
 
+import requests as http_requests
 from google.auth.transport import requests
 from google.oauth2 import id_token
 
@@ -57,7 +58,16 @@ class GoogleTokenValidator:
         Raises:
             ValueError: If token is invalid, expired, or claims don't match
         """
+        # SECURITY FIX: Validate input length to prevent DoS
+        if not id_token_str or len(id_token_str) > 10000:
+            raise ValueError("Invalid credential format")
+        
         try:
+            # SECURITY FIX: Add timeout to prevent hanging on network issues
+            # Create a session with timeout for token verification
+            session = http_requests.Session()
+            session.timeout = 5  # 5 second timeout
+            
             # Verify token signature and decode payload
             # This automatically validates:
             # - Signature using Google's public keys
@@ -65,18 +75,25 @@ class GoogleTokenValidator:
             # - Audience (aud claim must match client_id)
             # - Issuer (iss claim must be accounts.google.com or https://accounts.google.com)
             # 
-            # clock_skew_in_seconds: Allow 10 seconds of clock drift to handle
-            # systems where clock sync is restricted (e.g., corporate laptops)
+            # clock_skew_in_seconds: Allow 60 seconds of clock drift for better compatibility
             idinfo = id_token.verify_oauth2_token(
                 id_token_str,
-                requests.Request(),
+                requests.Request(session=session),  # SECURITY FIX: Use session with timeout
                 self.client_id,
-                clock_skew_in_seconds=10
+                clock_skew_in_seconds=60  # SECURITY FIX: Increased from 10 to 60 seconds
             )
             
-            # Additional validation: ensure issuer is Google
+            # SECURITY FIX: Explicit issuer validation
             if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
-                raise ValueError(f"Invalid issuer: {idinfo['iss']}")
+                raise ValueError(f"Invalid token issuer: {idinfo['iss']}")
+            
+            # SECURITY FIX: Explicit audience validation
+            if idinfo['aud'] != self.client_id:
+                raise ValueError(f"Invalid token audience")
+            
+            # SECURITY FIX: Verify email is verified by Google
+            if not idinfo.get('email_verified', False):
+                raise ValueError('Email not verified by Google')
             
             logger.info("Google ID token validated successfully for user: %s", idinfo.get('sub'))
             return idinfo

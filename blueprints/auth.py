@@ -67,6 +67,38 @@ def _regenerate_session_secure(user_id: int, username: str):
     session["_user_agent"] = request.headers.get("User-Agent", "")[:200]
 
 
+def _regenerate_session_secure_minimal():
+    """
+    Regenerate session without user data - for pre-authentication use.
+    
+    CRITICAL: Use this BEFORE user lookup in OAuth flows to prevent
+    session fixation attacks where attacker pre-sets victim's session.
+    """
+    from flask import current_app
+    
+    # Clear old session completely
+    session.clear()
+    
+    # Set permanent and modified flags
+    session.permanent = True
+    session.modified = True
+    
+    # Add regeneration marker to force new session ID/signature
+    session["_regenerated"] = secrets.token_urlsafe(16)
+    
+    # Generate new CSRF token
+    session["csrf_token"] = secrets.token_urlsafe(32)
+    
+    # Set session metadata (no user data yet)
+    session["_boot"] = current_app.config.get("BOOT_TIME")
+    session["_created"] = datetime.now(timezone.utc).isoformat()
+    session["_last_activity"] = datetime.now(timezone.utc).isoformat()
+    
+    # Bind session to IP and User-Agent
+    session["_ip"] = client_ip()
+    session["_user_agent"] = request.headers.get("User-Agent", "")[:200]
+
+
 # ── Register ───────────────────────────────────────────────────────────────────
 
 @auth_bp.route("/register", methods=["GET", "POST"])
@@ -214,6 +246,12 @@ def logout():
 
 @auth_bp.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
+    """
+    Password reset request handler.
+    
+    SECURITY (VULN-004): Implements strict rate limiting and constant-time response
+    to prevent username enumeration and distributed attacks.
+    """
     if request.method == "GET":
         return render_template("forgot_password.html", csrf_token=get_csrf_token())
 
@@ -222,28 +260,39 @@ def forgot_password():
         return render_template("forgot_password.html", csrf_token=get_csrf_token())
 
     username = (request.form.get("username") or "").strip()
+    
+    # Start timing for constant-time response
+    import time
+    start_time = time.perf_counter()
 
     with get_db() as db:
-        # Global rate limit to prevent distributed attacks (VULN-004 fix - stricter)
-        if not check_rate_limit(db, "reset:global", limit=50, window_secs=3600):
+        # VULN-004 FIX: Much stricter global limit (10/hour instead of 50/hour)
+        if not check_rate_limit(db, "reset:global", limit=10, window_secs=3600):
+            # Add delay before error
+            time.sleep(0.5 + secrets.randbelow(500) / 1000.0)
             flash("Service temporarily unavailable — please try again later.", "error")
             return render_template("forgot_password.html", csrf_token=get_csrf_token())
         
-        # IP-based rate limit (VULN-004 fix - stricter: 2 per 10 minutes)
-        if not check_rate_limit(db, f"reset:{client_ip()}", limit=2, window_secs=600):
-            flash("Too many reset attempts. Please wait 10 minutes.", "error")
+        # VULN-004 FIX: Stricter IP limit (1 per 15 minutes instead of 2 per 10 minutes)
+        if not check_rate_limit(db, f"reset:{client_ip()}", limit=1, window_secs=900):
+            time.sleep(0.5 + secrets.randbelow(500) / 1000.0)
+            flash("Too many reset attempts. Please wait 15 minutes.", "error")
             return render_template("forgot_password.html", csrf_token=get_csrf_token())
         
-        # Username-based rate limit (VULN-004 fix - stricter: 1 per hour to prevent enumeration)
-        if username and not check_rate_limit(db, f"reset:user:{username}", limit=1, window_secs=3600):
-            # CRITICAL: Same message as success to prevent enumeration
-            flash("If that username exists, a reset link has been sent to the registered email address.", "info")
-            return redirect(url_for("auth.login_page"))
-
-        user = db.query(User).filter(User.username == username).first()
-        if user and user.is_active:
+        # VULN-004 FIX: Username limit with constant-time response
+        username_limited = False
+        if username:
+            username_limited = not check_rate_limit(
+                db, f"reset:user:{username}", limit=1, window_secs=3600
+            )
+        
+        # Query user (always, even if rate limited)
+        user = db.query(User).filter(User.username == username).first() if username else None
+        
+        # Send email only if user exists AND not rate limited
+        if user and user.is_active and not username_limited:
             token = generate_reset_token()
-            user.reset_token            = token
+            user.reset_token = token
             user.reset_token_expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
             reset_url = url_for("auth.reset_password", token=token, _external=True)
             
@@ -252,8 +301,15 @@ def forgot_password():
                 send_password_reset(user.email, reset_url)
             else:
                 logger.info("Password reset link for %s (no email): %s", username, reset_url)
+        
+        # VULN-004 FIX: Constant-time response to prevent timing-based enumeration
+        elapsed = time.perf_counter() - start_time
+        target_delay = 0.5  # 500ms baseline
+        jitter = secrets.randbelow(200) / 1000.0  # 0-200ms jitter
+        remaining = max(0, target_delay + jitter - elapsed)
+        time.sleep(remaining)
 
-    # CRITICAL: Always same message to prevent user enumeration (VULN-004 fix)
+    # CRITICAL: Always same message to prevent user enumeration
     flash("If that username exists, a reset link has been sent to the registered email address.", "info")
     return redirect(url_for("auth.login_page"))
 
@@ -425,6 +481,11 @@ def google_callback():
             validator = GoogleTokenValidator(client_id)
             token_payload = validator.validate_token(credential)
             
+            # SECURITY FIX (VULN-001): Regenerate session IMMEDIATELY after token validation
+            # This MUST happen BEFORE any user lookup or account creation to prevent session fixation
+            # Attacker cannot pre-set victim's session because session is regenerated here
+            _regenerate_session_secure_minimal()
+            
             # Extract profile
             profile = GoogleProfileExtractor.extract_profile(token_payload)
             
@@ -433,7 +494,9 @@ def google_callback():
             
             if user:
                 # User exists with this Google ID - log them in
-                _regenerate_session_secure(user.id, user.username)
+                # Session already regenerated above, just set user data
+                session["user_id"] = user.id
+                session["username"] = user.username
                 log_event(db, "oauth.login", user_id=user.id, ip_address=client_ip(),
                          detail={"provider": "google", "email": profile['email']})
                 logger.info("Google OAuth login: %s", user.username)
@@ -458,7 +521,9 @@ def google_callback():
                 )
                 db.flush()
                 
-                _regenerate_session_secure(user.id, user.username)
+                # Session already regenerated above, just set user data
+                session["user_id"] = user.id
+                session["username"] = user.username
                 log_event(db, "oauth.account_linked", user_id=user.id, ip_address=client_ip(),
                          detail={"provider": "google", "email": profile['email']})
                 logger.info("Google account linked to existing user: %s", user.username)
@@ -470,7 +535,9 @@ def google_callback():
             db.flush()
             db.refresh(user)
             
-            _regenerate_session_secure(user.id, user.username)
+            # Session already regenerated above, just set user data
+            session["user_id"] = user.id
+            session["username"] = user.username
             log_event(db, "oauth.account_created", user_id=user.id, ip_address=client_ip(),
                      detail={"provider": "google", "email": profile['email'], "username": user.username})
             logger.info("New user created via Google OAuth: %s", user.username)

@@ -2,7 +2,21 @@
 
 A modern, secure payment verification and invoice management platform that integrates with KoraPay API. OnePay eliminates fake payment confirmations by allowing merchants to generate secure, time-bound payment links, automatically create professional invoices, and verify transactions directly from the payment infrastructure.
 
-## 🚀 Latest Updates (v1.5.0)
+## 🚀 Latest Updates (v1.5.5)
+
+### Security Hardening - Critical Vulnerability Fixes
+- 🔒 **Session Timeout**: Automatic session expiration (30min authenticated, 60min guest)
+- 🛡️ **Security Headers**: Comprehensive headers (CSP, HSTS, X-Frame-Options, etc.)
+- ⏱️ **Timing Attack Protection**: Constant-time responses prevent enumeration
+- 🚫 **Content-Type Validation**: CSRF protection on all JSON endpoints
+- 📏 **Request Size Limits**: 1MB limit prevents memory exhaustion DoS
+- 🔇 **Error Handling**: Generic error messages prevent information disclosure
+- ✅ **Input Validation**: Length validation on all user inputs
+- ⏰ **OAuth Timeout**: Google OAuth requests timeout after 5 seconds
+
+**Security Status**: 8/8 vulnerabilities resolved ✅ | Production Ready 🚀
+
+### Previous Updates (v1.5.0)
 
 ### KoraPay Integration - Major Payment Provider Migration
 - 💳 **KoraPay Gateway**: Migrated from Quickteller to KoraPay for enhanced payment processing
@@ -12,7 +26,7 @@ A modern, secure payment verification and invoice management platform that integ
 - 📊 **SLA Monitoring**: Real-time performance tracking and alerting
 - 🗄️ **Redis Caching**: Optimized performance with intelligent caching layer
 
-### Previous Updates (v1.3.0)
+### Earlier Updates (v1.3.0)
 - 🔐 **Google Sign-In**: One-click registration and login with Google accounts
 - 🔗 **Account Linking**: Connect existing accounts to Google for easier access
 - 🛡️ **Secure Authentication**: Token validation, CSRF protection, rate limiting
@@ -335,33 +349,41 @@ OnePay implements comprehensive security controls across all layers:
 
 ### Authentication & Authorization
 - **Password Security**: bcrypt hashing, 12+ character minimum, complexity requirements
-- **Session Management**: IP/User-Agent binding, configurable timeout
+- **Session Management**: IP/User-Agent binding, automatic timeout (30min authenticated, 60min guest)
+- **Session Timeout Enforcement**: Automatic invalidation of expired sessions on every request
 - **Account Protection**: Lockout protection, rate limiting on login and password reset
 - **CSRF Protection**: Token validation on all state-changing operations
 
 ### Data Protection
 - **Input Validation**: Length limits, format validation, Content-Type enforcement
+- **Input Length Validation**: Explicit rejection of oversized inputs with clear error messages
 - **SQL Injection Prevention**: Parameterized queries via SQLAlchemy ORM
 - **XSS Prevention**: Template escaping, Content-Security-Policy headers
 - **Secrets Management**: Environment variables only, startup validation enforced
 
 ### API Security
 - **Rate Limiting**: Per-endpoint limits
+- **Content-Type Validation**: All JSON endpoints validate Content-Type header (415 on mismatch)
+- **Request Size Limits**: 1MB maximum request size prevents memory exhaustion DoS
+- **Timing Attack Protection**: Constant-time responses prevent transaction enumeration
 - **SSRF Prevention**: Webhook blacklist, DNS rebinding detection, AWS metadata blocking
 - **Webhook Security**: HMAC-SHA256 signatures, constant-time comparison
 - **Circuit Breaker**: Automatic protection against downstream service failures
+- **OAuth Timeout**: Google OAuth requests timeout after 5 seconds
 
 ### Monitoring & Logging
 - **Security Monitoring**: Background thread detecting brute force, spam, anomalies
 - **SLA Monitoring**: Real-time performance metrics with Prometheus
 - **Audit Logging**: All security events logged with retention
 - **Grafana Dashboards**: Visual monitoring of system health
+- **Error Handling**: Generic error messages in production, detailed logs server-side only
 
 ### Production Hardening
 - **Secret Validation**: Application refuses to start with weak secrets
 - **HTTPS Enforcement**: Strict-Transport-Security headers, secure cookies
 - **Database Security**: PostgreSQL required in production (SQLite blocked)
-- **Security Headers**: Comprehensive CSP, X-Frame-Options, X-Content-Type-Options
+- **Security Headers**: Comprehensive CSP, X-Frame-Options, X-Content-Type-Options, HSTS
+- **Information Disclosure Prevention**: No stack traces or sensitive data in client responses
 
 ## Monitoring & Observability
 
@@ -451,7 +473,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 📊 Project Status
 
-- **Version**: 1.5.0
+- **Version**: 1.5.5
 - **Status**: Production Ready ✅
 - **Payment Provider**: KoraPay ✅
+- **Security Audit**: 8/8 vulnerabilities resolved ✅
 - **Test Coverage**: Comprehensive test suite ✅

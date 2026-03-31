@@ -619,31 +619,55 @@ def create_payment_link():
 
 @payments_bp.route("/api/payments/status/<tx_ref>", methods=["GET"])
 def transaction_status(tx_ref):
+    """
+    Get transaction status by reference.
+    
+    SECURITY (VULN-003): Implements constant-time response to prevent timing attacks
+    that could enumerate valid transaction references.
+    """
     if not current_user_id():
         return unauthenticated()
-    if not valid_tx_ref(tx_ref):
-        return error("Invalid transaction reference format", "INVALID_REF", 400)
-
-    # Add random jitter to mask timing differences (VULN-005 fix)
+    
+    # Start timing for constant-time response
     import time
     import secrets
-    jitter = secrets.randbelow(40) / 1000.0  # 0-40ms
-    time.sleep(0.01 + jitter)  # Base 10ms + jitter
+    start_time = time.perf_counter()
+    
+    if not valid_tx_ref(tx_ref):
+        # Add delay to match DB query time
+        elapsed = time.perf_counter() - start_time
+        target_delay = 0.05  # 50ms baseline
+        jitter = secrets.randbelow(40) / 1000.0  # 0-40ms jitter
+        remaining = max(0, target_delay + jitter - elapsed)
+        time.sleep(remaining)
+        return error("Invalid transaction reference format", "INVALID_REF", 400)
 
     with get_db() as db:
-        # Rate limit status checks to prevent enumeration (VULN-005 fix)
+        # Rate limit status checks to prevent enumeration
         if not check_rate_limit(db, f"status:{current_user_id()}", limit=100, window_secs=60):
             return rate_limited()
         
-        # Query with user_id filter to prevent enumeration (VULN-005 fix)
+        # Query with user_id filter to prevent enumeration
         t = db.query(Transaction).filter(
             Transaction.tx_ref == tx_ref,
-            Transaction.user_id == current_user_id()  # Filter in query
+            Transaction.user_id == current_user_id()
         ).first()
         
+        # Calculate elapsed time
+        elapsed = time.perf_counter() - start_time
+        
         if not t:
+            # Add delay to match successful query time
+            target_delay = 0.05  # 50ms baseline
+            jitter = secrets.randbelow(40) / 1000.0  # 0-40ms jitter
+            remaining = max(0, target_delay + jitter - elapsed)
+            time.sleep(remaining)
             # Same error for both "not found" and "unauthorized"
             return error("Transaction not found", "NOT_FOUND", 404)
+        
+        # Add jitter to successful responses too
+        jitter = secrets.randbelow(40) / 1000.0
+        time.sleep(jitter)
         
         return jsonify({"success": True, **t.to_dict()})
 

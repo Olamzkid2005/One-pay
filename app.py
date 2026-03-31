@@ -300,6 +300,17 @@ def create_app() -> Flask:
             }), 404
         return render_template('base.html'), 404
 
+    @app.errorhandler(413)
+    def request_entity_too_large(error):
+        """Handle requests that exceed MAX_CONTENT_LENGTH."""
+        logger.warning("Request too large | ip=%s path=%s", client_ip(), request.path)
+        return jsonify({
+            "success": False,
+            "error": "REQUEST_TOO_LARGE",
+            "message": "Request too large (max 1MB)",
+            "max_size_mb": 1
+        }), 413
+
     @app.errorhandler(500)
     def internal_error(error):
         """Handle 500 errors without exposing stack traces."""
@@ -336,6 +347,56 @@ def create_app() -> Flask:
                 "message": "You don't have permission to access this resource"
             }), 403
         return render_template('base.html'), 403
+
+    @app.errorhandler(Exception)
+    def handle_unexpected_error(error):
+        """
+        Catch-all handler for unexpected exceptions.
+        VULN-007 FIX: Prevents stack trace leakage in production.
+        """
+        from core.ip import client_ip
+        
+        # Log full error server-side with context
+        logger.error(
+            "Unexpected error: %s",
+            str(error),
+            exc_info=True,
+            extra={
+                "url": request.url,
+                "method": request.method,
+                "ip": client_ip(),
+                "user_id": session.get("user_id")
+            }
+        )
+        
+        # Rollback any pending database transactions
+        try:
+            from database import get_db
+            with get_db() as db:
+                db.rollback()
+        except Exception:
+            pass
+        
+        # Return generic error to client (no details in production)
+        if app.config.get('DEBUG'):
+            # In development, include error details for debugging
+            if request.path.startswith('/api/'):
+                return jsonify({
+                    "success": False,
+                    "error": "INTERNAL_ERROR",
+                    "message": str(error),
+                    "type": type(error).__name__
+                }), 500
+            return render_template('base.html'), 500
+        else:
+            # In production, generic message only
+            if request.path.startswith('/api/'):
+                return jsonify({
+                    "success": False,
+                    "error": "INTERNAL_ERROR",
+                    "message": "An internal error occurred. Please try again later."
+                }), 500
+            return render_template('base.html'), 500
 
     # ── Security headers (Talisman) ────────────────────────────────────────────
     if not Config.TESTING and not Config.DEBUG:
