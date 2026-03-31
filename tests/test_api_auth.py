@@ -31,3 +31,18 @@ def test_generate_api_key_format():
     # Verify it's actually hex
     hex_part = key[12:]
     assert all(c in '0123456789abcdef' for c in hex_part)
+
+
+
+def test_hash_api_key():
+    """Test that API key hashing is consistent and secure"""
+    from core.api_auth import hash_api_key
+    
+    key = "onepay_live_abc123"
+    hash1 = hash_api_key(key)
+    hash2 = hash_api_key(key)
+    
+    assert hash1 == hash2  # Consistent
+    assert len(hash1) == 64  # SHA256 hex
+    assert hash1 != key  # Actually hashed
+    assert all(c in '0123456789abcdef' for c in hash1)  # Valid hex

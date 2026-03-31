@@ -11,3 +11,17 @@ def generate_api_key() -> str:
     random_bytes = secrets.token_bytes(32)
     hex_string = random_bytes.hex()
     return f"onepay_live_{hex_string}"
+
+import hashlib
+
+
+def hash_api_key(key: str) -> str:
+    """Hash API key using SHA256
+    
+    Args:
+        key: The API key to hash
+        
+    Returns:
+        str: SHA256 hash as hex string (64 characters)
+    """
+    return hashlib.sha256(key.encode('utf-8')).hexdigest()
