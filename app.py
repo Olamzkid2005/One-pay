@@ -117,6 +117,32 @@ def create_app() -> Flask:
     def inject_request_id():
         g.request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
 
+    # ── API Key Authentication ─────────────────────────────────────────────────
+    @app.before_request
+    def authenticate_api_key():
+        """Check for API key in Authorization header"""
+        from core.api_auth import validate_api_key
+        from core.audit import log_event
+        from core.ip import client_ip
+        from database import get_db
+        
+        auth_header = request.headers.get('Authorization', '')
+        
+        if auth_header.startswith('Bearer '):
+            api_key = auth_header[7:]  # Remove 'Bearer ' prefix
+            is_valid, user_id = validate_api_key(api_key)
+            
+            if is_valid:
+                g.api_key_authenticated = True
+                g.user_id = user_id
+                g.api_key = api_key
+                
+                # Log API key usage
+                with get_db() as db:
+                    log_event(db, "api_key.used", user_id=user_id, 
+                             ip_address=client_ip(),
+                             detail={"endpoint": request.endpoint})
+
     @app.after_request
     def add_request_id_header(response):
         response.headers["X-Request-ID"] = g.get("request_id", "")

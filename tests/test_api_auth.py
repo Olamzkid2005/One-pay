@@ -153,3 +153,24 @@ def test_validate_api_key_inactive(db_session, monkeypatch):
     is_valid, user_id = validate_api_key(key)
     assert is_valid is False
     assert user_id is None
+
+
+
+def test_is_api_key_authenticated():
+    """Test the is_api_key_authenticated helper function"""
+    from core.api_auth import is_api_key_authenticated
+    from flask import Flask, g
+    
+    app = Flask(__name__)
+    
+    with app.app_context():
+        # No flag set
+        assert is_api_key_authenticated() is False
+        
+        # Flag set to True
+        g.api_key_authenticated = True
+        assert is_api_key_authenticated() is True
+        
+        # Flag set to False
+        g.api_key_authenticated = False
+        assert is_api_key_authenticated() is False
