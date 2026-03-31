@@ -56,6 +56,17 @@ class BaseConfig:
     RATE_LIMIT_VERIFY_PAGE_ATTEMPTS  = int(os.getenv("RATE_LIMIT_VERIFY_PAGE_ATTEMPTS",  "5"))
     RATE_LIMIT_VERIFY_PAGE_WINDOW_SECS = int(os.getenv("RATE_LIMIT_VERIFY_PAGE_WINDOW_SECS", "300"))
 
+    # ── API Keys ──────────────────────────────────────────────────────────────
+    API_KEY_MAX_PER_USER = int(os.getenv("API_KEY_MAX_PER_USER", "10"))
+    API_KEY_GENERATION_RATE_LIMIT = int(os.getenv("API_KEY_GENERATION_RATE_LIMIT", "5"))
+
+    # ── Inbound Webhooks ──────────────────────────────────────────────────────
+    INBOUND_WEBHOOK_SECRET = os.getenv("INBOUND_WEBHOOK_SECRET", "")
+
+    # ── API Rate Limits ───────────────────────────────────────────────────────
+    RATE_LIMIT_API_LINK_CREATE = int(os.getenv("RATE_LIMIT_API_LINK_CREATE", "100"))
+    RATE_LIMIT_API_STATUS_CHECK = int(os.getenv("RATE_LIMIT_API_STATUS_CHECK", "500"))
+
     # ── Session lifetime ──────────────────────────────────────────────────────
     # SESSION_LIFETIME_HOURS: how long a permanent session lasts (default 24h)
     PERMANENT_SESSION_LIFETIME = int(os.getenv("SESSION_LIFETIME_HOURS", "24"))
@@ -143,6 +154,12 @@ class BaseConfig:
             
             if cls.KORAPAY_USE_SANDBOX:
                 errors.append("KORAPAY_USE_SANDBOX must be false in production")
+            
+            # Check inbound webhook secret
+            if not cls.INBOUND_WEBHOOK_SECRET:
+                errors.append("INBOUND_WEBHOOK_SECRET is required in production")
+            elif len(cls.INBOUND_WEBHOOK_SECRET) < 32:
+                errors.append("INBOUND_WEBHOOK_SECRET too short (minimum 32 characters)")
         
         # Check Google OAuth configuration in production
         if app_env == "production" and cls.GOOGLE_CLIENT_ID:
