@@ -87,6 +87,18 @@ def validate_csrf_with_origin() -> tuple[bool, str | None]:
 # ── Session ───────────────────────────────────────────────────────────────────
 
 def current_user_id() -> int | None:
+    """Get user ID from session OR API key
+    
+    Returns:
+        int | None: User ID if authenticated via session or API key, None otherwise
+    """
+    from flask import g
+    
+    # Check API key first (stored in g.user_id by middleware)
+    if hasattr(g, 'api_key_authenticated') and g.api_key_authenticated:
+        return g.user_id
+    
+    # Fall back to session
     return session.get("user_id")
 
 
