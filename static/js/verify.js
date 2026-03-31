@@ -128,6 +128,12 @@ async function loadPreview() {
       return;
     }
 
+    // Already confirmed — redirect to verified page
+    if (data.transfer_confirmed) {
+      window.location.href = `/verified/${TX_REF}`;
+      return;
+    }
+
     // Populate bank transfer details
     const currency = data.currency || 'NGN';
     const detailAmountEl = document.getElementById('detail-amount');
@@ -289,7 +295,7 @@ function updatePollStatus(msg) {
 // ── Step 3: Success state ──────────────────────────────────────────────────────
 
 function showSuccess() {
-  // Move from details → waiting → success
+  // Show brief success animation, then redirect to verified page
   showState('state-success');
 
   // Populate success details
@@ -298,7 +304,7 @@ function showSuccess() {
   const successRef = document.getElementById('success-ref');
   const successDate = document.getElementById('success-date');
   const successMessage = document.getElementById('success-message');
-  
+
   if (detailAmount && successAmount) {
     const amount = detailAmount.textContent;
     successAmount.textContent = amount;
@@ -306,12 +312,12 @@ function showSuccess() {
       successMessage.innerHTML = `Your transfer of <span class="text-on-surface font-bold">${amount}</span> has been verified successfully.`;
     }
   }
-  
+
   if (successRef) {
     const refEl = document.getElementById('detail-ref');
     successRef.textContent = refEl ? refEl.textContent : TX_REF;
   }
-  
+
   if (successDate) {
     const now = new Date();
     successDate.textContent = now.toLocaleString('en-US', {
@@ -323,29 +329,11 @@ function showSuccess() {
     });
   }
 
-  // Redirect to return_url if the page has one
-  const returnUrl = document.getElementById('return-url-meta')?.content;
-  const cta = document.getElementById('return-url-cta');
-  const redirectMsg = document.getElementById('redirect-msg');
-
-  if (returnUrl) {
-    if (cta) {
-      cta.classList.remove('hidden');
-      cta.href = returnUrl;
-    }
-    if (redirectMsg) {
-      redirectMsg.innerHTML = '<div class="w-3 h-3 border-2 border-outline-variant border-t-primary rounded-full animate-spin"></div><span class="text-xs text-outline font-medium">Redirecting in 5 seconds...</span>';
-    }
-    setTimeout(() => { window.location.href = returnUrl; }, 5000);
-    return;
-  }
-
-  if (redirectMsg) {
-    redirectMsg.innerHTML = '<span class="text-xs text-outline font-medium">Payment confirmed. The merchant will update your payment status shortly.</span>';
-  }
-  if (cta) {
-    cta.classList.add('hidden');
-  }
+  // Redirect to /verified/{tx_ref} which handles return_url
+  // The verified page will show confirmation and redirect to merchant if needed
+  setTimeout(() => {
+    window.location.href = `/verified/${TX_REF}`;
+  }, 1500);
 }
 
 // ── Resume polling after cap ───────────────────────────────────────────────────

@@ -41,17 +41,14 @@ class BaseConfig:
     MAIL_PASSWORD = os.getenv("MAIL_PASSWORD", "")
     MAIL_FROM     = os.getenv("MAIL_FROM",     "noreply@onepay.com")
 
-    # ── Quickteller ───────────────────────────────────────────────────────────
-    QUICKTELLER_CLIENT_ID     = os.getenv("QUICKTELLER_CLIENT_ID",     "")
-    QUICKTELLER_CLIENT_SECRET = os.getenv("QUICKTELLER_CLIENT_SECRET", "")
-    QUICKTELLER_BASE_URL      = os.getenv("QUICKTELLER_BASE_URL",      "https://passport.k8.isw.la")
-
-    # ── Dynamic Transfer ──────────────────────────────────────────────────────
-    MERCHANT_CODE            = os.getenv("MERCHANT_CODE",  "")
-    PAYABLE_CODE             = os.getenv("PAYABLE_CODE",   "")
-    VIRTUAL_ACCOUNT_BASE_URL = os.getenv(
-        "VIRTUAL_ACCOUNT_BASE_URL", "https://payment-service.k8.isw.la"
-    )
+    # ── KoraPay Payment Gateway ───────────────────────────────────────────────
+    KORAPAY_SECRET_KEY      = os.getenv("KORAPAY_SECRET_KEY", "")
+    KORAPAY_WEBHOOK_SECRET  = os.getenv("KORAPAY_WEBHOOK_SECRET", "")
+    KORAPAY_BASE_URL        = os.getenv("KORAPAY_BASE_URL", "https://api.korapay.com")
+    KORAPAY_USE_SANDBOX     = os.getenv("KORAPAY_USE_SANDBOX", "false").lower() == "true"
+    KORAPAY_TIMEOUT_SECONDS = int(os.getenv("KORAPAY_TIMEOUT_SECONDS", "30"))
+    KORAPAY_CONNECT_TIMEOUT = int(os.getenv("KORAPAY_CONNECT_TIMEOUT", "10"))
+    KORAPAY_MAX_RETRIES     = int(os.getenv("KORAPAY_MAX_RETRIES", "3"))
 
     # ── Rate Limiting ─────────────────────────────────────────────────────────
     RATE_LIMIT_LINK_CREATE           = int(os.getenv("RATE_LIMIT_LINK_CREATE",           "10"))
@@ -117,6 +114,35 @@ class BaseConfig:
         
         # Check DEBUG mode in production
         app_env = _os.getenv("APP_ENV", "development").lower()
+        
+        # Check KoraPay configuration in production
+        if app_env == "production":
+            if not cls.KORAPAY_SECRET_KEY:
+                errors.append("KORAPAY_SECRET_KEY is required in production")
+            elif len(cls.KORAPAY_SECRET_KEY) < 32:
+                errors.append("KORAPAY_SECRET_KEY too short (minimum 32 characters)")
+            elif not cls.KORAPAY_SECRET_KEY.startswith("sk_live_"):
+                errors.append("KORAPAY_SECRET_KEY must start with sk_live_ in production")
+            elif cls.KORAPAY_SECRET_KEY.startswith("sk_test_"):
+                errors.append("Cannot use test API key (sk_test_) in production")
+            elif "change-this" in cls.KORAPAY_SECRET_KEY.lower():
+                errors.append("KORAPAY_SECRET_KEY contains placeholder value")
+            
+            if not cls.KORAPAY_WEBHOOK_SECRET:
+                errors.append("KORAPAY_WEBHOOK_SECRET is required in production")
+            elif len(cls.KORAPAY_WEBHOOK_SECRET) < 32:
+                errors.append("KORAPAY_WEBHOOK_SECRET too short (minimum 32 characters)")
+            elif "change-this" in cls.KORAPAY_WEBHOOK_SECRET.lower():
+                errors.append("KORAPAY_WEBHOOK_SECRET contains placeholder value")
+            
+            # Validate secrets are unique
+            if cls.KORAPAY_SECRET_KEY and cls.KORAPAY_SECRET_KEY == cls.KORAPAY_WEBHOOK_SECRET:
+                errors.append("KORAPAY_SECRET_KEY and KORAPAY_WEBHOOK_SECRET must be different")
+            if cls.KORAPAY_WEBHOOK_SECRET and cls.KORAPAY_WEBHOOK_SECRET == cls.HMAC_SECRET:
+                errors.append("KORAPAY_WEBHOOK_SECRET and HMAC_SECRET must be different")
+            
+            if cls.KORAPAY_USE_SANDBOX:
+                errors.append("KORAPAY_USE_SANDBOX must be false in production")
         
         # Check Google OAuth configuration in production
         if app_env == "production" and cls.GOOGLE_CLIENT_ID:

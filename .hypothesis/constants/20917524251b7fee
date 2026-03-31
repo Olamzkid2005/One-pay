@@ -1,0 +1,4 @@
+# file: C:\Users\David.Olamijulo\Documents\onepay\core\auth.py
+# hypothesis_version: 6.151.9
+
+['/', 'Origin', 'Origin mismatch', 'Referer', 'Referer mismatch', 'X-CSRF-Token', 'X-CSRFToken', '^[A-Z0-9\\-]{10,60}$', '^[a-zA-Z0-9_]{3,30}$', 'application/json', 'auth.login_page', 'csrf_token', 'user_id', 'username']

@@ -195,6 +195,8 @@
             
             <!-- Google Sign-In Button Container -->
             <div id="google-signin-container" class="hidden">
+                <!-- OAuth Error Message -->
+                <div id="oauth-error" class="hidden text-center text-xs text-red-400 mb-3 p-2 bg-red-500/10 rounded-lg"></div>
                 <div class="relative google-btn-custom">
                     <!-- Real Google button (invisible but functional) -->
                     <div id="google-signin-button" class="absolute inset-0 z-10"></div>
@@ -250,60 +252,172 @@ function togglePassword(inputId, iconId) {
 
 // Google OAuth Integration
 let googleOAuthConfig = null;
+let googleSignInAttempted = false;
+let googleSignInAvailable = false;
 
 // Fetch OAuth configuration from backend
 async function fetchGoogleOAuthConfig() {
     try {
         const response = await fetch('/auth/google/config');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
         const config = await response.json();
         return config;
     } catch (error) {
-        console.error('Failed to fetch Google OAuth config:', error);
-        return { enabled: false };
+        console.warn('Failed to fetch Google OAuth config:', error.message);
+        return { enabled: false, error: 'network_error' };
     }
 }
 
-// Initialize Google Sign-In
+// Check if Google Identity Services is available
+function isGoogleGISAvailable() {
+    return typeof google !== 'undefined' &&
+           google !== null &&
+           typeof google.accounts === 'object' &&
+           typeof google.accounts.id === 'object';
+}
+
+// Check if FedCM is supported (required for One Tap)
+function isFedCMSupported() {
+    return typeof navigator !== 'undefined' &&
+           navigator.credentials &&
+           typeof navigator.credentials.get === 'function';
+}
+
+// Initialize Google Sign-In with comprehensive error handling
 async function initializeGoogleSignIn() {
-    googleOAuthConfig = await fetchGoogleOAuthConfig();
-    
-    if (!googleOAuthConfig.enabled) {
-        console.log('Google OAuth is not configured');
+    // Guard: prevent multiple initialization attempts
+    if (googleSignInAttempted) {
         return;
     }
-    
+    googleSignInAttempted = true;
+
+    // Guard: Check if GIS script loaded
+    if (!isGoogleGISAvailable()) {
+        console.log('Google Identity Services not loaded - hiding OAuth UI');
+        hideOAuthUI();
+        return;
+    }
+
+    // Guard: Fetch configuration
+    try {
+        googleOAuthConfig = await fetchGoogleOAuthConfig();
+    } catch (error) {
+        console.error('Failed to initialize Google Sign-In:', error.message);
+        hideOAuthUI();
+        return;
+    }
+
+    // Guard: Check if OAuth is enabled
+    if (!googleOAuthConfig || !googleOAuthConfig.enabled) {
+        console.log('Google OAuth is not configured or disabled');
+        hideOAuthUI();
+        return;
+    }
+
+    // Guard: Validate client_id
+    if (!googleOAuthConfig.client_id) {
+        console.error('Google OAuth client_id is missing');
+        hideOAuthUI();
+        return;
+    }
+
     // Show OAuth UI elements
-    document.getElementById('oauth-separator').classList.remove('hidden');
-    document.getElementById('google-signin-container').classList.remove('hidden');
-    
-    // Initialize Google Identity Services
-    google.accounts.id.initialize({
-        client_id: googleOAuthConfig.client_id,
-        callback: handleGoogleCallback,
-        auto_select: false,
-        cancel_on_tap_outside: false
-    });
-    
-    // Display One Tap prompt
-    google.accounts.id.prompt((notification) => {
-        console.log('One Tap notification:', notification);
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            console.log('One Tap not displayed:', notification.getNotDisplayedReason());
-        }
-    });
-    
-    // Render the Google Sign-In button
-    google.accounts.id.renderButton(
-        document.getElementById('google-signin-button'),
-        {
+    showOAuthUI();
+
+    try {
+        // Initialize Google Identity Services
+        google.accounts.id.initialize({
+            client_id: googleOAuthConfig.client_id,
+            callback: handleGoogleCallback,
+            auto_select: false,
+            cancel_on_tap_outside: false,
+            error_callback: handleGoogleError  // Handle GSI errors
+        });
+
+        googleSignInAvailable = true;
+
+        // Skip One Tap / FedCM - use button sign-in directly to avoid FedCM errors
+        // FedCM has compatibility issues across browsers and GSI versions
+        console.log('Using button sign-in (FedCM/One Tap disabled)');
+        renderGoogleButton();
+    } catch (error) {
+        console.error('Google Sign-In initialization failed:', error.message);
+        hideOAuthUI();
+    }
+}
+
+// Handle Google Identity Services errors
+function handleGoogleError(error) {
+    console.warn('Google Sign-In error:', error);
+
+    // Common error codes from GSI
+    const errorMessages = {
+        'idp_pending_initialization': 'Google Sign-In is loading...',
+        'opt_out_or_no_account': 'No Google account selected or user opted out',
+        'https_required': 'HTTPS is required for Google Sign-In',
+        'unknown_client_id': 'Invalid Google OAuth client ID',
+        'registration_error': 'Google Sign-In registration failed',
+        'network_error': 'Network error - please check your connection',
+        'token_result_error': 'Failed to get authentication token'
+    };
+
+    const message = errorMessages[error.type] || error.message || 'Google Sign-In unavailable';
+
+    // Show user-friendly message but don't block email/password login
+    showOAuthError(message);
+
+    // Always render the button as fallback
+    renderGoogleButton();
+}
+
+// Show OAuth error message to user
+function showOAuthError(message) {
+    const errorEl = document.getElementById('oauth-error');
+    if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.classList.remove('hidden');
+        // Auto-hide after 5 seconds
+        setTimeout(() => errorEl.classList.add('hidden'), 5000);
+    }
+}
+
+// Show OAuth UI elements
+function showOAuthUI() {
+    const separator = document.getElementById('oauth-separator');
+    const container = document.getElementById('google-signin-container');
+    if (separator) separator.classList.remove('hidden');
+    if (container) container.classList.remove('hidden');
+}
+
+// Hide OAuth UI elements gracefully
+function hideOAuthUI() {
+    const separator = document.getElementById('oauth-separator');
+    const container = document.getElementById('google-signin-container');
+    if (separator) separator.classList.add('hidden');
+    if (container) container.classList.add('hidden');
+}
+
+// Render Google Sign-In button as fallback
+function renderGoogleButton() {
+    const buttonContainer = document.getElementById('google-signin-button');
+    if (!buttonContainer || !isGoogleGISAvailable()) {
+        return;
+    }
+
+    try {
+        google.accounts.id.renderButton(buttonContainer, {
             theme: 'filled_blue',
             size: 'large',
-            width: 400,
+            width: Math.min(400, buttonContainer.offsetWidth || 400),
             text: 'signin_with',
             shape: 'rectangular',
             logo_alignment: 'left'
-        }
-    );
+        });
+    } catch (error) {
+        console.error('Failed to render Google button:', error.message);
+    }
 }
 
 // Handle Google OAuth callback
@@ -368,6 +482,42 @@ function showGoogleError(message) {
 }
 
 // Initialize Google Sign-In when page loads
-window.addEventListener('load', initializeGoogleSignIn);
+// Use load event AND poll for GIS availability since script is async defer
+let gisPollInterval = null;
+
+function startGISPolling() {
+    if (googleSignInAttempted && googleSignInAvailable) {
+        // Already successfully initialized
+        return;
+    }
+    if (googleSignInAttempted && !googleSignInAvailable) {
+        // Previous attempt failed - allow retry
+        googleSignInAttempted = false;
+    }
+
+    // Try to initialize immediately
+    initializeGoogleSignIn();
+
+    // If not yet available, poll for up to 10 seconds
+    if (!isGoogleGISAvailable()) {
+        let pollCount = 0;
+        const maxPolls = 100; // 10 seconds worth
+        if (gisPollInterval) clearInterval(gisPollInterval);
+        gisPollInterval = setInterval(() => {
+            pollCount++;
+            if (pollCount >= maxPolls) {
+                clearInterval(gisPollInterval);
+                console.log('GIS polling timeout - Google Sign-In unavailable');
+                return;
+            }
+            if (isGoogleGISAvailable() && !googleSignInAvailable) {
+                clearInterval(gisPollInterval);
+                initializeGoogleSignIn();
+            }
+        }, 100);
+    }
+}
+
+window.addEventListener('load', startGISPolling);
 </script>
 {% endblock %}

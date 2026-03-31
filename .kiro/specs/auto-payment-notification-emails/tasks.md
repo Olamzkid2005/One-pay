@@ -4,6 +4,8 @@
 
 This implementation adds automatic email notifications when payments are confirmed via webhook. The system sends merchant notification emails with transfer details and attached invoices, and optionally sends customer invoice emails based on the merchant's auto_send_email setting. The feature integrates with existing webhook handler, email service, and invoice generation systems.
 
+**Current Status:** ⚠️ PARTIAL - Task 1 (merchant notification email) partially complete. Tasks 2-9 pending.
+
 ## Tasks
 
 - [x] 1. Implement merchant notification email function

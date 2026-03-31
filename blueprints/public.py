@@ -4,6 +4,7 @@ Handles: verify page, preview API, transfer-status polling, health check
 No login required — these are customer-facing routes.
 """
 import logging
+import json
 from datetime import datetime, timezone
 
 from flask import Blueprint, request, jsonify, render_template, session, make_response
@@ -11,9 +12,10 @@ from flask import Blueprint, request, jsonify, render_template, session, make_re
 from config import Config
 from database import engine, get_db
 from models.transaction import Transaction, TransactionStatus
+from models.user import User
 from services.rate_limiter import check_rate_limit, cleanup_old_rate_limits
 from services.security import verify_hash_token
-from services.quickteller import quickteller, QuicktellerError
+from services.korapay import korapay, KoraPayError
 from core.auth import valid_tx_ref
 from core.ip import client_ip
 from core.responses import error, rate_limited
@@ -142,6 +144,32 @@ def pay_page(tx_ref):
                                qr_code_virtual_account=None)
 
 
+# ── Verified page ───────────────────────────────────────────────────────────────
+
+@public_bp.route("/verified/<tx_ref>")
+def verified_page(tx_ref):
+    """Show verified page if transaction is confirmed, otherwise redirect to pay page."""
+    if not valid_tx_ref(tx_ref):
+        return redirect("/pay/invalid", code=301)
+
+    from flask import redirect
+
+    with get_db() as db:
+        t = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
+
+        if not t:
+            return redirect("/pay/invalid", code=301)
+
+        # If not yet confirmed, redirect to pay page to start polling
+        if not t.transfer_confirmed:
+            return redirect(f"/pay/{tx_ref}", code=302)
+
+        # Already confirmed - show verified page
+        return render_template("verified.html",
+                               tx_ref=tx_ref,
+                               return_url=t.return_url or "")
+
+
 # ── Legacy verify route — redirect to clean URL ────────────────────────────────
 
 @public_bp.route("/verify/<tx_ref>")
@@ -215,7 +243,7 @@ def transfer_status(tx_ref):
         if not check_rate_limit(db, f"poll:{ip}", Config.RATE_LIMIT_VERIFY):
             return rate_limited()
 
-        # Fetch transaction WITHOUT locking to check status quickly
+        # Fast path: Fetch transaction WITHOUT locking to check status quickly
         t = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
         
         if not t:
@@ -240,63 +268,161 @@ def transfer_status(tx_ref):
                 sync_invoice_on_transaction_update(db, t)
             return jsonify({"success": False, "status": "expired", "tx_ref": tx_ref})
 
-        if not quickteller.is_transfer_configured():
-            return jsonify({"success": False, "status": "error", "message": "Transfer not configured"})
-
-        # Check with payment provider (external API call - no lock held)
-        try:
-            result = quickteller.confirm_transfer(tx_ref)
-            response_code = result.get("responseCode", "")
-
-            if response_code == "00":
-                # Payment confirmed - now acquire lock to update
-                t_locked = db.query(Transaction).filter(
-                    Transaction.tx_ref == tx_ref,
-                    Transaction.transfer_confirmed == False  # Optimistic check
-                ).with_for_update().first()
-                
-                # Double-check: another request might have confirmed it
-                if not t_locked or t_locked.transfer_confirmed:
-                    logger.info("transfer-status: already confirmed by another request | tx_ref=%s", tx_ref)
-                    return jsonify({"success": True, "status": "confirmed", "tx_ref": tx_ref})
-                
-                # We won the race - update the transaction
-                now_utc = datetime.now(timezone.utc)
-                t_locked.transfer_confirmed = True
-                t_locked.is_used = True
-                t_locked.status = TransactionStatus.VERIFIED
-                t_locked.verified_at = now_utc
-                db.flush()
-                
-                log_event(db, "payment.confirmed", user_id=t_locked.user_id, 
-                          tx_ref=tx_ref, ip_address=ip, 
-                          detail={"amount": str(t_locked.amount)})
-                
-                # Deliver webhook (still within transaction for consistency)
-                if t_locked.webhook_url and not t_locked.webhook_delivered:
-                    from services.webhook import deliver_webhook
-                    deliver_webhook(db, t_locked)
-                
-                # Sync invoice status if invoice exists
-                from services.webhook import sync_invoice_on_transaction_update
-                sync_invoice_on_transaction_update(db, t_locked)
-                
-                # Send payment notification emails (merchant + customer if enabled)
-                from services.webhook import send_payment_notification_emails
-                from models.user import User
-                user = db.query(User).filter(User.id == t_locked.user_id).first()
-                if user:
-                    send_payment_notification_emails(db, t_locked, user)
-
-                logger.info("transfer-status confirmed | ip=%s tx_ref=%s", ip, tx_ref)
-                return jsonify({"success": True, "status": "confirmed", "tx_ref": tx_ref})
-
+        # Check if KoraPay transfer confirmation is configured
+        if not korapay.is_transfer_configured():
+            logger.debug("KoraPay transfer confirmation not configured")
             return jsonify({"success": False, "status": "pending", "tx_ref": tx_ref})
 
-        except QuicktellerError as e:
-            logger.error("confirm_transfer error for %s: %s", tx_ref, e)
-            return jsonify({"success": False, "status": "error",
-                            "message": "Could not reach payment provider"}), 200
+        # Optimistic locking: Acquire row lock to prevent race conditions
+        t_locked = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).with_for_update().first()
+        
+        if not t_locked:
+            return error("Transaction not found", "NOT_FOUND", 404)
+
+        # Double-check after lock acquisition: another request may have confirmed it
+        if t_locked.transfer_confirmed:
+            return jsonify({"success": True, "status": "confirmed", "tx_ref": tx_ref})
+
+        # Call KoraPay to confirm transfer
+        try:
+            result = korapay.confirm_transfer(tx_ref)
+            response_code = result.get("responseCode", "")
+            
+            if response_code == "00":
+                # Transfer confirmed
+                t_locked.transfer_confirmed = True
+                t_locked.status = TransactionStatus.VERIFIED
+                db.flush()
+
+                # Deliver webhook if configured
+                if t_locked.webhook_url:
+                    from services.webhook import deliver_webhook
+                    deliver_webhook(db, t_locked)
+
+                # Sync invoice status and send notification emails
+                from services.webhook import sync_invoice_on_transaction_update, send_payment_notification_emails
+                sync_invoice_on_transaction_update(db, t_locked)
+
+                # Send payment notification emails (merchant + customer)
+                user_for_email = db.query(User).filter(User.id == t_locked.user_id).first()
+                if user_for_email:
+                    send_payment_notification_emails(db, t_locked, user_for_email)
+
+                log_event(db, "transfer_confirmed", t_locked.user_id,
+                         tx_ref=tx_ref, detail={"tx_ref": tx_ref, "amount": str(t_locked.amount)})
+                
+                return jsonify({"success": True, "status": "confirmed", "tx_ref": tx_ref})
+            else:
+                # Transfer still pending
+                return jsonify({"success": False, "status": "pending", "tx_ref": tx_ref})
+                
+        except KoraPayError as e:
+            logger.error("KoraPay error confirming transfer %s: %s", tx_ref, e)
+            return jsonify({"success": False, "status": "pending", "tx_ref": tx_ref})
+
+# ── KoraPay Webhook ────────────────────────────────────────────────────────────
+
+@public_bp.route("/api/webhooks/korapay", methods=["POST"])
+def korapay_webhook():
+    """
+    Receive payment notifications from KoraPay.
+    
+    Security: HMAC-SHA256 signature verification on data object only.
+    Rate limited: 100 requests/min per IP.
+    Idempotent: Multiple deliveries of same webhook are safe.
+    
+    Requirements: 9.1-9.45
+    """
+    ip = client_ip()
+    
+    with get_db() as db:
+        # Rate limiting: 100 requests/min per IP
+        if not check_rate_limit(db, f"webhook:korapay:{ip}", limit=100, window_secs=60):
+            logger.warning("Webhook rate limit exceeded | ip=%s", ip)
+            return error("Rate limit exceeded", "RATE_LIMIT", 429)
+        
+        # Extract signature header
+        signature = request.headers.get("x-korapay-signature")
+        if not signature:
+            logger.warning("Webhook missing signature | ip=%s", ip)
+            log_event(db, "webhook.signature_missing", None, detail={"ip": ip})
+            return error("Missing signature", "UNAUTHORIZED", 401)
+        
+        # Get raw request body for signature verification
+        try:
+            raw_body = request.get_data(as_text=False)
+            payload = json.loads(raw_body)
+        except json.JSONDecodeError:
+            logger.warning("Webhook invalid JSON | ip=%s", ip)
+            return error("Invalid JSON", "BAD_REQUEST", 400)
+        
+        # Validate payload has data object
+        if "data" not in payload:
+            logger.warning("Webhook missing data object | ip=%s", ip)
+            return error("Missing data object", "BAD_REQUEST", 400)
+        
+        # Verify signature using webhook signature verification function
+        from services.korapay import verify_korapay_webhook_signature
+        if not verify_korapay_webhook_signature(payload, signature):
+            logger.warning("Webhook signature invalid | ip=%s ref=%s", 
+                         ip, payload.get("data", {}).get("reference", "unknown"))
+            log_event(db, "webhook.signature_failed", None, 
+                     {"ip": ip, "reference": payload.get("data", {}).get("reference")})
+            return error("Invalid signature", "UNAUTHORIZED", 401)
+        
+        # Extract webhook data
+        event = payload.get("event")
+        data = payload["data"]
+        reference = data.get("reference")
+        status = data.get("status")
+        amount = data.get("amount")
+        
+        # Query transaction by reference
+        t = db.query(Transaction).filter(Transaction.tx_ref == reference).first()
+        if not t:
+            logger.warning("Webhook transaction not found | ref=%s ip=%s", reference, ip)
+            return error("Transaction not found", "NOT_FOUND", 404)
+        
+        # Validate amount matches (KoraPay sends amount in Naira)
+        expected_amount = int(t.amount)  # Transaction amount is Decimal in Naira
+        if amount != expected_amount:
+            logger.warning("Webhook amount mismatch | ref=%s expected=%d got=%d", 
+                         reference, expected_amount, amount)
+            return error("Amount mismatch", "BAD_REQUEST", 400)
+        
+        # Check if already confirmed (idempotency)
+        if t.transfer_confirmed:
+            logger.info("Webhook for already confirmed transaction | ref=%s", reference)
+            return jsonify({"success": True, "tx_ref": reference}), 200
+        
+        # Process charge.success event
+        if event == "charge.success" and status == "success":
+            # Update transaction status
+            t.transfer_confirmed = True
+            t.status = TransactionStatus.VERIFIED
+            t.is_used = True
+            db.flush()
+            
+            # Deliver webhook if configured
+            if t.webhook_url:
+                from services.webhook import deliver_webhook
+                deliver_webhook(db, t)
+            
+            # Sync invoice status
+            from services.webhook import sync_invoice_on_transaction_update
+            sync_invoice_on_transaction_update(db, t)
+            
+            # Log audit event
+            log_event(db, "payment.confirmed_via_webhook", t.user_id, 
+                     {"tx_ref": reference, "amount": str(t.amount)})
+            
+            logger.info("Webhook processed successfully | ref=%s", reference)
+            return jsonify({"success": True, "tx_ref": reference}), 200
+        else:
+            # Other events or statuses - acknowledge but don't process
+            logger.info("Webhook received but not processed | event=%s status=%s ref=%s", 
+                       event, status, reference)
+            return jsonify({"success": True, "tx_ref": reference}), 200
 
 
 # ── Health check ───────────────────────────────────────────────────────────────
@@ -320,13 +446,28 @@ def health():
     except Exception:
         pass
 
-    mock_mode = not quickteller.is_configured()
+    # Check KoraPay configuration status
+    korapay_ok = korapay.is_configured()
+    korapay_transfer_ok = korapay.is_transfer_configured()
+    mock_mode = not korapay_ok  # Mock mode when not configured
+
+    # Get KoraPay health metrics
+    korapay_metrics = korapay.get_health_metrics()
+
+    # Get KoraPay base URL (without credentials)
+    from config import Config
+    korapay_base_url = Config.KORAPAY_BASE_URL
+    korapay_environment = "sandbox" if Config.KORAPAY_USE_SANDBOX else "production"
+
     return jsonify({
         "status":              "healthy" if db_ok else "degraded",
         "app":                 "OnePay",
         "timestamp":           datetime.now(timezone.utc).isoformat(),
         "database":            "ok" if db_ok else "error",
-        "quickteller":         quickteller.is_configured(),
-        "transfer_configured": quickteller.is_transfer_configured(),
+        "korapay":             "ok" if korapay_ok else "not_configured",
+        "korapay_configured":  korapay_transfer_ok,
         "mock_mode":           mock_mode,
+        "korapay_base_url":    korapay_base_url,
+        "korapay_environment":  korapay_environment,
+        "korapay_metrics":     korapay_metrics
     })

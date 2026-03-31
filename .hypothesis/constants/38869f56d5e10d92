@@ -1,0 +1,4 @@
+# file: C:\Users\David.Olamijulo\Documents\onepay\services\invoice.py
+# hypothesis_version: 6.151.9
+
+[100, 1024, '-', 'User-Agent', 'amount_asc', 'amount_desc', 'content-type', 'created_asc', 'created_desc', 'current_date', 'image/jpeg', 'image/jpg', 'image/png', 'image/svg+xml', 'invoice', 'invoice.html', 'invoice_number', 'logo_data_uri', 'payment_url', 'qr_code_data_uri', 'transaction', 'unique', 'utf-8']

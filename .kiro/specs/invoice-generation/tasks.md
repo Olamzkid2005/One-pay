@@ -4,6 +4,8 @@
 
 Implement a professional invoice generation system that automatically creates PDF invoices for OnePay payment links. The system includes database models for invoices and settings, a service layer for PDF generation and email delivery, REST API endpoints, HTML templates, and integration with existing transaction workflows.
 
+**Current Status:** ⚠️ PARTIAL - Core models, service, and some endpoints done. Tasks 1-7 partially complete, testing and remaining endpoints pending.
+
 ## Tasks
 
 - [ ] 1. Create database models and migration

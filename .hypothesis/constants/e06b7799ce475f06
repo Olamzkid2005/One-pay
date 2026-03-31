@@ -1,0 +1,4 @@
+# file: C:\Users\David.Olamijulo\Documents\onepay\models\transaction.py
+# hypothesis_version: 6.151.9
+
+[100, 255, 500, 'NGN', 'SET NULL', 'amount', 'created_at', 'currency', 'description', 'expired', 'expires_at', 'failed', 'is_expired', 'is_used', 'pending', 'qr_code_payment_url', 'status', 'transactions', 'transfer_confirmed', 'tx_ref', 'user_id', 'users.id', 'verified', 'verified_at', 'virtual_account_name', 'virtual_bank_name', 'webhook_delivered']

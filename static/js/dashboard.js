@@ -83,10 +83,150 @@ function fmtAmount(amount, currency = 'NGN') {
   }
 }
 
+function fmtNumber(value) {
+  // Remove existing commas and parse as number
+  const rawValue = value.replace(/,/g, '');
+  const num = parseFloat(rawValue);
+
+  // Return empty if not a valid number
+  if (isNaN(num) || rawValue === '' || rawValue === '-') {
+    return value; // Preserve as-is for partial input
+  }
+
+  // Format with commas, preserving decimal places
+  const parts = rawValue.split('.');
+  const integerPart = parts[0];
+  const decimalPart = parts[1];
+
+  // Format integer part with commas
+  const formatted = parseInt(integerPart, 10).toLocaleString('en-NG');
+
+  // Reattach decimal part if exists
+  if (decimalPart !== undefined) {
+    return formatted + '.' + decimalPart;
+  }
+  return formatted;
+}
+
+function formatAmountInput(input) {
+  // Get current cursor position
+  const cursorPos = input.selectionStart;
+  const beforeLength = input.value.length;
+
+  // Get raw value (without commas)
+  const rawValue = input.value.replace(/,/g, '');
+
+  // Only format if there's a numeric value
+  if (rawValue !== '' && rawValue !== '-') {
+    const num = parseFloat(rawValue);
+    if (!isNaN(num)) {
+      const formatted = fmtNumber(input.value);
+
+      // Only update if formatting changed
+      if (formatted !== input.value) {
+        input.value = formatted;
+
+        // Adjust cursor position for added/removed commas
+        const afterLength = formatted.length;
+        const diff = afterLength - beforeLength;
+
+        // Calculate new cursor position
+        let newCursorPos = cursorPos + diff;
+
+        // Handle cursor at end or beyond bounds
+        if (cursorPos >= beforeLength) {
+          newCursorPos = afterLength;
+        } else {
+          // Clamp to valid range
+          newCursorPos = Math.max(0, Math.min(newCursorPos, afterLength));
+        }
+
+        // Restore cursor position
+        input.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }
+  }
+}
+
 function fmtDate(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' });
 }
+
+function handleAmountInput(input) {
+  // Get raw value (strip commas for processing)
+  const rawValue = input.value.replace(/,/g, '');
+
+  // Store cursor position relative to raw value
+  const cursorPos = input.selectionStart;
+  const charsBeforeCursor = input.value.substring(0, cursorPos).replace(/,/g, '').length;
+
+  // Validate: only allow numbers, minus sign, and decimal point
+  if (rawValue !== '' && rawValue !== '-' && !/^-?[\d]*\.?[\d]*$/.test(rawValue)) {
+    // Invalid character - revert to last valid value
+    input.value = input.dataset.lastValid || '';
+    const lastValid = input.dataset.lastValid || '';
+    const newCursor = Math.min(cursorPos, lastValid.length);
+    input.setSelectionRange(newCursor, newCursor);
+    return;
+  }
+
+  // Parse and validate numeric value
+  const numValue = parseFloat(rawValue);
+
+  // Clear if empty or just minus sign
+  if (rawValue === '' || rawValue === '-') {
+    input.dataset.lastValid = rawValue;
+    updateAmountInWords('');
+    return;
+  }
+
+  // Apply min/max validation
+  let validValue = rawValue;
+  if (!isNaN(numValue)) {
+    if (numValue < 0) {
+      validValue = Math.abs(numValue).toString();
+      input.value = validValue; // Show positive value
+    }
+    if (numValue > 100000000) {
+      validValue = '100000000';
+      input.value = validValue;
+    }
+    updateAmountInWords(validValue);
+  }
+
+  // Format with commas if we have a valid number
+  if (!isNaN(numValue) && validValue !== '' && validValue !== '-') {
+    const parts = validValue.split('.');
+    const intPart = parseInt(parts[0], 10).toLocaleString('en-NG');
+    let formatted = parts[1] !== undefined ? intPart + '.' + parts[1] : intPart;
+
+    // Only update if formatted differs
+    if (formatted !== input.value) {
+      input.value = formatted;
+
+      // Recalculate cursor position
+      const newRawCursor = Math.min(charsBeforeCursor, validValue.length);
+      let newDisplayCursor = 0;
+      let rawCount = 0;
+
+      // Find display position that corresponds to raw cursor
+      for (let i = 0; i < formatted.length && rawCount < newRawCursor; i++) {
+        if (formatted[i] !== ',') {
+          rawCount++;
+        }
+        newDisplayCursor = i + 1;
+      }
+
+      input.setSelectionRange(newDisplayCursor, newDisplayCursor);
+    }
+  }
+
+  // Save last valid value
+  input.dataset.lastValid = input.value;
+}
+
+// ── Amount in words ─────────────────────────────────────────────────────────────
 
 function fmtDateShort(iso) {
   if (!iso) return '—';
@@ -174,6 +314,7 @@ function updateAmountInWords(value) {
 
 async function checkHealth() {
   const bar = document.getElementById('health-bar');
+  if (!bar) return;
   try {
     const res  = await fetch('/health');
     const data = await res.json();
@@ -780,6 +921,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  document.getElementById('create-form').addEventListener('submit', createLink);
-  document.getElementById('check-form').addEventListener('submit', checkStatus);
+  const createForm = document.getElementById('create-form');
+  if (createForm) createForm.addEventListener('submit', createLink);
+
+  const checkForm = document.getElementById('check-form');
+  if (checkForm) checkForm.addEventListener('submit', checkStatus);
 });

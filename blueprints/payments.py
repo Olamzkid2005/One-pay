@@ -21,10 +21,10 @@ from services.security import (
     generate_tx_reference, generate_hash_token,
     generate_expiration_time, validate_return_url, validate_webhook_url,
 )
-from services.quickteller import quickteller, QuicktellerError
 from services.qr_code import qr_service
 from services.invoice import invoice_service
 from services.email import send_invoice_email
+from services.korapay import korapay, KoraPayError
 from models.invoice import InvoiceSettings
 from core.auth import (
     get_csrf_token, is_valid_csrf_token,
@@ -459,21 +459,23 @@ def create_payment_link():
             expires_at      = expires_at,
         )
 
-        if quickteller.is_transfer_configured():
+        # Create virtual account with KoraPay
+        if korapay.is_transfer_configured():
             amount_kobo = int(round(amount * 100))
             try:
-                va = quickteller.create_virtual_account(
-                    transaction_reference = tx_ref,
-                    amount_kobo           = amount_kobo,
-                    account_name          = transaction.description or "OnePay Payment",
+                va = korapay.create_virtual_account(
+                    transaction_reference=tx_ref,
+                    amount_kobo=amount_kobo,
+                    account_name=f"{current_username()} - OnePay Payment"
                 )
+                # Store virtual account details
                 transaction.virtual_account_number = va.get("accountNumber")
-                transaction.virtual_bank_name      = va.get("bankName")
-                transaction.virtual_account_name   = va.get("accountName")
-            except QuicktellerError as e:
-                logger.warning("Virtual account creation failed: %s", e)
-        else:
-            logger.debug("Transfer not configured — skipping virtual account creation (mock mode)")
+                transaction.virtual_bank_name = va.get("bankName")
+                transaction.virtual_account_name = va.get("accountName")
+                logger.info("Virtual account created | ref=%s acct=%s", tx_ref, va.get("accountNumber"))
+            except KoraPayError as e:
+                logger.error("Virtual account creation failed: %s", e)
+                return error("Payment provider unavailable", "PROVIDER_ERROR", 500)
 
         db.add(transaction)
         db.flush()
@@ -743,22 +745,23 @@ def reissue_payment_link(tx_ref):
             expires_at=new_expires_at,
         )
         
-        # Try to create virtual account if configured
-        if quickteller.is_transfer_configured():
+        # Create virtual account with KoraPay
+        if korapay.is_transfer_configured():
             amount_kobo = int(round(original.amount * 100))
             try:
-                va = quickteller.create_virtual_account(
+                va = korapay.create_virtual_account(
                     transaction_reference=new_tx_ref,
                     amount_kobo=amount_kobo,
-                    account_name=original.description or "OnePay Payment",
+                    account_name=f"{current_username()} - OnePay Payment"
                 )
+                # Store virtual account details
                 new_transaction.virtual_account_number = va.get("accountNumber")
                 new_transaction.virtual_bank_name = va.get("bankName")
                 new_transaction.virtual_account_name = va.get("accountName")
-            except QuicktellerError as e:
-                logger.warning("Virtual account creation failed on reissue: %s", e)
-        else:
-            logger.debug("Transfer not configured — skipping virtual account creation (mock mode)")
+                logger.info("Virtual account created for reissue | ref=%s acct=%s", new_tx_ref, va.get("accountNumber"))
+            except KoraPayError as e:
+                logger.error("Virtual account creation failed for reissue: %s", e)
+                return error("Payment provider unavailable", "PROVIDER_ERROR", 500)
         
         db.add(new_transaction)
         db.flush()
@@ -924,3 +927,145 @@ def preview_receipt_html(tx_ref):
             logger.error("Receipt HTML preview failed | user=%s tx_ref=%s error=%s",
                         current_username(), tx_ref, e)
             return error("Failed to generate preview", "PREVIEW_ERROR", 500)
+
+
+
+@payments_bp.route("/api/payments/refund/<tx_ref>", methods=["POST"])
+def initiate_refund(tx_ref):
+    """
+    Initiate a refund for a verified transaction.
+    
+    Request body:
+        {
+            "amount": 1000,  # Optional, full refund if omitted
+            "reason": "Customer request"  # Optional
+        }
+    
+    Returns:
+        {
+            "success": true,
+            "refund_reference": "REFUND-...",
+            "status": "processing"
+        }
+    """
+    # Authentication required
+    if not current_user_id():
+        return error("Authentication required", "UNAUTHENTICATED", 401)
+    
+    # Validate transaction reference format
+    if not valid_tx_ref(tx_ref):
+        return error("Invalid transaction reference format", "INVALID_REF", 400)
+    
+    # Parse request body
+    data = request.get_json() or {}
+    refund_amount = data.get("amount")
+    refund_reason = data.get("reason")
+    
+    with get_db() as db:
+        # Find transaction
+        transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
+        
+        if not transaction:
+            return error("Transaction not found", "NOT_FOUND", 404)
+        
+        # Verify ownership
+        if transaction.user_id != current_user_id():
+            return error("Transaction not found", "NOT_FOUND", 404)
+        
+        # Validate transaction is VERIFIED
+        if transaction.status != TransactionStatus.VERIFIED:
+            return error(
+                "Cannot refund transaction that is not verified",
+                "INVALID_STATUS",
+                400
+            )
+        
+        # Check if already refunded
+        from models.refund import Refund
+        existing_refund = db.query(Refund).filter(
+            Refund.transaction_id == transaction.id
+        ).first()
+        
+        if existing_refund:
+            return error(
+                "Transaction has already been refunded",
+                "ALREADY_REFUNDED",
+                400
+            )
+        
+        try:
+            # Call KoraPay to initiate refund
+            refund_data = korapay.initiate_refund(
+                payment_reference=tx_ref,
+                refund_reference=None,  # Auto-generate
+                amount=refund_amount,
+                reason=refund_reason
+            )
+            
+            # Create refund record in database
+            refund = Refund(
+                transaction_id=transaction.id,
+                refund_reference=refund_data["reference"],
+                amount=Decimal(str(refund_data["amount"])),
+                currency=refund_data["currency"],
+                status=refund_data["status"],
+                reason=refund_reason
+            )
+            db.add(refund)
+            
+            log_event(
+                db,
+                "payment.refund_initiated",
+                user_id=current_user_id(),
+                ip_address=client_ip(),
+                detail={
+                    "tx_ref": tx_ref,
+                    "refund_reference": refund_data["reference"],
+                    "amount": refund_data["amount"],
+                    "reason": refund_reason
+                }
+            )
+            
+            db.commit()
+            
+            logger.info(
+                "Refund initiated | user=%s tx_ref=%s refund_ref=%s amount=%s",
+                current_username(),
+                tx_ref,
+                refund_data["reference"],
+                refund_data["amount"]
+            )
+            
+            return jsonify({
+                "success": True,
+                "refund_reference": refund_data["reference"],
+                "status": refund_data["status"],
+                "amount": refund_data["amount"],
+                "currency": refund_data["currency"]
+            }), 200
+            
+        except KoraPayError as e:
+            logger.error(
+                "Refund initiation failed | user=%s tx_ref=%s error=%s",
+                current_username(),
+                tx_ref,
+                str(e)
+            )
+            return error(
+                "Failed to initiate refund",
+                "REFUND_FAILED",
+                500
+            )
+        except Exception as e:
+            logger.error(
+                "Unexpected error during refund | user=%s tx_ref=%s error=%s",
+                current_username(),
+                tx_ref,
+                str(e)
+            )
+            db.rollback()
+            return error(
+                "An unexpected error occurred",
+                "INTERNAL_ERROR",
+                500
+            )

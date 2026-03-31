@@ -1,0 +1,105 @@
+groups:
+  - name: korapay_alerts
+    rules:
+      - alert: KoraPayAPIErrorRateHigh
+        expr: rate(korapay_errors_total[5m]) / rate(korapay_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "KoraPay API error rate is above 5%"
+          description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+
+      - alert: KoraPayAPILatencyHigh
+        expr: histogram_quantile(0.95, rate(korapay_request_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "KoraPay API p95 latency is above 5 seconds"
+          description: "p95 latency is {{ $value | humanizeDuration }}"
+
+      - alert: KoraPayWebhookFailureRateHigh
+        expr: rate(webhook_deliveries_total{status="failed"}[5m]) / rate(webhook_deliveries_total[5m]) > 0.10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Webhook failure rate is above 10%"
+          description: "Webhook failure rate is {{ $value | humanizePercentage }}"
+
+      - alert: CircuitBreakerOpen
+        expr: circuit_breaker_state == 2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker is OPEN"
+          description: "Circuit breaker for KoraPay API is in OPEN state"
+
+      - alert: DatabaseConnectionPoolHigh
+        expr: db_connections_used / db_connections_max > 0.90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connection pool usage is above 90%"
+          description: "Connection pool usage is {{ $value | humanizePercentage }}"
+
+      - alert: NoSuccessfulPayments
+        expr: |
+          sum(rate(korapay_requests_total{endpoint="/charges/bank-transfer", status="success"}[30m])) == 0
+          and
+          hour() >= 8 and hour() <= 22
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No successful payments in the last 30 minutes during business hours"
+          description: "No payment confirmations received in the last 30 minutes"
+
+      - alert: SLViolationVirtualAccountCreation
+        expr: histogram_quantile(0.95, rate(korapay_request_duration_seconds_bucket{endpoint="/charges/bank-transfer"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SLA violation: Virtual account creation p95 > 2s"
+          description: "p95 latency is {{ $value | humanizeDuration }}, SLA target is 2s"
+
+      - alert: SLViolationTransferStatusQuery
+        expr: histogram_quantile(0.95, rate(korapay_request_duration_seconds_bucket{endpoint="/charges/{reference}"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SLA violation: Transfer status query p95 > 1s"
+          description: "p95 latency is {{ $value | humanizeDuration }}, SLA target is 1s"
+
+      - alert: SLViolationSuccessRate
+        expr: |
+          (1 - rate(korapay_errors_total[5m]) / rate(korapay_requests_total[5m])) < 0.995
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SLA violation: Success rate < 99.5%"
+          description: "Success rate is {{ $value | humanizePercentage }}, SLA target is 99.5%"
+
+      - alert: HighConcurrentConfirmations
+        expr: pending_confirmations > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of pending confirmations"
+          description: "{{ $value }} transactions are pending confirmation"
+
+      - alert: WebhookQueueBacklog
+        expr: webhook_queue_size > 1000
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Webhook delivery queue is backed up"
+          description: "{{ $value }} webhooks are queued for delivery"

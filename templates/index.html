@@ -64,15 +64,14 @@
                                 <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                     <span class="text-primary font-label text-lg">₦</span>
                                 </div>
-                                <input 
+                                <input
                                     id="amount"
-                                    type="number"
-                                    min="1"
-                                    max="100000000"
-                                    step="0.01"
-                                    class="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl py-3 pl-10 pr-4 text-lg font-label focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-on-surface placeholder:text-outline/30" 
+                                    type="text"
+                                    inputmode="decimal"
+                                    class="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl py-3 pl-10 pr-4 text-lg font-label focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-on-surface placeholder:text-outline/30"
                                     placeholder="0.00"
-                                    oninput="if(parseFloat(this.value)<0){this.value=Math.abs(this.value)}; if(parseFloat(this.value)>100000000){this.value=100000000}; updateAmountInWords(this.value)"
+                                    oninput="handleAmountInput(this)"
+                                    autocomplete="off"
                                     required
                                 />
                             </div>

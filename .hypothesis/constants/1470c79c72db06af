@@ -1,0 +1,4 @@
+# file: C:\Users\David.Olamijulo\Documents\onepay\services\qr_code.py
+# hypothesis_version: 6.151.9
+
+[5.0, 'PNG', 'black', 'provider:OnePay', 'rounded', 'standard', 'white', '|']

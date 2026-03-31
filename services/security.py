@@ -165,6 +165,9 @@ def validate_webhook_url(value: str) -> str | None:
     Same rules as validate_return_url but no relative paths allowed.
     
     VULN-008 FIX: Check length BEFORE parsing, reject if exceeds 500 chars.
+    
+    Raises:
+        ValueError: If URL is invalid, uses private IP, or points to internal resources
     """
     if not value:
         return None
@@ -172,24 +175,44 @@ def validate_webhook_url(value: str) -> str | None:
     
     # VULN-008 FIX: Reject if exceeds max length (don't truncate)
     if len(url) > 500:
-        return None
+        raise ValueError("Webhook URL exceeds maximum length of 500 characters")
     
     parsed = urlparse(url)
     if parsed.scheme != "https":
-        return None
+        raise ValueError("Webhook URL must use HTTPS protocol")
     if not parsed.hostname:
-        return None
+        raise ValueError("Webhook URL must have a valid hostname")
     if parsed.username or parsed.password:
-        return None
+        raise ValueError("Webhook URL cannot contain credentials")
+    
     hostname = parsed.hostname.lower()
+    
+    # Check for localhost
     if hostname in ("localhost", "127.0.0.1", "::1"):
-        return None
+        raise ValueError("Webhook URL cannot point to localhost")
+    
+    # Check for private/internal IP addresses
     try:
         ip = ipaddress.ip_address(hostname)
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
-            return None
-    except ValueError:
+        if ip.is_private:
+            raise ValueError(f"Webhook URL cannot use private IP address: {hostname}")
+        if ip.is_loopback:
+            raise ValueError(f"Webhook URL cannot use loopback address: {hostname}")
+        if ip.is_link_local:
+            raise ValueError(f"Webhook URL cannot use link-local address: {hostname}")
+        if ip.is_multicast:
+            raise ValueError(f"Webhook URL cannot use multicast address: {hostname}")
+        
+        # Check for AWS metadata endpoint
+        if str(ip) == "169.254.169.254":
+            raise ValueError("Webhook URL cannot point to AWS metadata endpoint")
+    except ValueError as e:
+        # If it's already a ValueError we raised, re-raise it
+        if "Webhook URL" in str(e):
+            raise
+        # Otherwise it's not an IP address (it's a hostname), which is fine
         pass
+    
     return url
 
 

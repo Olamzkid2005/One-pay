@@ -69,11 +69,24 @@ class Transaction(Base):
     webhook_attempts       = Column(Integer, default=0)
     webhook_last_error     = Column(Text, nullable=True)
 
+    # KoraPay-specific fields (all nullable for backward compatibility)
+    payment_provider_reference = Column(String(100), nullable=True)
+    provider_fee              = Column(Numeric(12, 2), nullable=True)
+    provider_vat              = Column(Numeric(12, 2), nullable=True)
+    provider_transaction_date = Column(DateTime(timezone=True), nullable=True)
+    payer_bank_details        = Column(Text, nullable=True)
+    failure_reason            = Column(Text, nullable=True)
+    provider_status           = Column(String(50), nullable=True)
+    bank_code                 = Column(String(10), nullable=True)
+    virtual_account_expiry    = Column(DateTime(timezone=True), nullable=True)
+
     # Performance indexes for common queries
     __table_args__ = (
         Index("ix_transactions_user_created", "user_id", "created_at"),
         Index("ix_transactions_user_status", "user_id", "status"),
         Index("ix_transactions_expires_status", "expires_at", "status"),
+        Index("idx_payment_provider_reference", "payment_provider_reference"),
+        Index("idx_provider_transaction_date", "provider_transaction_date"),
     )
 
     # ── Timezone helpers ───────────────────────────────────────────────────────

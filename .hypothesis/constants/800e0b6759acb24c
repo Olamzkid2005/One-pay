@@ -1,0 +1,4 @@
+# file: C:\Users\David.Olamijulo\Documents\onepay\core\logging_filters.py
+# hypothesis_version: 6.151.9
+
+['API-Key: [REDACTED]', 'Bearer [REDACTED]', '[CARD]', '[EMAIL]', 'msg', 'password=[REDACTED]', 'secret=[REDACTED]', 'token=[REDACTED]']

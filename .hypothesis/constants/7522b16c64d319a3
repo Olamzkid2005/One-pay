@@ -1,0 +1,4 @@
+# file: C:\Users\David.Olamijulo\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\google\auth\jwt.py
+# hypothesis_version: 6.151.9
+
+[b'.', 3600, 'ES256', 'ES384', 'JWT', 'RS256', 'alg', 'aud', 'client_email', 'exp', 'iat', 'iss', 'issuer', 'kid', 'sub', 'subject', 'typ', 'utf-8']

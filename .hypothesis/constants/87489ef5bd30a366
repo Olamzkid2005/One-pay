@@ -1,0 +1,4 @@
+# file: C:\Users\David.Olamijulo\Documents\onepay\config.py
+# hypothesis_version: 6.151.9
+
+[9999, '\n  - ', '10', '20', '24', '3', '30', '300', '5', '587', '60', '900', 'APP_ENV', 'DATABASE_URL', 'ENFORCE_HTTPS', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI', 'HMAC_SECRET', 'HMAC_SECRET_OLD', 'KORAPAY_BASE_URL', 'KORAPAY_MAX_RETRIES', 'KORAPAY_SECRET_KEY', 'KORAPAY_USE_SANDBOX', 'LOGIN_MAX_ATTEMPTS', 'MAIL_FROM', 'MAIL_PASSWORD', 'MAIL_PORT', 'MAIL_SERVER', 'MAIL_USERNAME', 'MAIL_USE_TLS', 'RATE_LIMIT_VERIFY', 'SECRET_KEY', 'SECURITY WARNING: %s', 'WEBHOOK_MAX_RETRIES', 'WEBHOOK_SECRET', 'WEBHOOK_TIMEOUT_SECS', 'change-this', 'development', 'false', 'https://', 'noreply@onepay.com', 'production', 'sk_live_', 'sk_test_', 'smtp.gmail.com', 'sqlite', 'sqlite:///:memory:', 'sqlite:///onepay.db', 'test-hmac-secret', 'test-secret-key', 'testing', 'true']

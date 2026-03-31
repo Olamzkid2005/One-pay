@@ -15,7 +15,20 @@ qrcode[pil]==7.4.2
 xhtml2pdf==0.2.17
 google-auth>=2.0.0
 
+# Monitoring and metrics
+prometheus_client>=0.19.0
+
+# Load testing
+locust>=2.20.0
+
+# Distributed tracing
+opentelemetry-api>=1.22.0
+opentelemetry-sdk>=1.22.0
+opentelemetry-instrumentation-flask>=0.43b0
+opentelemetry-instrumentation-requests>=0.43b0
+
 # Testing dependencies
 pytest>=7.0.0
 pytest-mock>=3.10.0
 pytest-cov>=4.0.0
+hypothesis>=6.0.0
