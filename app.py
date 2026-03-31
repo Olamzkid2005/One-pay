@@ -18,6 +18,7 @@ from blueprints.payments import payments_bp
 from blueprints.public import public_bp
 from blueprints.invoices import invoices_bp
 from blueprints.api_keys import api_keys_bp
+from blueprints.webhooks import webhooks_bp
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 
@@ -315,6 +316,7 @@ def create_app() -> Flask:
     app.register_blueprint(public_bp)
     app.register_blueprint(invoices_bp)
     app.register_blueprint(api_keys_bp)
+    app.register_blueprint(webhooks_bp)
 
     # ── Error handlers ─────────────────────────────────────────────────────────
     @app.errorhandler(404)
