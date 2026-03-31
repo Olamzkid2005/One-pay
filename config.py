@@ -197,7 +197,21 @@ class TestingConfig(BaseConfig):
 
 
 class ProductionConfig(BaseConfig):
-    ENFORCE_HTTPS = os.getenv("ENFORCE_HTTPS", "true").lower() == "true"
+    # SECURITY FIX: Always enforce HTTPS in production, no override allowed
+    ENFORCE_HTTPS = True  # Hardcoded to True, cannot be overridden
+    
+    @classmethod
+    def validate(cls):
+        """Enforce strong secrets and HTTPS in production."""
+        super().validate()  # Call parent validation first
+        
+        # SECURITY FIX: Ensure HTTPS is enforced (redundant check for safety)
+        if not cls.ENFORCE_HTTPS:
+            import logging as _logging
+            import sys as _sys
+            _logger = _logging.getLogger(__name__)
+            _logger.critical("STARTUP ABORTED: HTTPS enforcement cannot be disabled in production")
+            _sys.exit(1)
 
 
 # ── Config selector ────────────────────────────────────────────────────────────

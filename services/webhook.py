@@ -80,10 +80,11 @@ def _send_with_retries(url: str, payload_bytes: bytes, headers: dict, tx_ref: st
     Returns True on success (HTTP < 300), False after all attempts fail.
     
     Security: Validates URL and DNS on EVERY attempt to prevent DNS rebinding attacks.
+    VULN-002 FIX: Forces request to use validated IP address to prevent TOCTOU race.
     Maintains permanent blacklist of malicious URLs.
     """
     from services.security import validate_webhook_url
-    from urllib.parse import urlparse
+    from urllib.parse import urlparse, urlunparse
     from models.webhook_blacklist import WebhookBlacklist
     from database import get_db
     import socket
@@ -109,7 +110,8 @@ def _send_with_retries(url: str, payload_bytes: bytes, headers: dict, tx_ref: st
         logger.error("Webhook URL failed security validation | tx_ref=%s url=%s", tx_ref, url)
         return False
     
-    hostname = urlparse(url).hostname
+    parsed = urlparse(url)
+    hostname = parsed.hostname
     if not hostname:
         _blacklist_webhook(url, "No hostname")
         logger.error("Webhook URL has no hostname | tx_ref=%s url=%s", tx_ref, url)
@@ -140,11 +142,27 @@ def _send_with_retries(url: str, payload_bytes: bytes, headers: dict, tx_ref: st
             logger.debug("Webhook DNS validated | tx_ref=%s hostname=%s ip=%s attempt=%d", 
                         tx_ref, hostname, ip, attempt)
             
-            # Proceed with request
+            # CRITICAL FIX (VULN-002): Force request to use validated IP address
+            # This prevents DNS rebinding TOCTOU attacks where DNS changes between
+            # validation and request
+            ip_url = urlunparse((
+                parsed.scheme,
+                ip if not parsed.port else f"{ip}:{parsed.port}",
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment
+            ))
+            
+            # Add Host header to preserve virtual hosting
+            request_headers = headers.copy()
+            request_headers['Host'] = hostname
+            
+            # Proceed with request to IP address (not hostname)
             resp = requests.post(
-                url, 
+                ip_url,  # Use IP URL instead of hostname URL - prevents DNS rebinding
                 data=payload_bytes, 
-                headers=headers,
+                headers=request_headers,
                 timeout=Config.WEBHOOK_TIMEOUT_SECS,
                 allow_redirects=False,  # Prevent redirect-based SSRF
                 stream=True  # Stream response to check size

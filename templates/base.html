@@ -110,6 +110,10 @@
         .gradient-cta {
             background: linear-gradient(135deg, #aac7ff 0%, #418fff 100%);
         }
+        /* Light mode deeper red for error text */
+        :root:not(.dark) .text-error {
+            color: #b91c1c;
+        }
     </style>
     {% block extra_styles %}{% endblock %}
     

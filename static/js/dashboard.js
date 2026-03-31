@@ -350,16 +350,17 @@ async function createLink(event) {
 
   const btn    = document.getElementById('create-btn');
   const amount = document.getElementById('amount').value;
+  const normalizedAmount = parseFloat(amount.replace(/,/g, ''));
 
   if (!CSRF_TOKEN) {
     showToast('Security token missing — please refresh the page.', 'error');
     return;
   }
-  if (!amount || parseFloat(amount) <= 0) {
+  if (!normalizedAmount || normalizedAmount <= 0) {
     showToast('Please enter a valid amount', 'error');
     return;
   }
-  if (parseFloat(amount) > 100000000) {
+  if (normalizedAmount > 100000000) {
     showToast('Amount cannot exceed ₦100,000,000', 'error');
     return;
   }
@@ -368,7 +369,7 @@ async function createLink(event) {
   btn.innerHTML = `<span class="spinner-sm"></span> Generating…`;
 
   const body = {
-    amount:         parseFloat(amount),
+    amount:         normalizedAmount,
     description:    document.getElementById('description').value || null,
     customer_email: document.getElementById('email').value       || null,
     customer_phone: document.getElementById('phone').value       || null,
