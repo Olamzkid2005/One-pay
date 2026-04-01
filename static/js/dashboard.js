@@ -312,32 +312,91 @@ function updateAmountInWords(value) {
 
 // ── Health bar ─────────────────────────────────────────────────────────────────
 
+const HealthState = {
+  CONNECTING: 'connecting',   // Blue (#0066CC) - pulsing - establishing connection
+  MOCK: 'mock',              // Yellow (#FFC107) - static - mock/simulation mode
+  OK: 'ok',                  // Green (#28A745) - steady glow - fully operational
+  ERROR: 'error'             // Red (#DC3545) - static - connection failed
+};
+
+const healthMessages = {
+  [HealthState.CONNECTING]: 'Connecting...',
+  [HealthState.MOCK]: 'Demo Mode — Mock Active',
+  [HealthState.OK]: 'Connected',
+  [HealthState.ERROR]: 'Connection Failed'
+};
+
 async function checkHealth() {
   const bar = document.getElementById('health-bar');
   if (!bar) return;
+
   try {
-    const res  = await fetch('/health');
+    const res = await fetch('/health');
     const data = await res.json();
 
+    // Determine state based on mock_mode
     if (data.mock_mode) {
-      bar.className = 'health-bar mock';
-      bar.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             style="width:13px;height:13px;flex-shrink:0">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8" x2="12" y2="12"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        <strong>Demo mode</strong> — no Quickteller credentials set. Payment will auto-confirm after ~15 seconds.
-      `;
+      setHealthState(bar, HealthState.MOCK);
     } else {
-      bar.className = 'health-bar ok';
-      const dot = ok => `<span style="width:7px;height:7px;border-radius:50%;background:${ok ? '#3fb950' : '#e3b341'};display:inline-block;"></span>`;
-      bar.innerHTML = `${dot(true)} OnePay v1.0 &nbsp;·&nbsp; ${dot(data.transfer_configured)} ${data.transfer_configured ? 'Transfer ready' : 'Transfer not configured'} &nbsp;·&nbsp; ${dot(data.database === 'ok')} DB`;
+      // Check if all dependencies are operational
+      const dbOk = data.database === 'ok';
+      const transferOk = data.transfer_configured !== false;
+      const korapayOk = data.korapay !== false;
+
+      if (dbOk && transferOk && korapayOk) {
+        setHealthState(bar, HealthState.OK);
+      } else {
+        setHealthState(bar, HealthState.MOCK);
+      }
     }
   } catch {
-    bar.className = 'health-bar error';
-    bar.textContent = 'Backend offline';
+    setHealthState(bar, HealthState.ERROR);
+  }
+}
+
+function setHealthState(bar, state) {
+  // Remove all state classes
+  bar.classList.remove('connecting', 'mock', 'ok', 'error');
+
+  // Add new state class
+  bar.classList.add(state);
+
+  // Update ARIA label
+  bar.setAttribute('aria-label', `System status: ${healthMessages[state]}`);
+
+  // Update content
+  const dot = bar.querySelector('.health-dot');
+  const text = bar.querySelector('#health-text') || bar;
+
+  if (dot) {
+    // Update dot color based on state
+    const colors = {
+      [HealthState.CONNECTING]: '#0066CC', // Blue
+      [HealthState.MOCK]: '#FFC107',        // Yellow
+      [HealthState.OK]: '#28A745',         // Green
+      [HealthState.ERROR]: '#DC3545'        // Red
+    };
+
+    dot.style.backgroundColor = colors[state];
+
+    // Handle animation - connecting pulses, others are static
+    if (state === HealthState.CONNECTING) {
+      dot.classList.add('animate-pulse');
+    } else {
+      dot.classList.remove('animate-pulse');
+      // Add subtle glow for ok state
+      if (state === HealthState.OK) {
+        dot.style.boxShadow = '0 0 6px #28A745';
+      } else {
+        dot.style.boxShadow = 'none';
+      }
+    }
+  }
+
+  // Update text if there's a dedicated text element
+  const textEl = document.getElementById('health-text');
+  if (textEl) {
+    textEl.textContent = healthMessages[state];
   }
 }
 

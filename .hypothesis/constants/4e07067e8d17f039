@@ -1,4 +1,0 @@
-# file: C:\Users\David.Olamijulo\Documents\onepay\services\security_monitor.py
-# hypothesis_version: 6.151.9
-
-[100, 500, 1000, 'high', 'link.created', 'medium', 'message', 'rate_limit.exceeded', 'severity', 'timestamp', 'title', 'webhook.failed']

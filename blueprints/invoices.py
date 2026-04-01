@@ -4,12 +4,15 @@ Handles: invoice creation, retrieval, download, email, and settings
 """
 import logging
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, render_template
 
 from database import get_db
+from models.user import User
 from services.rate_limiter import check_rate_limit
 from core.auth import (
     current_user_id,
+    current_username,
+    get_csrf_token,
     login_required_redirect,
 )
 from core.responses import error, rate_limited, unauthenticated
@@ -188,19 +191,46 @@ def create_invoice():
             return error("Failed to create invoice", "INTERNAL_ERROR", 500)
 
 
-# ── List invoices ──────────────────────────────────────────────────────────────
+# ── Invoice page (HTML) and API list ─────────────────────────────────────────
 
 @invoices_bp.route("/invoices", methods=["GET"])
+def invoices_page():
+    """Render the invoices HTML page or return JSON API response"""
+    if not current_user_id():
+        return login_required_redirect()
+
+    # Return JSON only for direct /api/ path (not /api/v1/)
+    # This allows /api/v1/invoices to render HTML while /api/invoices returns JSON
+    # Use request.path which is just the path without query string
+    if request.path == '/api/invoices':
+        return list_invoices()
+
+    # Otherwise render HTML page
+    with get_db() as db:
+        user = db.query(User).filter(User.id == current_user_id()).first()
+        profile_picture = user.profile_picture_url if user else None
+    return render_template(
+        "invoices.html",
+        username=current_username(),
+        profile_picture=profile_picture,
+        csrf_token=get_csrf_token(),
+        active_page="invoices",
+    )
+
+
+# ── List invoices (API) ────────────────────────────────────────────────────────
+
+@invoices_bp.route("/invoices/list", methods=["GET"])
 def list_invoices():
     """List invoices with pagination and filtering"""
     if not current_user_id():
         return unauthenticated()
-    
+
     with get_db() as db:
         # Rate limit: 50 requests per minute
         if not check_rate_limit(db, f"invoice_list:{current_user_id()}", limit=50, window_secs=60):
             return rate_limited()
-        
+
         # Parse pagination parameters
         try:
             page = int(request.args.get('page', 1))

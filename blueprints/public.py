@@ -7,7 +7,7 @@ import logging
 import json
 from datetime import datetime, timezone
 
-from flask import Blueprint, request, jsonify, render_template, session, make_response
+from flask import Blueprint, request, jsonify, render_template, session, make_response, redirect
 
 from config import Config
 from database import engine, get_db
@@ -24,6 +24,144 @@ import sqlalchemy
 
 logger = logging.getLogger(__name__)
 public_bp = Blueprint("public", __name__)
+
+
+# ── Root route ────────────────────────────────────────────────────────────────
+
+@public_bp.route("/")
+def index():
+    """Root route - redirect to dashboard if authenticated, otherwise to login."""
+    from flask import session, redirect
+    
+    if session.get("user_id"):
+        return redirect("/api/v1/", code=302)
+    return redirect("/api/v1/login", code=302)
+
+
+# ── Login route alias ─────────────────────────────────────────────────────────
+
+@public_bp.route("/login")
+def login():
+    """Redirect /login to the actual login endpoint."""
+    return redirect("/api/v1/login", code=301)
+
+
+# ── Register route alias ──────────────────────────────────────────────────────
+
+@public_bp.route("/register")
+def register():
+    """Redirect /register to the actual register endpoint."""
+    return redirect("/api/v1/register", code=301)
+
+
+# ── Google OAuth route aliases ─────────────────────────────────────────────────
+
+@public_bp.route("/auth/google/config", methods=["GET"])
+def google_config():
+    """Redirect /auth/google/config to the actual OAuth config endpoint."""
+    from flask import redirect
+    return redirect("/api/v1/auth/google/config", code=301)
+
+
+@public_bp.route("/auth/google/callback", methods=["POST"])
+def google_callback():
+    """Redirect /auth/google/callback to the actual OAuth callback endpoint."""
+    from flask import redirect
+    return redirect("/api/v1/auth/google/callback", code=307)
+
+
+# ── API route aliases (frontend uses /api/ prefix but routes are at /api/v1/) ──
+
+@public_bp.route("/api/payments/link", methods=["POST"])
+def api_create_payment_link():
+    """Redirect /api/payments/link to the actual endpoint."""
+    from flask import redirect
+    return redirect("/api/v1/payments/link", code=307)
+
+
+@public_bp.route("/api/payments/status/<tx_ref>", methods=["GET"])
+def api_payment_status(tx_ref):
+    """Redirect /api/payments/status/<tx_ref> to the actual endpoint."""
+    from flask import redirect
+    return redirect(f"/api/v1/payments/status/{tx_ref}", code=307)
+
+
+@public_bp.route("/api/payments/history", methods=["GET"])
+def api_payment_history():
+    """Redirect /api/payments/history to the actual endpoint."""
+    from flask import redirect
+    return redirect("/api/v1/payments/history", code=307)
+
+
+@public_bp.route("/api/account/settings", methods=["GET", "POST"])
+def api_account_settings():
+    """Redirect /api/account/settings to the actual endpoint."""
+    return redirect("/api/v1/account/settings", code=307)
+
+
+@public_bp.route("/api/payments/reissue/<tx_ref>", methods=["POST"])
+def api_payment_reissue(tx_ref):
+    """Redirect /api/payments/reissue/<tx_ref> to the actual endpoint."""
+    return redirect(f"/api/v1/payments/reissue/{tx_ref}", code=307)
+
+
+@public_bp.route("/api/payments/receipt/<tx_ref>", methods=["GET"])
+def api_payment_receipt(tx_ref):
+    """Redirect /api/payments/receipt/<tx_ref> to the actual endpoint."""
+    return redirect(f"/api/v1/payments/receipt/{tx_ref}", code=307)
+
+
+@public_bp.route("/api/payments/receipt/<tx_ref>/preview", methods=["GET"])
+def api_payment_receipt_preview(tx_ref):
+    """Redirect /api/payments/receipt/<tx_ref>/preview to the actual endpoint."""
+    return redirect(f"/api/v1/payments/receipt/{tx_ref}/preview", code=307)
+
+
+@public_bp.route("/api/settings/webhook", methods=["POST"])
+def api_settings_webhook():
+    """Redirect /api/settings/webhook to the actual endpoint."""
+    return redirect("/api/v1/settings/webhook", code=307)
+
+
+@public_bp.route("/api/payments/summary", methods=["GET"])
+def api_payment_summary():
+    """Redirect /api/payments/summary to the actual endpoint."""
+    return redirect("/api/v1/payments/summary", code=307)
+
+
+@public_bp.route("/api/invoices", methods=["GET"])
+def api_invoices_list():
+    """Handle /api/invoices API call - redirect to the JSON API endpoint"""
+    from flask import request, redirect
+    return redirect(f"/api/v1/invoices/list{('?' + request.query_string.decode()) if request.query_string else ''}", code=307)
+
+
+@public_bp.route("/api/invoices/<invoice_number>/download", methods=["GET"])
+def api_invoice_download(invoice_number):
+    """Redirect /api/invoices/<invoice_number>/download to the actual endpoint."""
+    from flask import redirect
+    return redirect(f"/api/v1/invoices/{invoice_number}/download", code=307)
+
+
+@public_bp.route("/api/invoices/<invoice_number>/send", methods=["POST"])
+def api_invoice_send(invoice_number):
+    """Redirect /api/invoices/<invoice_number>/send to the actual endpoint."""
+    from flask import redirect
+    return redirect(f"/api/v1/invoices/{invoice_number}/send", code=307)
+
+
+@public_bp.route("/api/invoices/export", methods=["GET"])
+def api_invoices_export():
+    """Redirect /api/invoices/export to the actual endpoint."""
+    from flask import redirect
+    return redirect("/api/v1/invoices/export", code=307)
+
+
+@public_bp.route("/api/invoices/settings", methods=["GET", "POST"])
+def api_invoices_settings():
+    """Redirect /api/invoices/settings to the actual endpoint."""
+    from flask import redirect
+    return redirect("/api/v1/invoices/settings", code=307)
 
 
 # ── Pay page (clean URL — hash validated server-side) ─────────────────────────

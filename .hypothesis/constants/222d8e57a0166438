@@ -1,4 +1,0 @@
-# file: C:\Users\David.Olamijulo\Documents\onepay\models\invoice.py
-# hypothesis_version: 6.151.9
-
-[100, 255, 500, 'CASCADE', 'NGN', 'SET NULL', 'Transaction', 'amount', 'auto_send_email', 'business_address', 'business_logo_url', 'business_name', 'business_tax_id', 'cancelled', 'created_at', 'currency', 'customer_email', 'customer_phone', 'description', 'draft', 'email_sent', 'expired', 'invoice', 'invoice_number', 'invoice_settings', 'invoices', 'paid', 'paid_at', 'payment_terms', 'sent', 'sent_at', 'status', 'transaction_id', 'transactions.id', 'user_id', 'users.id', 'value']

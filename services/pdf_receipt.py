@@ -28,7 +28,7 @@ def generate_receipt_html(transaction) -> str:
     try:
         html = render_template(
             'receipt.html',
-            transaction=transaction,
+            tx=transaction,
             current_date=datetime.now(timezone.utc)
         )
         return html

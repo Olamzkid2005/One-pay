@@ -1,4 +1,0 @@
-# file: C:\Users\David.Olamijulo\Documents\onepay\services\google_oauth.py
-# hypothesis_version: 6.151.9
-
-['accounts.google.com', 'email', 'email_verified', 'full_name', 'google_id', 'iss', 'name', 'picture', 'profile_picture_url', 'sub']

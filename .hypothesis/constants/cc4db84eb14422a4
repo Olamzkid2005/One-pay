@@ -1,4 +1,0 @@
-# file: C:\Users\David.Olamijulo\Documents\onepay\core\responses.py
-# hypothesis_version: 6.151.9
-
-[401, 429, 'RATE_LIMITED', 'UNAUTHENTICATED', 'error_code', 'message', 'success']

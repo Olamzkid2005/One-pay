@@ -1,4 +1,0 @@
-# file: C:\Users\David.Olamijulo\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\png.py
-# hypothesis_version: 6.151.9
-
-[b'IDAT', b'IEND', b'IHDR', b'PLTE', b'bKGD', b'gAMA', b'pHYs', b'sBIT', b'tRNS', 100000.0, 123, 137, 255, 256, '!%dH', '!1H', '!2I5B', '!3H', '!I', '!I4s', '!L', '!LLB', '%dB', '-', '0.20220715.0', '8B', ': ', '=', 'A', 'B', 'BH', 'End of PNG stream.', 'H', 'Image', 'L', 'No more chunks.', 'Reader', 'Writer', '_Resolution', '__main__', '_process_', 'alpha', 'ascii', 'b', 'background', 'bitdepth', 'colormap', 'force', 'from_array', 'greyscale', 'height', 'invalid bit depth %d', 'natural', 'palette', 'physical', 'planes', 'rb', 'read', 'size', 'transparent', 'wb', 'width', 'win32', 'write_chunks', 'x y unit_is_meter', 'x_pixels_per_unit']

@@ -165,22 +165,6 @@ def history():
     )
 
 
-@payments_bp.route("/invoices")
-def invoices():
-    if not current_user_id():
-        return login_required_redirect()
-    with get_db() as db:
-        user = db.query(User).filter(User.id == current_user_id()).first()
-        profile_picture = user.profile_picture_url if user else None
-    return render_template(
-        "invoices.html",
-        username=current_username(),
-        profile_picture=profile_picture,
-        csrf_token=get_csrf_token(),
-        active_page="invoices",
-    )
-
-
 # ── Update webhook settings ────────────────────────────────────────────────────
 
 @payments_bp.route("/settings/webhook", methods=["POST"])

@@ -1,4 +1,0 @@
-# file: C:\Users\David.Olamijulo\Documents\onepay\models\refund.py
-# hypothesis_version: 6.151.9
-
-[100, 200, 'CASCADE', 'NGN', 'Transaction', 'created_at', 'failed', 'idx_refunds_status', 'processing', 'refunds', 'status', 'success', 'transaction_id', 'transactions.id']
