@@ -541,6 +541,41 @@ def korapay_webhook():
             t.is_used = True
             db.flush()
             
+            # Forward to VoicePay if this is a VoicePay transaction
+            from config import Config
+            if Config.VOICEPAY_WEBHOOK_ENABLED and reference.startswith("VP-BILL-"):
+                try:
+                    from services.voicepay_webhook import build_voicepay_payload, send_voicepay_webhook
+                    
+                    # Determine webhook URL (sandbox vs production)
+                    if Config.KORAPAY_USE_SANDBOX and Config.VOICEPAY_WEBHOOK_URL_SANDBOX:
+                        webhook_url = Config.VOICEPAY_WEBHOOK_URL_SANDBOX
+                        webhook_secret = Config.VOICEPAY_WEBHOOK_SECRET_SANDBOX
+                    else:
+                        webhook_url = Config.VOICEPAY_WEBHOOK_URL
+                        webhook_secret = Config.VOICEPAY_WEBHOOK_SECRET
+                    
+                    # Build and send VoicePay webhook
+                    payload = build_voicepay_payload(t)
+                    result = send_voicepay_webhook(
+                        payload=payload,
+                        webhook_url=webhook_url,
+                        secret=webhook_secret,
+                        timeout=Config.VOICEPAY_WEBHOOK_TIMEOUT_SECS,
+                        max_retries=Config.VOICEPAY_WEBHOOK_MAX_RETRIES
+                    )
+                    
+                    if result.get("success"):
+                        logger.info("VoicePay webhook delivered | ref=%s status_code=%d", 
+                                   reference, result.get("status_code"))
+                    else:
+                        logger.warning("VoicePay webhook delivery failed | ref=%s error=%s", 
+                                      reference, result.get("error"))
+                except Exception as e:
+                    # Log error but don't block KoraPay webhook response
+                    logger.error("VoicePay webhook forwarding error | ref=%s error=%s", 
+                                reference, e, exc_info=True)
+            
             # Deliver webhook if configured
             if t.webhook_url:
                 from services.webhook import deliver_webhook
