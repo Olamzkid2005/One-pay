@@ -429,13 +429,8 @@ def korapay_webhook():
 
 @public_bp.route("/health", methods=["GET"])
 def health():
-    db_ok = True
-    try:
-        with engine.connect() as conn:
-            conn.execute(sqlalchemy.text("SELECT 1"))
-    except Exception as e:
-        db_ok = False
-        logger.error("Health check DB error: %s", e)
+    """Comprehensive health check with dependency status"""
+    db_ok = _check_database()
 
     try:
         with get_db() as db:
@@ -459,10 +454,22 @@ def health():
     korapay_base_url = Config.KORAPAY_BASE_URL
     korapay_environment = "sandbox" if Config.KORAPAY_USE_SANDBOX else "production"
 
+    # Build checks structure
+    checks = {
+        "database": db_ok,
+        "korapay": korapay_ok,
+    }
+    
+    all_healthy = all(v for v in checks.values() if v is not None)
+    status_code = 200 if all_healthy else 503
+
     return jsonify({
-        "status":              "healthy" if db_ok else "degraded",
-        "app":                 "OnePay",
+        "status":              "healthy" if all_healthy else "unhealthy",
+        "checks":              checks,
         "timestamp":           datetime.now(timezone.utc).isoformat(),
+        "version":             "1.0.0",
+        # Legacy fields for backward compatibility
+        "app":                 "OnePay",
         "database":            "ok" if db_ok else "error",
         "korapay":             "ok" if korapay_ok else "not_configured",
         "korapay_configured":  korapay_transfer_ok,
@@ -470,4 +477,15 @@ def health():
         "korapay_base_url":    korapay_base_url,
         "korapay_environment":  korapay_environment,
         "korapay_metrics":     korapay_metrics
-    })
+    }), status_code
+
+
+def _check_database() -> bool:
+    """Check database connectivity"""
+    try:
+        with engine.connect() as conn:
+            conn.execute(sqlalchemy.text("SELECT 1"))
+        return True
+    except Exception as e:
+        logger.error("Health check DB error: %s", e)
+        return False
