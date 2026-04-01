@@ -1,5 +1,148 @@
 # OnePay Changelog
 
+## Version 1.6.0 - April 1, 2026
+
+### 🎤 VoicePay Integration - Merchant Payment Gateway
+
+#### Overview
+OnePay now serves as the merchant payment gateway for VoicePay, a voice-authenticated payment system. Complete integration with webhook forwarding, HMAC signatures, monitoring, and comprehensive documentation.
+
+#### Added
+
+**Configuration & Environment Setup**
+- VoicePay configuration with production validation
+- HTTPS enforcement in production
+- Secret uniqueness validation (32+ character minimum)
+- Sandbox/production environment separation
+- API key generation script (`scripts/generate_voicepay_api_key.py`)
+- 21 configuration tests (all passing)
+
+**VoicePay Webhook Service**
+- HMAC-SHA256 signature generation for webhook security
+- Webhook payload building from transaction data
+- HTTP delivery with exponential backoff retry logic (3 attempts)
+- Timeout and connection error handling
+- Server error (5xx) retry, client error (4xx) no retry
+- Non-blocking webhook delivery (doesn't block KoraPay response)
+- Transaction identification by `tx_ref` prefix: `VP-BILL-`
+- 15 webhook service tests (all passing)
+
+**Integration & Testing**
+- Comprehensive edge case test suite (11 tests)
+- Special characters and Unicode support
+- Large amounts (₦99,999,999.99) and zero amounts
+- Missing optional fields handling
+- Different transaction statuses (pending, failed, verified)
+- Total: 47/47 VoicePay tests passing (100%)
+
+**Monitoring & Logging**
+- Prometheus metrics (4 metrics):
+  - `voicepay_webhooks_sent_total` - Counter with status label
+  - `voicepay_webhook_duration_seconds` - Histogram of delivery time
+  - `voicepay_webhook_retries_total` - Counter of retry attempts
+  - `voicepay_payment_amount_naira` - Histogram of payment amounts
+- Grafana dashboard with 10 panels:
+  - Webhook success rate, delivery duration, retry rate
+  - Payment amount distribution, failure tracking
+- Prometheus alert rules (6 alerts):
+  - High failure rate (>10% warning, >25% critical)
+  - High latency (p95 >5s)
+  - Excessive retries (>0.5/sec)
+  - No activity (30min)
+  - Near timeout (p99 >8s)
+- Graceful degradation if prometheus_client not installed
+
+**Documentation**
+- VoicePay Integration Guide (`docs/VOICEPAY_INTEGRATION.md`)
+- VoicePay Webhook Guide (`docs/VOICEPAY_WEBHOOK_GUIDE.md`)
+- VoicePay Bill Categories (`docs/VOICEPAY_BILL_CATEGORIES.md`)
+- Updated README with VoicePay section
+- Implementation status documentation
+
+#### Changed
+
+**KoraPay Webhook Handler**
+- Enhanced to forward payments to VoicePay
+- VoicePay transaction detection by `tx_ref` prefix
+- Webhook forwarding with HMAC signature
+- Error handling doesn't block KoraPay response
+
+**Payment Endpoints**
+- Added VoicePay-specific logging
+- Transaction identification logging
+- Status check logging for VoicePay transactions
+
+**Configuration**
+- Added 8 VoicePay environment variables
+- Production validation for VoicePay settings
+- Sandbox/production webhook URL separation
+
+#### Security
+
+- HMAC-SHA256 signature generation for VoicePay webhooks
+- Webhook signature validation with constant-time comparison
+- Separate secrets for VoicePay and KoraPay webhooks
+- HTTPS enforcement in production
+- Secret validation (32+ characters, no placeholders)
+
+#### Files Modified/Created
+
+**Configuration**
+- `config.py` - VoicePay configuration class
+- `.env.example` - Environment variable documentation
+
+**Services**
+- `services/voicepay_webhook.py` - Webhook service with metrics
+
+**Scripts**
+- `scripts/generate_voicepay_api_key.py` - API key generation
+
+**Integration**
+- `blueprints/public.py` - KoraPay webhook handler integration
+- `blueprints/payments.py` - VoicePay-specific logging
+
+**Tests**
+- `tests/unit/test_voicepay_config.py` - 21 tests
+- `tests/unit/test_voicepay_webhook.py` - 15 tests
+- `tests/unit/test_voicepay_edge_cases.py` - 11 tests
+- `tests/unit/test_voicepay_metrics.py` - 5 tests
+- `tests/integration/test_voicepay_integration.py` - Integration tests
+
+**Monitoring**
+- `grafana/dashboards/voicepay-integration.json` - Grafana dashboard
+- `prometheus/alerts/voicepay.yml` - Alert rules
+
+**Documentation**
+- `docs/VOICEPAY_INTEGRATION.md` - Integration guide
+- `docs/VOICEPAY_WEBHOOK_GUIDE.md` - Webhook guide
+- `docs/VOICEPAY_BILL_CATEGORIES.md` - Bill categories
+- `docs/VOICEPAY_IMPLEMENTATION_COMPLETE.md` - Status document
+
+#### Test Results
+
+- 47/47 VoicePay tests passing (100%)
+- Configuration: 21/21 passing
+- Webhook service: 15/15 passing
+- Edge cases: 11/11 passing
+- Metrics: 5/5 passing (skip gracefully if prometheus not installed)
+
+#### Deployment Requirements
+
+**Environment Variables**
+```bash
+VOICEPAY_WEBHOOK_URL=https://voicepay.ng/api/webhooks/onepay
+VOICEPAY_WEBHOOK_SECRET=<32+ character secret>
+VOICEPAY_WEBHOOK_ENABLED=true
+VOICEPAY_API_KEY=<generated via script>
+```
+
+**Optional Dependencies**
+```bash
+pip install prometheus_client>=0.19.0  # For metrics
+```
+
+---
+
 ## Version 1.5.5 - March 31, 2026
 
 ### 🔒 Security Hardening - Critical Vulnerability Fixes

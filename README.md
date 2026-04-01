@@ -2,7 +2,16 @@
 
 A modern, secure payment verification and invoice management platform that integrates with KoraPay API. OnePay eliminates fake payment confirmations by allowing merchants to generate secure, time-bound payment links, automatically create professional invoices, and verify transactions directly from the payment infrastructure.
 
-## 🚀 Latest Updates (v1.5.5)
+## 🚀 Latest Updates (v1.6.0)
+
+### VoicePay Integration - Merchant Payment Gateway
+- 🎤 **VoicePay Gateway**: OnePay now serves as merchant payment gateway for VoicePay
+- 🔔 **Webhook Forwarding**: Automatic payment confirmations to VoicePay with HMAC signatures
+- 📊 **Monitoring**: Comprehensive metrics, dashboards, and alerting for VoicePay integration
+- 🔐 **Security**: HMAC-SHA256 signatures, HTTPS enforcement, separate secrets
+- 📱 **Bill Payments**: Support for DSTV, electricity, airtime, and more
+
+### Previous Updates (v1.5.5)
 
 ### Security Hardening - Critical Vulnerability Fixes
 - 🔒 **Session Timeout**: Automatic session expiration (30min authenticated, 60min guest)
@@ -16,9 +25,7 @@ A modern, secure payment verification and invoice management platform that integ
 
 **Security Status**: 8/8 vulnerabilities resolved ✅ | Production Ready 🚀
 
-### Previous Updates (v1.5.0)
-
-### KoraPay Integration - Major Payment Provider Migration
+### Earlier Updates (v1.5.0) - KoraPay Integration
 - 💳 **KoraPay Gateway**: Migrated from Quickteller to KoraPay for enhanced payment processing
 - 🔒 **Virtual Accounts**: Generate virtual bank accounts for seamless payments
 - ⚡ **Circuit Breaker**: Fault-tolerant architecture prevents cascading failures
@@ -420,6 +427,36 @@ pytest --cov=. tests/
 ### Manual Testing
 For manual testing procedures, see [tests/MANUAL_TESTING_CHECKLIST.md](tests/MANUAL_TESTING_CHECKLIST.md)
 
+## VoicePay Integration
+
+OnePay serves as the merchant payment gateway for VoicePay, a voice-authenticated payment system.
+
+### Features
+
+- Payment link creation with virtual bank accounts
+- Webhook notifications for payment confirmations
+- Support for bill payments (DSTV, electricity, airtime)
+- HMAC-SHA256 signature verification
+- Comprehensive monitoring and alerting
+
+### Documentation
+
+- [Integration Guide](docs/VOICEPAY_INTEGRATION.md) - API endpoints and authentication
+- [Webhook Guide](docs/VOICEPAY_WEBHOOK_GUIDE.md) - Webhook security and implementation
+- [Bill Categories](docs/VOICEPAY_BILL_CATEGORIES.md) - Supported bill types and metadata
+
+### Configuration
+
+```bash
+# VoicePay webhook settings
+VOICEPAY_WEBHOOK_URL=https://voicepay.ng/api/webhooks/onepay
+VOICEPAY_WEBHOOK_SECRET=your_secret_here
+VOICEPAY_API_KEY=voicepay_api_key_here
+VOICEPAY_WEBHOOK_ENABLED=true
+```
+
+See [.env.example](.env.example) for complete configuration.
+
 ## Deployment
 
 See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment instructions.
@@ -432,6 +469,9 @@ See [docs/ROLLBACK.md](docs/ROLLBACK.md) for detailed procedures.
 ## 📚 Documentation
 
 ### User Guides
+- [VoicePay Integration Guide](docs/VOICEPAY_INTEGRATION.md) - VoicePay API integration
+- [VoicePay Webhook Guide](docs/VOICEPAY_WEBHOOK_GUIDE.md) - Webhook implementation
+- [VoicePay Bill Categories](docs/VOICEPAY_BILL_CATEGORIES.md) - Supported bill types
 - [KoraPay Setup Guide](docs/KORAPAY_SETUP.md) - Configure KoraPay integration
 - [Rollback Guide](docs/ROLLBACK.md) - Rollback procedures
 - [Email Setup Guide](EMAIL_SETUP_GUIDE.md) - Configure email notifications
@@ -473,8 +513,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 📊 Project Status
 
-- **Version**: 1.5.5
+- **Version**: 1.6.0
 - **Status**: Production Ready ✅
 - **Payment Provider**: KoraPay ✅
+- **VoicePay Integration**: Complete ✅
 - **Security Audit**: 8/8 vulnerabilities resolved ✅
-- **Test Coverage**: Comprehensive test suite ✅
+- **Test Coverage**: 47/47 VoicePay tests passing ✅
