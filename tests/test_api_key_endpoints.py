@@ -226,9 +226,10 @@ def test_revoke_api_key(db_session, monkeypatch):
         db_session.commit()
     
     monkeypatch.setattr('database.get_db', mock_get_db)
+    monkeypatch.setattr('blueprints.api_keys.get_db', mock_get_db)
     
     from blueprints.api_keys import api_keys_bp
-    app.register_blueprint(api_keys_bp)
+    app.register_blueprint(api_keys_bp, url_prefix="/api/v1")
     
     client = app.test_client()
     
