@@ -55,7 +55,7 @@ def client(db_session, monkeypatch):
     
     # Register webhooks blueprint
     from blueprints.webhooks import webhooks_bp
-    app.register_blueprint(webhooks_bp)
+    app.register_blueprint(webhooks_bp, url_prefix="/api/v1")
     
     return app.test_client()
 
@@ -139,7 +139,7 @@ def test_receive_payment_status_webhook(client, db_session):
     try:
         # Send webhook with raw data (not json parameter)
         response = client.post(
-            '/api/webhooks/payment-status',
+            '/api/v1/webhooks/payment-status',
             data=payload_bytes,
             content_type='application/json',
             headers={'X-Webhook-Signature': f'sha256={sig}'}

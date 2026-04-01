@@ -183,7 +183,7 @@ def invoices():
 
 # ── Update webhook settings ────────────────────────────────────────────────────
 
-@payments_bp.route("/api/settings/webhook", methods=["POST"])
+@payments_bp.route("/settings/webhook", methods=["POST"])
 def update_webhook_settings():
     # VULN-007 FIX: Validate Content-Type for JSON API
     if request.content_type != 'application/json':
@@ -227,7 +227,7 @@ def update_webhook_settings():
 
 # ── Export transactions ────────────────────────────────────────────────────────
 
-@payments_bp.route("/api/payments/export", methods=["GET"])
+@payments_bp.route("/payments/export", methods=["GET"])
 def export_transactions():
     if not current_user_id():
         return unauthenticated()
@@ -279,7 +279,7 @@ def export_transactions():
 
 # ── Analytics summary ──────────────────────────────────────────────────────────
 
-@payments_bp.route("/api/payments/summary", methods=["GET"])
+@payments_bp.route("/payments/summary", methods=["GET"])
 def payment_summary():
     if not current_user_id():
         return unauthenticated()
@@ -361,7 +361,7 @@ def payment_summary():
 
 # ── Create payment link ────────────────────────────────────────────────────────
 
-@payments_bp.route("/api/payments/link", methods=["POST"])
+@payments_bp.route("/payments/link", methods=["POST"])
 def create_payment_link():
     # VULN-007 FIX: Validate Content-Type for JSON API
     if request.content_type != 'application/json':
@@ -623,7 +623,7 @@ def create_payment_link():
 
 # ── Transaction status ─────────────────────────────────────────────────────────
 
-@payments_bp.route("/api/payments/status/<tx_ref>", methods=["GET"])
+@payments_bp.route("/payments/status/<tx_ref>", methods=["GET"])
 def transaction_status(tx_ref):
     """
     Get transaction status by reference.
@@ -680,7 +680,7 @@ def transaction_status(tx_ref):
 
 # ── Transaction history (paginated) ───────────────────────────────────────────
 
-@payments_bp.route("/api/payments/history", methods=["GET"])
+@payments_bp.route("/payments/history", methods=["GET"])
 def transaction_history():
     if not current_user_id():
         return unauthenticated()
@@ -722,7 +722,7 @@ def transaction_history():
 
 # ── Re-issue expired link ──────────────────────────────────────────────────────
 
-@payments_bp.route("/api/payments/reissue/<tx_ref>", methods=["POST"])
+@payments_bp.route("/payments/reissue/<tx_ref>", methods=["POST"])
 def reissue_payment_link(tx_ref):
     # VULN-007 FIX: Validate Content-Type for JSON API
     if request.content_type != 'application/json':
@@ -827,7 +827,7 @@ def reissue_payment_link(tx_ref):
 
 # ── Audit log for transaction ─────────────────────────────────────────────────
 
-@payments_bp.route("/api/payments/audit/<tx_ref>", methods=["GET"])
+@payments_bp.route("/payments/audit/<tx_ref>", methods=["GET"])
 def transaction_audit(tx_ref):
     if not current_user_id():
         return unauthenticated()
@@ -883,7 +883,7 @@ def expired_link(tx_ref):
 
 # ── Download receipt ───────────────────────────────────────────────────────────
 
-@payments_bp.route("/api/payments/receipt/<tx_ref>", methods=["GET"])
+@payments_bp.route("/payments/receipt/<tx_ref>", methods=["GET"])
 def download_receipt(tx_ref):
     """Generate and download a PDF receipt for a transaction"""
     if not current_user_id():
@@ -928,7 +928,7 @@ def download_receipt(tx_ref):
             return error("Failed to generate receipt", "PDF_GENERATION_ERROR", 500)
 
 
-@payments_bp.route("/api/payments/receipt/<tx_ref>/preview", methods=["GET"])
+@payments_bp.route("/payments/receipt/<tx_ref>/preview", methods=["GET"])
 def preview_receipt_html(tx_ref):
     """Generate and return HTML preview of receipt (for debugging/testing)"""
     if not current_user_id():
@@ -963,7 +963,7 @@ def preview_receipt_html(tx_ref):
 
 
 
-@payments_bp.route("/api/payments/refund/<tx_ref>", methods=["POST"])
+@payments_bp.route("/payments/refund/<tx_ref>", methods=["POST"])
 def initiate_refund(tx_ref):
     """
     Initiate a refund for a verified transaction.

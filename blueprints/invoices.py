@@ -20,7 +20,7 @@ invoices_bp = Blueprint("invoices", __name__)
 
 # ── Create invoice ─────────────────────────────────────────────────────────────
 
-@invoices_bp.route("/api/invoices/create", methods=["POST"])
+@invoices_bp.route("/invoices/create", methods=["POST"])
 def create_invoice():
     """Create invoice for an existing transaction"""
     if not current_user_id():
@@ -190,7 +190,7 @@ def create_invoice():
 
 # ── List invoices ──────────────────────────────────────────────────────────────
 
-@invoices_bp.route("/api/invoices", methods=["GET"])
+@invoices_bp.route("/invoices", methods=["GET"])
 def list_invoices():
     """List invoices with pagination and filtering"""
     if not current_user_id():
@@ -296,7 +296,7 @@ def list_invoices():
 
 # ── Get invoice details ────────────────────────────────────────────────────────
 
-@invoices_bp.route("/api/invoices/<invoice_number>", methods=["GET"])
+@invoices_bp.route("/invoices/<invoice_number>", methods=["GET"])
 def get_invoice(invoice_number):
     """Get detailed invoice information"""
     if not current_user_id():
@@ -372,7 +372,7 @@ def get_invoice(invoice_number):
 
 # ── Download invoice PDF ───────────────────────────────────────────────────────
 
-@invoices_bp.route("/api/invoices/<invoice_number>/download", methods=["GET"])
+@invoices_bp.route("/invoices/<invoice_number>/download", methods=["GET"])
 def download_invoice(invoice_number):
     """Download invoice as PDF"""
     if not current_user_id():
@@ -470,7 +470,7 @@ def download_invoice(invoice_number):
 
 # ── Send invoice via email ─────────────────────────────────────────────────────
 
-@invoices_bp.route("/api/invoices/<invoice_number>/send", methods=["POST"])
+@invoices_bp.route("/invoices/<invoice_number>/send", methods=["POST"])
 def send_invoice(invoice_number):
     """Send invoice via email to customer"""
     if not current_user_id():
@@ -615,7 +615,7 @@ def send_invoice(invoice_number):
 
 # ── Get invoice settings ───────────────────────────────────────────────────────
 
-@invoices_bp.route("/api/invoices/settings", methods=["GET"])
+@invoices_bp.route("/invoices/settings", methods=["GET"])
 def get_invoice_settings():
     """Get merchant invoice settings"""
     if not current_user_id():
@@ -657,7 +657,7 @@ def get_invoice_settings():
 
 # ── Update invoice settings ────────────────────────────────────────────────────
 
-@invoices_bp.route("/api/invoices/settings", methods=["POST"])
+@invoices_bp.route("/invoices/settings", methods=["POST"])
 def update_invoice_settings():
     """Update merchant invoice settings"""
     if not current_user_id():

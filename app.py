@@ -311,12 +311,15 @@ def create_app() -> Flask:
         return response
 
     # ── Blueprints ─────────────────────────────────────────────────────────────
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(payments_bp)
+    # Public routes (no versioning)
     app.register_blueprint(public_bp)
-    app.register_blueprint(invoices_bp)
-    app.register_blueprint(api_keys_bp)
-    app.register_blueprint(webhooks_bp)
+    
+    # API v1 routes
+    app.register_blueprint(auth_bp, url_prefix="/api/v1")
+    app.register_blueprint(payments_bp, url_prefix="/api/v1")
+    app.register_blueprint(invoices_bp, url_prefix="/api/v1")
+    app.register_blueprint(api_keys_bp, url_prefix="/api/v1")
+    app.register_blueprint(webhooks_bp, url_prefix="/api/v1")
 
     # ── Error handlers ─────────────────────────────────────────────────────────
     @app.errorhandler(404)

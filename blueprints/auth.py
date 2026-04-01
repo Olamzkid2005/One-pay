@@ -385,7 +385,7 @@ def reset_password(token: str):
 
 # ── Account settings ───────────────────────────────────────────────────────────
 
-@auth_bp.route("/api/account/settings", methods=["POST"])
+@auth_bp.route("/account/settings", methods=["POST"])
 def update_settings():
     if not current_user_id():
         return error("Authentication required", "UNAUTHENTICATED", 401)

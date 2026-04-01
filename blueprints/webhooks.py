@@ -32,7 +32,7 @@ def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> boo
     return hmac.compare_digest(expected_sig, computed_sig)
 
 
-@webhooks_bp.route("/api/webhooks/payment-status", methods=["POST"])
+@webhooks_bp.route("/webhooks/payment-status", methods=["POST"])
 def receive_payment_status():
     """Receive payment status updates from external services"""
     from config import Config
