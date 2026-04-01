@@ -87,6 +87,22 @@ class BaseConfig:
     WEBHOOK_TIMEOUT_SECS = int(os.getenv("WEBHOOK_TIMEOUT_SECS", "10"))
     WEBHOOK_MAX_RETRIES  = int(os.getenv("WEBHOOK_MAX_RETRIES",  "3"))
 
+    # ── VoicePay Integration ──────────────────────────────────────────────────
+    VOICEPAY_WEBHOOK_URL = os.getenv("VOICEPAY_WEBHOOK_URL", "")
+    VOICEPAY_WEBHOOK_SECRET = os.getenv("VOICEPAY_WEBHOOK_SECRET", "")
+    VOICEPAY_API_KEY = os.getenv("VOICEPAY_API_KEY", "")
+
+    # Sandbox configuration
+    VOICEPAY_WEBHOOK_URL_SANDBOX = os.getenv("VOICEPAY_WEBHOOK_URL_SANDBOX", "")
+    VOICEPAY_WEBHOOK_SECRET_SANDBOX = os.getenv("VOICEPAY_WEBHOOK_SECRET_SANDBOX", "")
+
+    # Webhook timeout and retry settings
+    VOICEPAY_WEBHOOK_TIMEOUT_SECS = int(os.getenv("VOICEPAY_WEBHOOK_TIMEOUT_SECS", "10"))
+    VOICEPAY_WEBHOOK_MAX_RETRIES = int(os.getenv("VOICEPAY_WEBHOOK_MAX_RETRIES", "3"))
+
+    # Enable/disable VoicePay webhook forwarding
+    VOICEPAY_WEBHOOK_ENABLED = os.getenv("VOICEPAY_WEBHOOK_ENABLED", "true").lower() == "true"
+
     # ── Google OAuth ──────────────────────────────────────────────────────────
     GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
@@ -167,6 +183,32 @@ class BaseConfig:
                 errors.append("GOOGLE_CLIENT_SECRET too short (minimum 32 characters)")
             if cls.GOOGLE_REDIRECT_URI and not cls.GOOGLE_REDIRECT_URI.startswith("https://"):
                 errors.append("GOOGLE_REDIRECT_URI must use HTTPS in production")
+        
+        # Check VoicePay configuration in production
+        if app_env == "production" and cls.VOICEPAY_WEBHOOK_ENABLED:
+            if not cls.VOICEPAY_WEBHOOK_URL:
+                errors.append("VOICEPAY_WEBHOOK_URL is required when VoicePay integration is enabled")
+            elif not cls.VOICEPAY_WEBHOOK_URL.startswith("https://"):
+                errors.append("VOICEPAY_WEBHOOK_URL must use HTTPS in production")
+            
+            if not cls.VOICEPAY_WEBHOOK_SECRET:
+                errors.append("VOICEPAY_WEBHOOK_SECRET is required when VoicePay integration is enabled")
+            elif len(cls.VOICEPAY_WEBHOOK_SECRET) < 32:
+                errors.append("VOICEPAY_WEBHOOK_SECRET too short (minimum 32 characters)")
+            elif "change-this" in cls.VOICEPAY_WEBHOOK_SECRET.lower():
+                errors.append("VOICEPAY_WEBHOOK_SECRET contains placeholder value")
+            
+            if not cls.VOICEPAY_API_KEY:
+                warnings.append("VOICEPAY_API_KEY not set - VoicePay will need to generate this")
+            elif len(cls.VOICEPAY_API_KEY) < 32:
+                errors.append("VOICEPAY_API_KEY too short (minimum 32 characters)")
+            
+            # Validate secrets are unique
+            if cls.VOICEPAY_WEBHOOK_SECRET and cls.VOICEPAY_WEBHOOK_SECRET == cls.HMAC_SECRET:
+                errors.append("VOICEPAY_WEBHOOK_SECRET and HMAC_SECRET must be different")
+            if cls.VOICEPAY_WEBHOOK_SECRET and cls.VOICEPAY_WEBHOOK_SECRET == cls.KORAPAY_WEBHOOK_SECRET:
+                errors.append("VOICEPAY_WEBHOOK_SECRET and KORAPAY_WEBHOOK_SECRET must be different")
+        
         if app_env == "production" and cls.DEBUG:
             errors.append("DEBUG mode is enabled in production environment")
         
