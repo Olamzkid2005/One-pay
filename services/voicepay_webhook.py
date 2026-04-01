@@ -62,12 +62,11 @@ def build_voicepay_payload(transaction) -> dict:
         "event": "payment.verified",
         "tx_ref": transaction.tx_ref,
         "amount": float(transaction.amount),
-        "currency": "NGN",
-        "status": transaction.status,
-        "paid_at": transaction.paid_at.isoformat() if transaction.paid_at else None,
+        "currency": transaction.currency or "NGN",
+        "status": transaction.status.value if hasattr(transaction.status, 'value') else str(transaction.status),
+        "verified_at": transaction.verified_at.isoformat() if transaction.verified_at else None,
         "customer_email": transaction.customer_email,
-        "description": transaction.description,
-        "metadata": transaction.metadata or {}
+        "description": transaction.description
     }
     
     return payload

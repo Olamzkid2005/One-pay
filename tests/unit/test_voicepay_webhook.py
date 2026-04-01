@@ -123,22 +123,21 @@ def test_generate_voicepay_signature_with_nested_objects():
 def test_build_voicepay_payload():
     """Test building VoicePay webhook payload from transaction"""
     from services.voicepay_webhook import build_voicepay_payload
-    from models.transaction import Transaction
+    from models.transaction import Transaction, TransactionStatus
+    from datetime import timezone, timedelta
     
     # Create mock transaction
     transaction = Transaction(
         tx_ref="VP-BILL-123-1234567890",
         amount=Decimal("9000.00"),
-        status="VERIFIED",
+        status=TransactionStatus.VERIFIED,
         customer_email="user@voicepay.ng",
         description="DSTV Premium Subscription",
-        metadata={
-            "source": "voicepay",
-            "user_id": "123",
-            "bill_type": "dstv"
-        }
+        hash_token="test-hash",
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+        created_at=datetime.now(timezone.utc),
+        verified_at=datetime(2026, 4, 1, 10, 30, 0, tzinfo=timezone.utc)
     )
-    transaction.paid_at = datetime(2026, 4, 1, 10, 30, 0)
     
     payload = build_voicepay_payload(transaction)
     
@@ -147,70 +146,78 @@ def test_build_voicepay_payload():
     assert payload["tx_ref"] == "VP-BILL-123-1234567890"
     assert payload["amount"] == 9000.00
     assert payload["currency"] == "NGN"
-    assert payload["status"] == "VERIFIED"
+    assert payload["status"] == "verified"
     assert payload["customer_email"] == "user@voicepay.ng"
     assert payload["description"] == "DSTV Premium Subscription"
-    assert payload["metadata"]["source"] == "voicepay"
-    assert payload["metadata"]["user_id"] == "123"
-    assert "paid_at" in payload
+    assert "verified_at" in payload
 
 
 def test_build_voicepay_payload_with_null_paid_at():
-    """Test building payload when paid_at is None"""
+    """Test building payload when verified_at is None"""
     from services.voicepay_webhook import build_voicepay_payload
-    from models.transaction import Transaction
+    from models.transaction import Transaction, TransactionStatus
+    from datetime import timezone, timedelta
     
     transaction = Transaction(
         tx_ref="VP-BILL-456",
         amount=Decimal("5000.00"),
-        status="PENDING",
+        status=TransactionStatus.PENDING,
         customer_email="user@voicepay.ng",
         description="Test payment",
-        metadata={"source": "voicepay"}
+        hash_token="test-hash",
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+        created_at=datetime.now(timezone.utc),
+        verified_at=None
     )
-    transaction.paid_at = None
     
     payload = build_voicepay_payload(transaction)
     
-    assert payload["paid_at"] is None
-    assert payload["status"] == "PENDING"
+    assert payload["verified_at"] is None
+    assert payload["status"] == "pending"
 
 
 def test_build_voicepay_payload_with_empty_metadata():
-    """Test building payload when metadata is None or empty"""
+    """Test building payload - metadata field removed from payload"""
     from services.voicepay_webhook import build_voicepay_payload
-    from models.transaction import Transaction
+    from models.transaction import Transaction, TransactionStatus
+    from datetime import timezone, timedelta
     
     transaction = Transaction(
         tx_ref="VP-BILL-789",
         amount=Decimal("1000.00"),
-        status="VERIFIED",
+        status=TransactionStatus.VERIFIED,
         customer_email="user@voicepay.ng",
         description="Test payment",
-        metadata=None
+        hash_token="test-hash",
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+        created_at=datetime.now(timezone.utc),
+        verified_at=datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
     )
-    transaction.paid_at = datetime(2026, 4, 1, 12, 0, 0)
     
     payload = build_voicepay_payload(transaction)
     
-    assert payload["metadata"] == {}
+    # Metadata field no longer in payload (Transaction model doesn't have it)
+    assert "metadata" not in payload
     assert payload["event"] == "payment.verified"
 
 
 def test_build_voicepay_payload_decimal_to_float_conversion():
     """Test that Decimal amounts are converted to float"""
     from services.voicepay_webhook import build_voicepay_payload
-    from models.transaction import Transaction
+    from models.transaction import Transaction, TransactionStatus
+    from datetime import timezone, timedelta
     
     transaction = Transaction(
         tx_ref="VP-BILL-999",
         amount=Decimal("12345.67"),
-        status="VERIFIED",
+        status=TransactionStatus.VERIFIED,
         customer_email="user@voicepay.ng",
         description="Test payment",
-        metadata={"source": "voicepay"}
+        hash_token="test-hash",
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+        created_at=datetime.now(timezone.utc),
+        verified_at=datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
     )
-    transaction.paid_at = datetime(2026, 4, 1, 12, 0, 0)
     
     payload = build_voicepay_payload(transaction)
     
