@@ -9,11 +9,44 @@ import json
 import hmac
 import hashlib
 import requests
+import time
 from typing import Dict, Optional
 from datetime import datetime
 from config import Config
 
 logger = logging.getLogger(__name__)
+
+# Prometheus metrics (optional - gracefully handle if not installed)
+try:
+    from prometheus_client import Counter, Histogram
+    
+    voicepay_webhooks_sent = Counter(
+        'voicepay_webhooks_sent_total',
+        'Total number of webhooks sent to VoicePay',
+        ['status']  # success, failure
+    )
+    
+    voicepay_webhook_duration = Histogram(
+        'voicepay_webhook_duration_seconds',
+        'Time taken to deliver webhook to VoicePay',
+        buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
+    )
+    
+    voicepay_webhook_retries = Counter(
+        'voicepay_webhook_retries_total',
+        'Total number of webhook retry attempts'
+    )
+    
+    voicepay_payment_amount = Histogram(
+        'voicepay_payment_amount_naira',
+        'Payment amounts from VoicePay transactions',
+        buckets=[100, 500, 1000, 5000, 10000, 50000, 100000]
+    )
+    
+    METRICS_ENABLED = True
+except ImportError:
+    logger.warning("prometheus_client not installed - VoicePay metrics disabled")
+    METRICS_ENABLED = False
 
 
 def generate_voicepay_signature(payload: dict, secret: str) -> str:
@@ -58,6 +91,10 @@ def build_voicepay_payload(transaction) -> dict:
     Returns:
         Dict with VoicePay webhook payload structure
     """
+    # Track payment amount metric
+    if METRICS_ENABLED:
+        voicepay_payment_amount.observe(float(transaction.amount))
+    
     payload = {
         "event": "payment.verified",
         "tx_ref": transaction.tx_ref,
@@ -100,8 +137,10 @@ def send_voicepay_webhook(
             "error": str (if failed)
         }
     """
-    import time
     import random
+    
+    # Start timing for metrics
+    start_time = time.time()
     
     # Generate signature
     signature = generate_voicepay_signature(payload, secret)
@@ -116,6 +155,9 @@ def send_voicepay_webhook(
     # Retry logic with exponential backoff
     last_error = None
     for attempt in range(1, max_retries + 1):
+        # Track retry attempts (skip first attempt)
+        if attempt > 1 and METRICS_ENABLED:
+            voicepay_webhook_retries.inc()
         try:
             logger.info(
                 "Sending VoicePay webhook | tx_ref=%s attempt=%d/%d url=%s",
@@ -142,6 +184,12 @@ def send_voicepay_webhook(
             
             # Check if successful (2xx status code)
             if 200 <= response.status_code < 300:
+                # Track success metrics
+                if METRICS_ENABLED:
+                    duration = time.time() - start_time
+                    voicepay_webhook_duration.observe(duration)
+                    voicepay_webhooks_sent.labels(status='success').inc()
+                
                 return {
                     "success": True,
                     "status_code": response.status_code,
@@ -162,6 +210,12 @@ def send_voicepay_webhook(
                 continue
             
             # Client error or final attempt - return failure
+            # Track failure metrics
+            if METRICS_ENABLED:
+                duration = time.time() - start_time
+                voicepay_webhook_duration.observe(duration)
+                voicepay_webhooks_sent.labels(status='failure').inc()
+            
             return {
                 "success": False,
                 "status_code": response.status_code,
@@ -202,7 +256,12 @@ def send_voicepay_webhook(
             )
             break
     
-    # All retries failed
+    # All retries failed - track failure metrics
+    if METRICS_ENABLED:
+        duration = time.time() - start_time
+        voicepay_webhook_duration.observe(duration)
+        voicepay_webhooks_sent.labels(status='failure').inc()
+    
     return {
         "success": False,
         "status_code": 0,
