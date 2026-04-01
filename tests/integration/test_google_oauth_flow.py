@@ -26,12 +26,21 @@ class TestGoogleOAuthCallback:
     @pytest.fixture
     def app(self):
         """Create test Flask app."""
-        from app import app as flask_app
-        flask_app.config['TESTING'] = True
-        flask_app.config['SECRET_KEY'] = 'test-secret-key-for-sessions'
-        flask_app.config['GOOGLE_CLIENT_ID'] = 'test-client-id.apps.googleusercontent.com'
-        flask_app.config['GOOGLE_CLIENT_SECRET'] = 'test-secret'
-        return flask_app
+        from app import create_app
+        import os
+        # Set test environment variables
+        os.environ['ENFORCE_HTTPS'] = 'false'
+        os.environ['DEBUG'] = 'true'
+        
+        app = create_app()
+        app.config['TESTING'] = True
+        app.config['SECRET_KEY'] = 'test-secret-key-for-sessions'
+        app.config['GOOGLE_CLIENT_ID'] = 'test-client-id.apps.googleusercontent.com'
+        app.config['GOOGLE_CLIENT_SECRET'] = 'test-secret'
+        app.config['ENFORCE_HTTPS'] = False
+        app.config['DEBUG'] = True
+        app.config['WTF_CSRF_ENABLED'] = False  # Disable CSRF for tests
+        return app
     
     @pytest.fixture
     def client(self, app):
@@ -359,9 +368,10 @@ class TestGoogleOAuthConfig:
     @pytest.fixture
     def app(self):
         """Create test Flask app."""
-        from app import app as flask_app
-        flask_app.config['TESTING'] = True
-        return flask_app
+        from app import create_app
+        app = create_app()
+        app.config['TESTING'] = True
+        return app
     
     @pytest.fixture
     def client(self, app):
