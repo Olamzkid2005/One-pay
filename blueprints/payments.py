@@ -381,8 +381,18 @@ def create_payment_link():
             return error("CSRF validation failed", "CSRF_ERROR", 403)
 
     with get_db() as db:
-        rate_key = f"link:user:{current_user_id()}"
-        if not check_rate_limit(db, rate_key, Config.RATE_LIMIT_LINK_CREATE):
+        # Separate rate limits for API vs web clients
+        from core.api_auth import is_api_key_authenticated
+        from flask import g
+        
+        if is_api_key_authenticated():
+            rate_key = f"api_link:{g.api_key}"
+            limit = Config.RATE_LIMIT_API_LINK_CREATE
+        else:
+            rate_key = f"link:user:{current_user_id()}"
+            limit = Config.RATE_LIMIT_LINK_CREATE
+        
+        if not check_rate_limit(db, rate_key, limit):
             return rate_limited()
 
         data = request.get_json(silent=True) or {}
