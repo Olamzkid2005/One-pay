@@ -1,0 +1,532 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "OnePay API",
+    "version": "1.0.0",
+    "description": "OnePay payment processing API for machine-to-machine integrations",
+    "contact": {
+      "name": "OnePay Support",
+      "url": "https://onepay.example.com/support"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "API v1"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key",
+        "description": "API key authentication. Format: `Bearer onepay_live_<64_hex_chars>`"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "string",
+            "example": "Validation error"
+          },
+          "error_code": {
+            "type": "string",
+            "example": "VALIDATION_ERROR"
+          }
+        }
+      },
+      "PaymentLink": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Payment link created successfully"
+          },
+          "tx_ref": {
+            "type": "string",
+            "example": "ONEPAY-ABC123"
+          },
+          "payment_url": {
+            "type": "string",
+            "example": "https://onepay.example.com/pay/ONEPAY-ABC123"
+          },
+          "amount": {
+            "type": "string",
+            "example": "1000.00"
+          },
+          "currency": {
+            "type": "string",
+            "example": "NGN"
+          },
+          "description": {
+            "type": "string",
+            "example": "Payment for services"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-04-02T12:00:00Z"
+          },
+          "virtual_account_number": {
+            "type": "string",
+            "example": "3000001234"
+          },
+          "virtual_bank_name": {
+            "type": "string",
+            "example": "Wema Bank"
+          },
+          "qr_code_payment_url": {
+            "type": "string",
+            "description": "Base64 encoded QR code image for payment URL"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/payments/link": {
+      "post": {
+        "summary": "Create payment link",
+        "description": "Create a new payment link for accepting payments",
+        "operationId": "createPaymentLink",
+        "tags": ["Payments"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["amount", "currency"],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "description": "Payment amount (decimal string)",
+                    "example": "1000.00"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "description": "Currency code (ISO 4217)",
+                    "example": "NGN"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Payment description (max 255 chars)",
+                    "example": "Payment for services"
+                  },
+                  "customer_email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Customer email address",
+                    "example": "customer@example.com"
+                  },
+                  "customer_phone": {
+                    "type": "string",
+                    "description": "Customer phone number",
+                    "example": "+2348012345678"
+                  },
+                  "return_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL to redirect after payment",
+                    "example": "https://yourapp.com/payment/success"
+                  },
+                  "webhook_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Webhook URL for payment notifications",
+                    "example": "https://yourapp.com/webhooks/payment"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Payment link created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api-keys": {
+      "get": {
+        "summary": "List API keys",
+        "description": "Get all API keys for the authenticated user",
+        "operationId": "listApiKeys",
+        "tags": ["API Keys"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of API keys",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "api_keys": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "key_prefix": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "last_used_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "is_active": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Generate API key",
+        "description": "Create a new API key",
+        "operationId": "createApiKey",
+        "tags": ["API Keys"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Friendly name for the API key",
+                    "example": "Production API Key"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "API key created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "api_key": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "api_key": {
+                          "type": "string",
+                          "description": "Full API key (only shown once)",
+                          "example": "onepay_live_abc123..."
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "key_prefix": {
+                          "type": "string"
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api-keys/{key_id}": {
+      "delete": {
+        "summary": "Revoke API key",
+        "description": "Revoke (deactivate) an API key",
+        "operationId": "revokeApiKey",
+        "tags": ["API Keys"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "API key ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API key revoked successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "API key revoked"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "API key not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhooks/payment-status": {
+      "post": {
+        "summary": "Receive payment status webhook",
+        "description": "Endpoint for receiving payment status updates from external services",
+        "operationId": "receivePaymentStatus",
+        "tags": ["Webhooks"],
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-Webhook-Signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "HMAC-SHA256 signature for webhook verification"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["tx_ref", "status"],
+                "properties": {
+                  "tx_ref": {
+                    "type": "string",
+                    "description": "Transaction reference",
+                    "example": "ONEPAY-ABC123"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Payment status",
+                    "example": "VERIFIED"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook processed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "tx_ref": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid signature",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Transaction not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Payments",
+      "description": "Payment link creation and management"
+    },
+    {
+      "name": "API Keys",
+      "description": "API key management"
+    },
+    {
+      "name": "Webhooks",
+      "description": "Inbound webhook receivers"
+    }
+  ]
+}
