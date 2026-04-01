@@ -591,6 +591,16 @@ def create_payment_link():
                   detail={"amount": str(amount), "currency": transaction.currency})
 
         logger.info("Payment link created | merchant=%s ref=%s amount=%s", current_username(), tx_ref, amount)
+        
+        # VoicePay-specific logging
+        if tx_ref.startswith("VP-BILL-"):
+            logger.info(
+                "VoicePay payment link created | tx_ref=%s merchant=%s amount=₦%.2f description=%s",
+                tx_ref,
+                current_username(),
+                float(amount),
+                description or "N/A"
+            )
 
         response_data = {
             "success":     True,
@@ -664,6 +674,15 @@ def transaction_status(tx_ref):
             time.sleep(remaining)
             # Same error for both "not found" and "unauthorized"
             return error("Transaction not found", "NOT_FOUND", 404)
+        
+        # VoicePay-specific logging
+        if t.tx_ref.startswith("VP-BILL-"):
+            logger.info(
+                "VoicePay status check | tx_ref=%s status=%s merchant=%s",
+                t.tx_ref,
+                t.status.value if t.status else "UNKNOWN",
+                current_username()
+            )
         
         # Add jitter to successful responses too
         jitter = secrets.randbelow(40) / 1000.0
