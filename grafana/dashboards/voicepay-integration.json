@@ -1,0 +1,233 @@
+{
+  "dashboard": {
+    "title": "VoicePay Integration",
+    "tags": ["voicepay", "webhooks", "payments"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "VoicePay Webhook Success Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(voicepay_webhooks_sent_total{status=\"success\"}[5m]) / rate(voicepay_webhooks_sent_total[5m]) * 100",
+            "legendFormat": "Success Rate %",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 90, "color": "yellow"},
+                {"value": 95, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "VoicePay Webhooks Sent (Rate)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(voicepay_webhooks_sent_total{status=\"success\"}[5m])",
+            "legendFormat": "Success",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(voicepay_webhooks_sent_total{status=\"failure\"}[5m])",
+            "legendFormat": "Failure",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0},
+        "yaxes": [
+          {"format": "reqps", "label": "Requests/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Total Webhooks Sent",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(voicepay_webhooks_sent_total)",
+            "legendFormat": "Total",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Webhook Delivery Duration (p50, p95, p99)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(voicepay_webhook_duration_seconds_bucket[5m]))",
+            "legendFormat": "p50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(voicepay_webhook_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(voicepay_webhook_duration_seconds_bucket[5m]))",
+            "legendFormat": "p99",
+            "refId": "C"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "yaxes": [
+          {"format": "s", "label": "Duration"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Webhook Retry Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(voicepay_webhook_retries_total[5m])",
+            "legendFormat": "Retries/sec",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "yaxes": [
+          {"format": "reqps", "label": "Retries/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Payment Amount Distribution",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(voicepay_payment_amount_naira_bucket[5m]))",
+            "legendFormat": "p50 (Median)",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(voicepay_payment_amount_naira_bucket[5m]))",
+            "legendFormat": "p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(voicepay_payment_amount_naira_bucket[5m]))",
+            "legendFormat": "p99",
+            "refId": "C"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "yaxes": [
+          {"format": "currencyNGN", "label": "Amount (₦)"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Recent Webhook Failures",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "increase(voicepay_webhooks_sent_total{status=\"failure\"}[1h])",
+            "legendFormat": "Failures (last hour)",
+            "refId": "A",
+            "format": "table"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      },
+      {
+        "id": 8,
+        "title": "Webhook Success vs Failure (24h)",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum(increase(voicepay_webhooks_sent_total{status=\"success\"}[24h]))",
+            "legendFormat": "Success",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(increase(voicepay_webhooks_sent_total{status=\"failure\"}[24h]))",
+            "legendFormat": "Failure",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      },
+      {
+        "id": 9,
+        "title": "Average Webhook Duration (5m)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(voicepay_webhook_duration_seconds_sum[5m]) / rate(voicepay_webhook_duration_seconds_count[5m])",
+            "legendFormat": "Avg Duration",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 24},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 2, "color": "yellow"},
+                {"value": 5, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Total Retries (24h)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(increase(voicepay_webhook_retries_total[24h]))",
+            "legendFormat": "Retries",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 24},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 10, "color": "yellow"},
+                {"value": 50, "color": "red"}
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}

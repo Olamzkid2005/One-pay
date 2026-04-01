@@ -1,0 +1,87 @@
+groups:
+  - name: voicepay_webhooks
+    interval: 30s
+    rules:
+      # High webhook failure rate
+      - alert: VoicePayWebhookHighFailureRate
+        expr: |
+          (
+            rate(voicepay_webhooks_sent_total{status="failure"}[5m])
+            /
+            rate(voicepay_webhooks_sent_total[5m])
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: voicepay
+        annotations:
+          summary: "VoicePay webhook failure rate is high"
+          description: "VoicePay webhook failure rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+      
+      # Critical webhook failure rate
+      - alert: VoicePayWebhookCriticalFailureRate
+        expr: |
+          (
+            rate(voicepay_webhooks_sent_total{status="failure"}[5m])
+            /
+            rate(voicepay_webhooks_sent_total[5m])
+          ) > 0.25
+        for: 2m
+        labels:
+          severity: critical
+          component: voicepay
+        annotations:
+          summary: "VoicePay webhook failure rate is critical"
+          description: "VoicePay webhook failure rate is {{ $value | humanizePercentage }} (threshold: 25%)"
+      
+      # High webhook latency
+      - alert: VoicePayWebhookHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(voicepay_webhook_duration_seconds_bucket[5m])
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: voicepay
+        annotations:
+          summary: "VoicePay webhook latency is high"
+          description: "VoicePay webhook p95 latency is {{ $value }}s (threshold: 5s)"
+      
+      # Excessive retries
+      - alert: VoicePayWebhookExcessiveRetries
+        expr: |
+          rate(voicepay_webhook_retries_total[5m]) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: voicepay
+        annotations:
+          summary: "VoicePay webhook retry rate is high"
+          description: "VoicePay webhook retry rate is {{ $value }} retries/sec (threshold: 0.5/sec)"
+      
+      # No webhooks sent (possible integration issue)
+      - alert: VoicePayWebhookNoActivity
+        expr: |
+          rate(voicepay_webhooks_sent_total[15m]) == 0
+        for: 30m
+        labels:
+          severity: info
+          component: voicepay
+        annotations:
+          summary: "No VoicePay webhooks sent recently"
+          description: "No VoicePay webhooks have been sent in the last 30 minutes. This may indicate an integration issue or no VoicePay transactions."
+      
+      # Webhook duration timeout risk
+      - alert: VoicePayWebhookNearTimeout
+        expr: |
+          histogram_quantile(0.99,
+            rate(voicepay_webhook_duration_seconds_bucket[5m])
+          ) > 8
+        for: 5m
+        labels:
+          severity: warning
+          component: voicepay
+        annotations:
+          summary: "VoicePay webhook duration approaching timeout"
+          description: "VoicePay webhook p99 latency is {{ $value }}s, approaching 10s timeout"
