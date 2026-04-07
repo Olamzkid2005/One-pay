@@ -169,32 +169,18 @@
                     </div>
                 </div>
                 
-                <!-- QR Code Section (moved outside bank-section to be a sibling) -->
+                <!-- QR Code Section -->
                 <div id="qr-section" class="hidden bg-surface-container-lowest/50 rounded-2xl p-6 border border-outline-variant/5">
                     <p class="text-[10px] font-label font-bold text-outline tracking-widest uppercase mb-4 text-center">Scan to Pay</p>
                     
                     <!-- Payment URL QR Code -->
-                    <div id="payment-qr-container" class="hidden">
+                    <div id="payment-qr-container">
                         <div class="text-center">
                             <p class="text-xs text-on-surface-variant mb-3">Scan this QR code to open payment page</p>
                             <div class="inline-block bg-white p-4 rounded-xl border border-outline-variant/20">
                                 <img id="payment-qr-code" class="w-48 h-48 mx-auto" alt="Payment QR Code">
                             </div>
                             <button onclick="downloadQR('payment')" class="mt-3 text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 mx-auto">
-                                <span class="material-symbols-outlined text-[16px]">download</span>
-                                Download QR Code
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- Virtual Account QR Code -->
-                    <div id="virtual-account-qr-container" class="hidden">
-                        <div class="text-center">
-                            <p class="text-xs text-on-surface-variant mb-3">Scan to pay via virtual account</p>
-                            <div class="inline-block bg-white p-4 rounded-xl border border-outline-variant/20">
-                                <img id="virtual-account-qr-code" class="w-48 h-48 mx-auto" alt="Virtual Account QR Code">
-                            </div>
-                            <button onclick="downloadQR('virtual')" class="mt-3 text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 mx-auto">
                                 <span class="material-symbols-outlined text-[16px]">download</span>
                                 Download QR Code
                             </button>
@@ -426,14 +412,12 @@
   window.ONEPAY_QR_VIRTUAL_ACCOUNT = {{ qr_code_virtual_account | default(None) | tojson }};
 
 // QR Code functions - MUST be defined before verify.js loads
-function showQRCodes(paymentQR, virtualAccountQR) {
+function showQRCodes(paymentQR) {
     const qrSection = document.getElementById('qr-section');
     const paymentContainer = document.getElementById('payment-qr-container');
-    const virtualContainer = document.getElementById('virtual-account-qr-container');
     const paymentImg = document.getElementById('payment-qr-code');
-    const virtualImg = document.getElementById('virtual-account-qr-code');
     
-    console.log('showQRCodes called:', { paymentQR: !!paymentQR, virtualAccountQR: !!virtualAccountQR });
+    console.log('showQRCodes called:', { paymentQR: !!paymentQR });
     
     if (paymentQR && paymentImg) {
         paymentImg.src = paymentQR;
@@ -441,14 +425,8 @@ function showQRCodes(paymentQR, virtualAccountQR) {
         console.log('Payment QR code set');
     }
     
-    if (virtualAccountQR && virtualImg) {
-        virtualImg.src = virtualAccountQR;
-        virtualContainer.classList.remove('hidden');
-        console.log('Virtual account QR code set');
-    }
-    
     // Show QR section if we have any QR codes
-    if ((paymentQR && paymentImg) || (virtualAccountQR && virtualImg)) {
+    if (paymentQR && paymentImg) {
         qrSection.classList.remove('hidden');
         console.log('QR section shown');
     }
@@ -474,7 +452,7 @@ function showPaymentMethod(method) {
     } else if (method === 'qr') {
         // Ensure QR codes are loaded before showing
         console.log('Loading QR codes...');
-        showQRCodes(window.ONEPAY_QR_PAYMENT_URL, window.ONEPAY_QR_VIRTUAL_ACCOUNT);
+        showQRCodes(window.ONEPAY_QR_PAYMENT_URL);
         
         // Show QR codes, hide bank details
         bankSection.classList.add('hidden');

@@ -924,14 +924,21 @@ let analyticsChartInstance = null;
 function renderAnalyticsChart(chartData) {
   const container = document.getElementById('analytics-chart-container');
   const ctx = document.getElementById('revenueChart');
-  if (!container || !ctx || !chartData || !chartData.dataset || chartData.dataset.length === 0) return;
+  if (!container || !ctx || !chartData) return;
+  
+  console.log('Rendering chart with data:', chartData);
   
   container.classList.remove('hidden');
 
   if (analyticsChartInstance) {
-    analyticsChartInstance.data.labels = chartData.labels;
-    analyticsChartInstance.data.datasets[0].data = chartData.dataset;
+    analyticsChartInstance.data.labels = chartData.labels || [];
+    analyticsChartInstance.data.datasets[0].data = chartData.dataset || [];
     analyticsChartInstance.update();
+    return;
+  }
+  
+  if (!chartData.labels || !chartData.dataset || chartData.dataset.length === 0) {
+    console.log('No chart data to display');
     return;
   }
 
@@ -1042,6 +1049,7 @@ async function loadPerformanceStats() {
     
     // Render analytics chart
     if (data.chart_data) {
+      console.log('Chart data received:', data.chart_data);
       renderAnalyticsChart(data.chart_data);
     }
     

@@ -325,7 +325,7 @@ def create_app() -> Flask:
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://accounts.google.com/gsi/ https://accounts.google.com; "
+            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://accounts.google.com/gsi/ https://accounts.google.com; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://accounts.google.com; "
             "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com; "
             "img-src 'self' data: https://lh3.googleusercontent.com; "
@@ -432,7 +432,7 @@ def create_app() -> Flask:
             with get_db() as db:
                 db.rollback()
         except Exception:
-            pass
+            logger.exception("Unhandled exception in error handler: %s")
 
         if request.path.startswith("/api/"):
             return jsonify(
@@ -486,7 +486,7 @@ def create_app() -> Flask:
             with get_db() as db:
                 db.rollback()
         except Exception:
-            pass
+            logger.exception("Unhandled exception in after_request: %s")
 
         # Return generic error to client (no details in production)
         if app.config.get("DEBUG"):
@@ -519,7 +519,12 @@ def create_app() -> Flask:
 
         csp = {
             "default-src": ["'self'"],
-            "script-src": ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
+            "script-src": [
+                "'self'",
+                "'unsafe-inline'",
+                "https://cdn.tailwindcss.com",
+                "https://cdn.jsdelivr.net",
+            ],
             "style-src": [
                 "'self'",
                 "'unsafe-inline'",
