@@ -71,29 +71,33 @@ def check_rate_limit(db, key: str, limit: int, window_secs: int = 60, critical: 
     window_start = now - timedelta(seconds=window_secs)
 
     try:
-        record = (
-            db.query(RateLimit)
-            .filter(
-                RateLimit.key == key,
-                RateLimit.window_start >= window_start,
+        # Use a savepoint to prevent concurrent RateLimit inserts from poisoning the parent transaction
+        # if an IntegrityError occurs (e.g. race condition on first request in window)
+        with db.begin_nested():
+            record = (
+                db.query(RateLimit)
+                .filter(
+                    RateLimit.key == key,
+                    RateLimit.window_start >= window_start,
+                )
+                .with_for_update()  # Lock the row to prevent races if it exists
+                .first()
             )
-            .first()
-        )
 
-        if record is None:
-            # First request in this window
-            record = RateLimit(key=key, window_start=now, count=1)
-            db.add(record)
+            if record is None:
+                # First request in this window
+                record = RateLimit(key=key, window_start=now, count=1)
+                db.add(record)
+                db.flush()
+                return True
+
+            if record.count >= limit:
+                logger.warning("Rate limit exceeded | key=%s count=%d limit=%d", key, record.count, limit)
+                return False
+
+            record.count += 1
             db.flush()
             return True
-
-        if record.count >= limit:
-            logger.warning("Rate limit exceeded | key=%s count=%d limit=%d", key, record.count, limit)
-            return False
-
-        record.count += 1
-        db.flush()
-        return True
 
     except Exception as e:
         logger.error("Rate limiter DB error: %s", e)

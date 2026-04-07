@@ -1,5 +1,6 @@
 """API key authentication module for machine-to-machine access"""
 import secrets
+from typing import Tuple, Optional
 
 
 def generate_api_key() -> str:
@@ -31,14 +32,14 @@ from database import get_db
 from models.api_key import APIKey
 
 
-def validate_api_key(key: str) -> tuple[bool, int | None]:
+def validate_api_key(key: str) -> Tuple[bool, Optional[int]]:
     """Validate API key and return (is_valid, user_id)
     
     Args:
         key: The API key to validate
         
     Returns:
-        tuple: (is_valid, user_id) where user_id is None if invalid
+        Tuple: (is_valid, user_id) where user_id is None if invalid
     """
     if not key or not key.startswith('onepay_live_'):
         return False, None

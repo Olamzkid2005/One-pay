@@ -186,6 +186,20 @@
                             </button>
                         </div>
                     </div>
+                    
+                    <!-- Virtual Account QR Code -->
+                    <div id="virtual-account-qr-container" class="hidden">
+                        <div class="text-center">
+                            <p class="text-xs text-on-surface-variant mb-3">Scan to pay via virtual account</p>
+                            <div class="inline-block bg-white p-4 rounded-xl border border-outline-variant/20">
+                                <img id="virtual-account-qr-code" class="w-48 h-48 mx-auto" alt="Virtual Account QR Code">
+                            </div>
+                            <button onclick="downloadQR('virtual')" class="mt-3 text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 mx-auto">
+                                <span class="material-symbols-outlined text-[16px]">download</span>
+                                Download QR Code
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 
                 <div id="no-bank-note" class="hidden p-4 bg-error-container/10 rounded-xl border border-error-container/20">

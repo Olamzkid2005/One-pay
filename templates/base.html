@@ -5,10 +5,9 @@
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>{% block title %}OnePay{% endblock %}</title>
     
-    <!-- Initialize theme before page renders to prevent flash -->
     <script>
-        // Check localStorage for theme preference, default to dark
-        const theme = localStorage.getItem('theme') || 'dark';
+        // Check localStorage for theme preference, default to light
+        const theme = localStorage.getItem('theme') || 'light';
         if (theme === 'dark') {
             document.documentElement.classList.add('dark');
         } else {
@@ -123,6 +122,38 @@
     <div id="toast-container"></div>
     {% block body %}{% endblock %}
     
+    <!-- Dark/Light Mode Toggle -->
+    <button id="theme-toggle" class="fixed top-6 right-6 z-50 p-3 rounded-full bg-surface-container-high/80 dark:bg-surface-variant/80 backdrop-blur-md editorial-shadow hover:scale-110 active:scale-95 transition-all outline-none">
+        <span id="theme-toggle-dark-icon" class="hidden material-symbols-outlined text-outline">light_mode</span>
+        <span id="theme-toggle-light-icon" class="hidden material-symbols-outlined text-outline">dark_mode</span>
+    </button>
+    
     {% block scripts %}{% endblock %}
+    
+    <script>
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const darkIcon = document.getElementById('theme-toggle-dark-icon');
+        const lightIcon = document.getElementById('theme-toggle-light-icon');
+        
+        // Initial icon state
+        if (document.documentElement.classList.contains('dark')) {
+            darkIcon.classList.remove('hidden');
+        } else {
+            lightIcon.classList.remove('hidden');
+        }
+        
+        themeToggleBtn.addEventListener('click', function() {
+            darkIcon.classList.toggle('hidden');
+            lightIcon.classList.toggle('hidden');
+            
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        });
+    </script>
 </body>
 </html>

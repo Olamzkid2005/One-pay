@@ -3,11 +3,20 @@ OnePay — Public blueprint
 Handles: verify page, preview API, transfer-status polling, health check
 No login required — these are customer-facing routes.
 """
+
 import logging
 import json
 from datetime import datetime, timezone
 
-from flask import Blueprint, request, jsonify, render_template, session, make_response, redirect
+from flask import (
+    Blueprint,
+    request,
+    jsonify,
+    render_template,
+    session,
+    make_response,
+    redirect,
+)
 
 from config import Config
 from database import engine, get_db
@@ -28,17 +37,19 @@ public_bp = Blueprint("public", __name__)
 
 # ── Root route ────────────────────────────────────────────────────────────────
 
+
 @public_bp.route("/")
 def index():
     """Root route - redirect to dashboard if authenticated, otherwise to login."""
     from flask import session, redirect
-    
+
     if session.get("user_id"):
         return redirect("/api/v1/", code=302)
     return redirect("/api/v1/login", code=302)
 
 
 # ── Login route alias ─────────────────────────────────────────────────────────
+
 
 @public_bp.route("/login")
 def login():
@@ -48,6 +59,7 @@ def login():
 
 # ── Register route alias ──────────────────────────────────────────────────────
 
+
 @public_bp.route("/register")
 def register():
     """Redirect /register to the actual register endpoint."""
@@ -56,10 +68,12 @@ def register():
 
 # ── Google OAuth route aliases ─────────────────────────────────────────────────
 
+
 @public_bp.route("/auth/google/config", methods=["GET"])
 def google_config():
     """Redirect /auth/google/config to the actual OAuth config endpoint."""
     from flask import redirect
+
     return redirect("/api/v1/auth/google/config", code=301)
 
 
@@ -67,15 +81,18 @@ def google_config():
 def google_callback():
     """Redirect /auth/google/callback to the actual OAuth callback endpoint."""
     from flask import redirect
+
     return redirect("/api/v1/auth/google/callback", code=307)
 
 
 # ── API route aliases (frontend uses /api/ prefix but routes are at /api/v1/) ──
 
+
 @public_bp.route("/api/payments/link", methods=["POST"])
 def api_create_payment_link():
     """Redirect /api/payments/link to the actual endpoint."""
     from flask import redirect
+
     return redirect("/api/v1/payments/link", code=307)
 
 
@@ -83,6 +100,7 @@ def api_create_payment_link():
 def api_payment_status(tx_ref):
     """Redirect /api/payments/status/<tx_ref> to the actual endpoint."""
     from flask import redirect
+
     return redirect(f"/api/v1/payments/status/{tx_ref}", code=307)
 
 
@@ -90,6 +108,7 @@ def api_payment_status(tx_ref):
 def api_payment_history():
     """Redirect /api/payments/history to the actual endpoint."""
     from flask import redirect
+
     return redirect("/api/v1/payments/history", code=307)
 
 
@@ -133,13 +152,18 @@ def api_payment_summary():
 def api_invoices_list():
     """Handle /api/invoices API call - redirect to the JSON API endpoint"""
     from flask import request, redirect
-    return redirect(f"/api/v1/invoices/list{('?' + request.query_string.decode()) if request.query_string else ''}", code=307)
+
+    return redirect(
+        f"/api/v1/invoices/list{('?' + request.query_string.decode()) if request.query_string else ''}",
+        code=307,
+    )
 
 
 @public_bp.route("/api/invoices/<invoice_number>/download", methods=["GET"])
 def api_invoice_download(invoice_number):
     """Redirect /api/invoices/<invoice_number>/download to the actual endpoint."""
     from flask import redirect
+
     return redirect(f"/api/v1/invoices/{invoice_number}/download", code=307)
 
 
@@ -147,6 +171,7 @@ def api_invoice_download(invoice_number):
 def api_invoice_send(invoice_number):
     """Redirect /api/invoices/<invoice_number>/send to the actual endpoint."""
     from flask import redirect
+
     return redirect(f"/api/v1/invoices/{invoice_number}/send", code=307)
 
 
@@ -154,6 +179,7 @@ def api_invoice_send(invoice_number):
 def api_invoices_export():
     """Redirect /api/invoices/export to the actual endpoint."""
     from flask import redirect
+
     return redirect("/api/v1/invoices/export", code=307)
 
 
@@ -161,10 +187,12 @@ def api_invoices_export():
 def api_invoices_settings():
     """Redirect /api/invoices/settings to the actual endpoint."""
     from flask import redirect
+
     return redirect("/api/v1/invoices/settings", code=307)
 
 
 # ── Pay page (clean URL — hash validated server-side) ─────────────────────────
+
 
 @public_bp.route("/pay/<tx_ref>")
 def pay_page(tx_ref):
@@ -175,24 +203,39 @@ def pay_page(tx_ref):
 
         if not valid_tx_ref(tx_ref):
             link_error = "Invalid transaction reference format."
-            logger.warning("Invalid tx_ref format | tx_ref=%s ip=%s", tx_ref, client_ip())
-            return render_template("verify.html", tx_ref=tx_ref,
-                                   return_url=return_url, link_error=link_error,
-                                   qr_code_payment_url=None,
-                                   qr_code_virtual_account=None)
+            logger.warning(
+                "Invalid tx_ref format | tx_ref=%s ip=%s", tx_ref, client_ip()
+            )
+            return render_template(
+                "verify.html",
+                tx_ref=tx_ref,
+                return_url=return_url,
+                link_error=link_error,
+                qr_code_payment_url=None,
+                qr_code_virtual_account=None,
+            )
 
         with get_db() as db:
             if not check_rate_limit(
-                db, f"verify_page:{client_ip()}",
+                db,
+                f"verify_page:{client_ip()}",
                 Config.RATE_LIMIT_VERIFY_PAGE_ATTEMPTS,
                 window_secs=Config.RATE_LIMIT_VERIFY_PAGE_WINDOW_SECS,
             ):
-                link_error = "Too many verification attempts — please wait and try again."
-                logger.warning("Rate limit exceeded | tx_ref=%s ip=%s", tx_ref, client_ip())
-                return render_template("verify.html", tx_ref=tx_ref,
-                                       return_url=return_url, link_error=link_error,
-                                       qr_code_payment_url=None,
-                                       qr_code_virtual_account=None)
+                link_error = (
+                    "Too many verification attempts — please wait and try again."
+                )
+                logger.warning(
+                    "Rate limit exceeded | tx_ref=%s ip=%s", tx_ref, client_ip()
+                )
+                return render_template(
+                    "verify.html",
+                    tx_ref=tx_ref,
+                    return_url=return_url,
+                    link_error=link_error,
+                    qr_code_payment_url=None,
+                    qr_code_virtual_account=None,
+                )
 
             t = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
 
@@ -201,88 +244,142 @@ def pay_page(tx_ref):
             qr_virtual_account = None
 
             if not t:
-                link_error = "This payment link was not found. Please request a new one."
-                logger.warning("Transaction not found | tx_ref=%s ip=%s", tx_ref, client_ip())
+                link_error = (
+                    "This payment link was not found. Please request a new one."
+                )
+                logger.warning(
+                    "Transaction not found | tx_ref=%s ip=%s", tx_ref, client_ip()
+                )
             else:
-                logger.info("Transaction found | tx_ref=%s user_id=%s status=%s", 
-                           tx_ref, t.user_id, t.status.value if t.status else 'None')
+                logger.info(
+                    "Transaction found | tx_ref=%s user_id=%s status=%s",
+                    tx_ref,
+                    t.user_id,
+                    t.status.value if t.status else "None",
+                )
                 # Store QR code values before session ends
                 qr_payment_url = t.qr_code_payment_url
                 qr_virtual_account = t.qr_code_virtual_account
-                
-                logger.debug("QR data for %s: payment=%s, va=%s", 
-                           tx_ref, 
-                           "Yes" if qr_payment_url else "No",
-                           "Yes" if qr_virtual_account else "No")
-                
+
+                logger.debug(
+                    "QR data for %s: payment=%s, va=%s",
+                    tx_ref,
+                    "Yes" if qr_payment_url else "No",
+                    "Yes" if qr_virtual_account else "No",
+                )
+
                 if t.return_url:
                     return_url = t.return_url
-                    
+
                 # Validate hash server-side — customer never sees it
-                hash_valid = verify_hash_token(tx_ref, t.amount, t.expires_at, t.hash_token)
-                logger.debug("Hash validation | tx_ref=%s valid=%s amount=%s expires=%s", 
-                            tx_ref, hash_valid, t.amount, t.expires_at)
-                
+                hash_valid = verify_hash_token(
+                    tx_ref, t.amount, t.expires_at, t.hash_token
+                )
+                logger.debug(
+                    "Hash validation | tx_ref=%s valid=%s amount=%s expires=%s",
+                    tx_ref,
+                    hash_valid,
+                    t.amount,
+                    t.expires_at,
+                )
+
                 if not hash_valid:
-                    link_error = "This payment link is invalid or has been tampered with."
-                    logger.warning("Hash validation failed | tx_ref=%s ip=%s amount=%s", 
-                                 tx_ref, client_ip(), t.amount)
+                    link_error = (
+                        "This payment link is invalid or has been tampered with."
+                    )
+                    logger.warning(
+                        "Hash validation failed | tx_ref=%s ip=%s amount=%s",
+                        tx_ref,
+                        client_ip(),
+                        t.amount,
+                    )
                 elif t.is_expired():
-                    link_error = "This payment link has expired. Please request a new one."
-                    logger.info("Transaction expired | tx_ref=%s expires_at=%s", 
-                               tx_ref, t.expires_at)
+                    link_error = (
+                        "This payment link has expired. Please request a new one."
+                    )
+                    logger.info(
+                        "Transaction expired | tx_ref=%s expires_at=%s",
+                        tx_ref,
+                        t.expires_at,
+                    )
                 else:
                     logger.info("Transaction valid | tx_ref=%s", tx_ref)
 
         if link_error:
-            logger.warning("Pay page rejected | ip=%s tx_ref=%s error=%s", 
-                         client_ip(), tx_ref, link_error)
-            return render_template("verify.html", tx_ref=tx_ref,
-                                   return_url=return_url, link_error=link_error,
-                                   qr_code_payment_url=None,
-                                   qr_code_virtual_account=None)
+            logger.warning(
+                "Pay page rejected | ip=%s tx_ref=%s error=%s",
+                client_ip(),
+                tx_ref,
+                link_error,
+            )
+            return render_template(
+                "verify.html",
+                tx_ref=tx_ref,
+                return_url=return_url,
+                link_error=link_error,
+                qr_code_payment_url=None,
+                qr_code_virtual_account=None,
+            )
         else:
             # Grant this browser session access to poll/preview this specific tx_ref
             session[f"pay_access_{tx_ref}"] = True
             logger.info("Pay page accepted | ip=%s tx_ref=%s", client_ip(), tx_ref)
 
-        logger.debug("Rendering payment page | payment_qr=%s va_qr=%s", 
-                   "Yes" if qr_payment_url else "No",
-                   "Yes" if qr_virtual_account else "No")
+        logger.debug(
+            "Rendering payment page | payment_qr=%s va_qr=%s",
+            "Yes" if qr_payment_url else "No",
+            "Yes" if qr_virtual_account else "No",
+        )
 
         # VULN-018 fix: Allow embedding only from merchant's return_url domain
-        response = make_response(render_template("verify.html", tx_ref=tx_ref,
-                               return_url=return_url, link_error=link_error,
-                               qr_code_payment_url=qr_payment_url,
-                               qr_code_virtual_account=qr_virtual_account))
-        
+        response = make_response(
+            render_template(
+                "verify.html",
+                tx_ref=tx_ref,
+                return_url=return_url,
+                link_error=link_error,
+                qr_code_payment_url=qr_payment_url,
+                qr_code_virtual_account=qr_virtual_account,
+            )
+        )
+
         # If transaction has return_url, allow framing from that domain only
         if return_url:
             from urllib.parse import urlparse
+
             try:
                 parsed = urlparse(return_url)
                 if parsed.netloc:
-                    # Override global X-Frame-Options for this specific page
-                    response.headers["X-Frame-Options"] = f"ALLOW-FROM https://{parsed.netloc}"
-                    # Modern browsers use CSP frame-ancestors
-                    response.headers["Content-Security-Policy"] = \
+                    # Modern browsers use CSP frame-ancestors (ALLOW-FROM is deprecated)
+                    response.headers["Content-Security-Policy"] = (
                         f"frame-ancestors 'self' https://{parsed.netloc}"
-                    logger.debug("Clickjacking protection: allowing frames from %s", parsed.netloc)
+                    )
+                    logger.debug(
+                        "Clickjacking protection: allowing frames from %s",
+                        parsed.netloc,
+                    )
             except Exception as e:
                 logger.warning("Failed to parse return_url for frame protection: %s", e)
-        
+
         return response
-    
+
     except Exception as e:
-        logger.error("Exception in pay_page | tx_ref=%s error=%s", tx_ref, e, exc_info=True)
+        logger.error(
+            "Exception in pay_page | tx_ref=%s error=%s", tx_ref, e, exc_info=True
+        )
         # Fallback render
-        return render_template("verify.html", tx_ref=tx_ref,
-                               return_url="", link_error="Internal server error",
-                               qr_code_payment_url=None,
-                               qr_code_virtual_account=None)
+        return render_template(
+            "verify.html",
+            tx_ref=tx_ref,
+            return_url="",
+            link_error="Internal server error",
+            qr_code_payment_url=None,
+            qr_code_virtual_account=None,
+        )
 
 
 # ── Verified page ───────────────────────────────────────────────────────────────
+
 
 @public_bp.route("/verified/<tx_ref>")
 def verified_page(tx_ref):
@@ -303,22 +400,25 @@ def verified_page(tx_ref):
             return redirect(f"/pay/{tx_ref}", code=302)
 
         # Already confirmed - show verified page
-        return render_template("verified.html",
-                               tx_ref=tx_ref,
-                               return_url=t.return_url or "")
+        return render_template(
+            "verified.html", tx_ref=tx_ref, return_url=t.return_url or ""
+        )
 
 
 # ── Legacy verify route — redirect to clean URL ────────────────────────────────
+
 
 @public_bp.route("/verify/<tx_ref>")
 @public_bp.route("/verify/<tx_ref>/<hash_in_path>")
 def verify_page(tx_ref, hash_in_path=None):
     """Backwards-compatible redirect to the clean /pay/ URL."""
     from flask import redirect
+
     return redirect(f"/pay/{tx_ref}", code=301)
 
 
 # ── Preview API ────────────────────────────────────────────────────────────────
+
 
 @public_bp.route("/api/payments/preview/<tx_ref>", methods=["GET"])
 def get_preview(tx_ref):
@@ -338,32 +438,35 @@ def get_preview(tx_ref):
             # Grant session access for subsequent poll calls
             session[f"pay_access_{tx_ref}"] = True
 
-        return jsonify({
-            "success":     True,
-            "tx_ref":      t.tx_ref,
-            "amount":      str(t.amount),
-            "currency":    t.currency,
-            "description": t.description,
-            "expires_at":  t.expires_at_utc_iso(),
-            "is_expired":  t.is_expired(),
-            "is_used":     t.is_used,
-            "status":      t.effective_status_value(),
-            "virtual_account_number": t.virtual_account_number,
-            "virtual_bank_name":      t.virtual_bank_name,
-            "virtual_account_name":   t.virtual_account_name,
-            "transfer_confirmed":     t.transfer_confirmed,
-            "qr_code_payment_url":     t.qr_code_payment_url,
-            "qr_code_virtual_account": t.qr_code_virtual_account,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "tx_ref": t.tx_ref,
+                "amount": str(t.amount),
+                "currency": t.currency,
+                "description": t.description,
+                "expires_at": t.expires_at_utc_iso(),
+                "is_expired": t.is_expired(),
+                "is_used": t.is_used,
+                "status": t.effective_status_value(),
+                "virtual_account_number": t.virtual_account_number,
+                "virtual_bank_name": t.virtual_bank_name,
+                "virtual_account_name": t.virtual_account_name,
+                "transfer_confirmed": t.transfer_confirmed,
+                "qr_code_payment_url": t.qr_code_payment_url,
+                "qr_code_virtual_account": t.qr_code_virtual_account,
+            }
+        )
 
 
 # ── Transfer status polling ────────────────────────────────────────────────────
+
 
 @public_bp.route("/api/payments/transfer-status/<tx_ref>", methods=["GET"])
 def transfer_status(tx_ref):
     """
     Poll transfer confirmation status.
-    
+
     Security: Rate limited to 20 requests per minute per IP to prevent DoS.
     Frontend implements additional client-side polling cap (60 polls max).
     Uses optimistic locking to prevent race conditions.
@@ -383,7 +486,7 @@ def transfer_status(tx_ref):
 
         # Fast path: Fetch transaction WITHOUT locking to check status quickly
         t = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
-        
+
         if not t:
             return error("Transaction not found", "NOT_FOUND", 404)
 
@@ -400,9 +503,10 @@ def transfer_status(tx_ref):
             if t.status != TransactionStatus.EXPIRED:
                 t.status = TransactionStatus.EXPIRED
                 db.flush()
-                
+
                 # Sync invoice status if invoice exists
                 from services.webhook import sync_invoice_on_transaction_update
+
                 sync_invoice_on_transaction_update(db, t)
             return jsonify({"success": False, "status": "expired", "tx_ref": tx_ref})
 
@@ -412,8 +516,13 @@ def transfer_status(tx_ref):
             return jsonify({"success": False, "status": "pending", "tx_ref": tx_ref})
 
         # Optimistic locking: Acquire row lock to prevent race conditions
-        t_locked = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).with_for_update().first()
-        
+        t_locked = (
+            db.query(Transaction)
+            .filter(Transaction.tx_ref == tx_ref)
+            .with_for_update()
+            .first()
+        )
+
         if not t_locked:
             return error("Transaction not found", "NOT_FOUND", 404)
 
@@ -425,7 +534,7 @@ def transfer_status(tx_ref):
         try:
             result = korapay.confirm_transfer(tx_ref)
             response_code = result.get("responseCode", "")
-            
+
             if response_code == "00":
                 # Transfer confirmed
                 t_locked.transfer_confirmed = True
@@ -435,57 +544,75 @@ def transfer_status(tx_ref):
                 # Deliver webhook if configured
                 if t_locked.webhook_url:
                     from services.webhook import deliver_webhook
+
                     deliver_webhook(db, t_locked)
 
                 # Sync invoice status and send notification emails
-                from services.webhook import sync_invoice_on_transaction_update, send_payment_notification_emails
+                from services.webhook import (
+                    sync_invoice_on_transaction_update,
+                    send_payment_notification_emails,
+                )
+
                 sync_invoice_on_transaction_update(db, t_locked)
 
                 # Send payment notification emails (merchant + customer)
-                user_for_email = db.query(User).filter(User.id == t_locked.user_id).first()
+                user_for_email = (
+                    db.query(User).filter(User.id == t_locked.user_id).first()
+                )
                 if user_for_email:
                     send_payment_notification_emails(db, t_locked, user_for_email)
 
-                log_event(db, "transfer_confirmed", t_locked.user_id,
-                         tx_ref=tx_ref, detail={"tx_ref": tx_ref, "amount": str(t_locked.amount)})
-                
-                return jsonify({"success": True, "status": "confirmed", "tx_ref": tx_ref})
+                log_event(
+                    db,
+                    "transfer_confirmed",
+                    t_locked.user_id,
+                    tx_ref=tx_ref,
+                    detail={"tx_ref": tx_ref, "amount": str(t_locked.amount)},
+                )
+
+                return jsonify(
+                    {"success": True, "status": "confirmed", "tx_ref": tx_ref}
+                )
             else:
                 # Transfer still pending
-                return jsonify({"success": False, "status": "pending", "tx_ref": tx_ref})
-                
+                return jsonify(
+                    {"success": False, "status": "pending", "tx_ref": tx_ref}
+                )
+
         except KoraPayError as e:
             logger.error("KoraPay error confirming transfer %s: %s", tx_ref, e)
             return jsonify({"success": False, "status": "pending", "tx_ref": tx_ref})
 
+
 # ── KoraPay Webhook ────────────────────────────────────────────────────────────
+
 
 @public_bp.route("/api/webhooks/korapay", methods=["POST"])
 def korapay_webhook():
     """
     Receive payment notifications from KoraPay.
-    
+
     Security: HMAC-SHA256 signature verification on data object only.
     Rate limited: 100 requests/min per IP.
     Idempotent: Multiple deliveries of same webhook are safe.
-    
+
     Requirements: 9.1-9.45
     """
     ip = client_ip()
-    
+
     with get_db() as db:
         # Rate limiting: 100 requests/min per IP
         if not check_rate_limit(db, f"webhook:korapay:{ip}", limit=100, window_secs=60):
             logger.warning("Webhook rate limit exceeded | ip=%s", ip)
             return error("Rate limit exceeded", "RATE_LIMIT", 429)
-        
+
         # Extract signature header
         signature = request.headers.get("x-korapay-signature")
         if not signature:
             logger.warning("Webhook missing signature | ip=%s", ip)
             log_event(db, "webhook.signature_missing", None, detail={"ip": ip})
             return error("Missing signature", "UNAUTHORIZED", 401)
-        
+
         # Get raw request body for signature verification
         try:
             raw_body = request.get_data(as_text=False)
@@ -493,46 +620,61 @@ def korapay_webhook():
         except json.JSONDecodeError:
             logger.warning("Webhook invalid JSON | ip=%s", ip)
             return error("Invalid JSON", "BAD_REQUEST", 400)
-        
+
         # Validate payload has data object
         if "data" not in payload:
             logger.warning("Webhook missing data object | ip=%s", ip)
             return error("Missing data object", "BAD_REQUEST", 400)
-        
+
         # Verify signature using webhook signature verification function
         from services.korapay import verify_korapay_webhook_signature
+
         if not verify_korapay_webhook_signature(payload, signature):
-            logger.warning("Webhook signature invalid | ip=%s ref=%s", 
-                         ip, payload.get("data", {}).get("reference", "unknown"))
-            log_event(db, "webhook.signature_failed", None, 
-                     {"ip": ip, "reference": payload.get("data", {}).get("reference")})
+            logger.warning(
+                "Webhook signature invalid | ip=%s ref=%s",
+                ip,
+                payload.get("data", {}).get("reference", "unknown"),
+            )
+            log_event(
+                db,
+                "webhook.signature_failed",
+                None,
+                {"ip": ip, "reference": payload.get("data", {}).get("reference")},
+            )
             return error("Invalid signature", "UNAUTHORIZED", 401)
-        
+
         # Extract webhook data
         event = payload.get("event")
         data = payload["data"]
         reference = data.get("reference")
         status = data.get("status")
         amount = data.get("amount")
-        
+
         # Query transaction by reference
         t = db.query(Transaction).filter(Transaction.tx_ref == reference).first()
         if not t:
-            logger.warning("Webhook transaction not found | ref=%s ip=%s", reference, ip)
+            logger.warning(
+                "Webhook transaction not found | ref=%s ip=%s", reference, ip
+            )
             return error("Transaction not found", "NOT_FOUND", 404)
-        
-        # Validate amount matches (KoraPay sends amount in Naira)
-        expected_amount = int(t.amount)  # Transaction amount is Decimal in Naira
-        if amount != expected_amount:
-            logger.warning("Webhook amount mismatch | ref=%s expected=%d got=%d", 
-                         reference, expected_amount, amount)
+
+        # Validate amount matches (KoraPay sends amount in kobo/minor units)
+        # Transaction amount is stored as Decimal in Naira, so convert to kobo for comparison
+        expected_kobo = int(t.amount * 100)
+        if amount != expected_kobo:
+            logger.warning(
+                "Webhook amount mismatch | ref=%s expected_kobo=%d got=%d",
+                reference,
+                expected_kobo,
+                amount,
+            )
             return error("Amount mismatch", "BAD_REQUEST", 400)
-        
+
         # Check if already confirmed (idempotency)
         if t.transfer_confirmed:
             logger.info("Webhook for already confirmed transaction | ref=%s", reference)
             return jsonify({"success": True, "tx_ref": reference}), 200
-        
+
         # Process charge.success event
         if event == "charge.success" and status == "success":
             # Update transaction status
@@ -540,21 +682,28 @@ def korapay_webhook():
             t.status = TransactionStatus.VERIFIED
             t.is_used = True
             db.flush()
-            
+
             # Forward to VoicePay if this is a VoicePay transaction
             from config import Config
+
             if Config.VOICEPAY_WEBHOOK_ENABLED and reference.startswith("VP-BILL-"):
                 try:
-                    from services.voicepay_webhook import build_voicepay_payload, send_voicepay_webhook
-                    
+                    from services.voicepay_webhook import (
+                        build_voicepay_payload,
+                        send_voicepay_webhook,
+                    )
+
                     # Determine webhook URL (sandbox vs production)
-                    if Config.KORAPAY_USE_SANDBOX and Config.VOICEPAY_WEBHOOK_URL_SANDBOX:
+                    if (
+                        Config.KORAPAY_USE_SANDBOX
+                        and Config.VOICEPAY_WEBHOOK_URL_SANDBOX
+                    ):
                         webhook_url = Config.VOICEPAY_WEBHOOK_URL_SANDBOX
                         webhook_secret = Config.VOICEPAY_WEBHOOK_SECRET_SANDBOX
                     else:
                         webhook_url = Config.VOICEPAY_WEBHOOK_URL
                         webhook_secret = Config.VOICEPAY_WEBHOOK_SECRET
-                    
+
                     # Build and send VoicePay webhook
                     payload = build_voicepay_payload(t)
                     result = send_voicepay_webhook(
@@ -562,43 +711,64 @@ def korapay_webhook():
                         webhook_url=webhook_url,
                         secret=webhook_secret,
                         timeout=Config.VOICEPAY_WEBHOOK_TIMEOUT_SECS,
-                        max_retries=Config.VOICEPAY_WEBHOOK_MAX_RETRIES
+                        max_retries=Config.VOICEPAY_WEBHOOK_MAX_RETRIES,
                     )
-                    
+
                     if result.get("success"):
-                        logger.info("VoicePay webhook delivered | ref=%s status_code=%d", 
-                                   reference, result.get("status_code"))
+                        logger.info(
+                            "VoicePay webhook delivered | ref=%s status_code=%d",
+                            reference,
+                            result.get("status_code"),
+                        )
                     else:
-                        logger.warning("VoicePay webhook delivery failed | ref=%s error=%s", 
-                                      reference, result.get("error"))
+                        logger.warning(
+                            "VoicePay webhook delivery failed | ref=%s error=%s",
+                            reference,
+                            result.get("error"),
+                        )
                 except Exception as e:
                     # Log error but don't block KoraPay webhook response
-                    logger.error("VoicePay webhook forwarding error | ref=%s error=%s", 
-                                reference, e, exc_info=True)
-            
+                    logger.error(
+                        "VoicePay webhook forwarding error | ref=%s error=%s",
+                        reference,
+                        e,
+                        exc_info=True,
+                    )
+
             # Deliver webhook if configured
             if t.webhook_url:
                 from services.webhook import deliver_webhook
+
                 deliver_webhook(db, t)
-            
+
             # Sync invoice status
             from services.webhook import sync_invoice_on_transaction_update
+
             sync_invoice_on_transaction_update(db, t)
-            
+
             # Log audit event
-            log_event(db, "payment.confirmed_via_webhook", t.user_id, 
-                     {"tx_ref": reference, "amount": str(t.amount)})
-            
+            log_event(
+                db,
+                "payment.confirmed_via_webhook",
+                t.user_id,
+                {"tx_ref": reference, "amount": str(t.amount)},
+            )
+
             logger.info("Webhook processed successfully | ref=%s", reference)
             return jsonify({"success": True, "tx_ref": reference}), 200
         else:
             # Other events or statuses - acknowledge but don't process
-            logger.info("Webhook received but not processed | event=%s status=%s ref=%s", 
-                       event, status, reference)
+            logger.info(
+                "Webhook received but not processed | event=%s status=%s ref=%s",
+                event,
+                status,
+                reference,
+            )
             return jsonify({"success": True, "tx_ref": reference}), 200
 
 
 # ── Health check ───────────────────────────────────────────────────────────────
+
 
 @public_bp.route("/health", methods=["GET"])
 def health():
@@ -610,6 +780,7 @@ def health():
             cleanup_old_rate_limits(db)
             # Cleanup old audit logs (90 day retention)
             from core.audit import cleanup_old_audit_logs
+
             cleanup_old_audit_logs(db, retention_days=90)
     except Exception:
         pass
@@ -624,6 +795,7 @@ def health():
 
     # Get KoraPay base URL (without credentials)
     from config import Config
+
     korapay_base_url = Config.KORAPAY_BASE_URL
     korapay_environment = "sandbox" if Config.KORAPAY_USE_SANDBOX else "production"
 
@@ -632,25 +804,27 @@ def health():
         "database": db_ok,
         "korapay": korapay_ok,
     }
-    
+
     all_healthy = all(v for v in checks.values() if v is not None)
     status_code = 200 if all_healthy else 503
 
-    return jsonify({
-        "status":              "healthy" if all_healthy else "unhealthy",
-        "checks":              checks,
-        "timestamp":           datetime.now(timezone.utc).isoformat(),
-        "version":             "1.0.0",
-        # Legacy fields for backward compatibility
-        "app":                 "OnePay",
-        "database":            "ok" if db_ok else "error",
-        "korapay":             "ok" if korapay_ok else "not_configured",
-        "korapay_configured":  korapay_transfer_ok,
-        "mock_mode":           mock_mode,
-        "korapay_base_url":    korapay_base_url,
-        "korapay_environment":  korapay_environment,
-        "korapay_metrics":     korapay_metrics
-    }), status_code
+    return jsonify(
+        {
+            "status": "healthy" if all_healthy else "unhealthy",
+            "checks": checks,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "version": "1.0.0",
+            # Legacy fields for backward compatibility
+            "app": "OnePay",
+            "database": "ok" if db_ok else "error",
+            "korapay": "ok" if korapay_ok else "not_configured",
+            "korapay_configured": korapay_transfer_ok,
+            "mock_mode": mock_mode,
+            "korapay_base_url": korapay_base_url,
+            "korapay_environment": korapay_environment,
+            "korapay_metrics": korapay_metrics,
+        }
+    ), status_code
 
 
 def _check_database() -> bool:

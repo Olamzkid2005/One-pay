@@ -5,9 +5,18 @@ All routes live in blueprints:
   blueprints/payments.py — dashboard, create link, status, history
   blueprints/public.py   — verify page, preview API, polling, health
 """
+
 import logging
+import warnings
 import uuid
 from datetime import timedelta, datetime, timezone
+
+# Silence warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=ResourceWarning)
+warnings.filterwarnings("ignore", message=".*urllib3 v2 only supports OpenSSL.*")
+warnings.filterwarnings("ignore", message=".*Python version 3.9 past its end of life.*")
 
 from flask import Flask, request, redirect, g, jsonify, render_template, session
 
@@ -22,11 +31,14 @@ from blueprints.webhooks import webhooks_bp
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 
+
 class RequestIdFilter(logging.Filter):
     """Inject request_id from Flask g into every log record."""
+
     def filter(self, record):
         try:
             from flask import g
+
             record.request_id = g.get("request_id", "-")
         except RuntimeError:
             record.request_id = "-"
@@ -39,15 +51,17 @@ def _configure_logging():
     JSON logs are easier to ingest in log aggregators (CloudWatch, Datadog, etc.)
     """
     from core.logging_filters import SensitiveDataFilter
-    
+
     request_id_filter = RequestIdFilter()
     sensitive_filter = SensitiveDataFilter()
-    
+
     if Config.DEBUG:
         handler = logging.StreamHandler()
-        handler.setFormatter(logging.Formatter(
-            "%(asctime)s  %(levelname)-8s  [%(request_id)s]  %(name)s — %(message)s"
-        ))
+        handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s  %(levelname)-8s  [%(request_id)s]  %(name)s — %(message)s"
+            )
+        )
         handler.addFilter(request_id_filter)
         handler.addFilter(sensitive_filter)
         root = logging.getLogger()
@@ -56,7 +70,8 @@ def _configure_logging():
     else:
         try:
             from pythonjsonlogger import jsonlogger
-            handler   = logging.StreamHandler()
+
+            handler = logging.StreamHandler()
             formatter = jsonlogger.JsonFormatter(
                 "%(asctime)s %(levelname)s %(request_id)s %(name)s %(message)s"
             )
@@ -68,34 +83,38 @@ def _configure_logging():
             root.setLevel(logging.INFO)
         except ImportError:
             handler = logging.StreamHandler()
-            handler.setFormatter(logging.Formatter(
-                "%(asctime)s  %(levelname)-8s  [%(request_id)s]  %(name)s — %(message)s"
-            ))
+            handler.setFormatter(
+                logging.Formatter(
+                    "%(asctime)s  %(levelname)-8s  [%(request_id)s]  %(name)s — %(message)s"
+                )
+            )
             handler.addFilter(request_id_filter)
             handler.addFilter(sensitive_filter)
             root = logging.getLogger()
             root.handlers = [handler]
             root.setLevel(logging.INFO)
 
+
 _configure_logging()
 logger = logging.getLogger(__name__)
 
 # ── App factory ────────────────────────────────────────────────────────────────
 
+
 def create_app() -> Flask:
     app = Flask(__name__)
     app.config["SECRET_KEY"] = Config.SECRET_KEY
-    app.config["DEBUG"]      = Config.DEBUG
+    app.config["DEBUG"] = Config.DEBUG
     app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # 1MB max request size
     app.config.update(
-        SESSION_COOKIE_HTTPONLY  = True,
-        SESSION_COOKIE_SAMESITE  = "Lax",  # Better compatibility while maintaining security
-        SESSION_COOKIE_SECURE    = Config.ENFORCE_HTTPS,
-        SESSION_COOKIE_DOMAIN    = None,  # Restrict to exact domain (no subdomains)
-        SESSION_PERMANENT        = True,
-        PERMANENT_SESSION_LIFETIME = timedelta(hours=Config.PERMANENT_SESSION_LIFETIME),
-        SESSION_TIMEOUT_AUTHENTICATED = Config.SESSION_TIMEOUT_AUTHENTICATED,
-        SESSION_TIMEOUT_UNAUTHENTICATED = Config.SESSION_TIMEOUT_UNAUTHENTICATED,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",  # Better compatibility while maintaining security
+        SESSION_COOKIE_SECURE=Config.ENFORCE_HTTPS,
+        SESSION_COOKIE_DOMAIN=None,  # Restrict to exact domain (no subdomains)
+        SESSION_PERMANENT=True,
+        PERMANENT_SESSION_LIFETIME=timedelta(hours=Config.PERMANENT_SESSION_LIFETIME),
+        SESSION_TIMEOUT_AUTHENTICATED=Config.SESSION_TIMEOUT_AUTHENTICATED,
+        SESSION_TIMEOUT_UNAUTHENTICATED=Config.SESSION_TIMEOUT_UNAUTHENTICATED,
     )
 
     Config.validate()
@@ -109,9 +128,12 @@ def create_app() -> Flask:
     def verify_production_config():
         """Runtime assertion to prevent DEBUG in production."""
         import os
+
         if os.getenv("APP_ENV") == "production":
             assert not app.config["DEBUG"], "DEBUG must be False in production"
-            assert app.config["SESSION_COOKIE_SECURE"], "SESSION_COOKIE_SECURE must be True in production"
+            assert app.config["SESSION_COOKIE_SECURE"], (
+                "SESSION_COOKIE_SECURE must be True in production"
+            )
             assert Config.ENFORCE_HTTPS, "HTTPS must be enforced in production"
 
     # ── Request ID tracing ─────────────────────────────────────────────────────
@@ -127,23 +149,27 @@ def create_app() -> Flask:
         from core.audit import log_event
         from core.ip import client_ip
         from database import get_db
-        
-        auth_header = request.headers.get('Authorization', '')
-        
-        if auth_header.startswith('Bearer '):
+
+        auth_header = request.headers.get("Authorization", "")
+
+        if auth_header.startswith("Bearer "):
             api_key = auth_header[7:]  # Remove 'Bearer ' prefix
             is_valid, user_id = validate_api_key(api_key)
-            
+
             if is_valid:
                 g.api_key_authenticated = True
                 g.user_id = user_id
                 g.api_key = api_key
-                
+
                 # Log API key usage
                 with get_db() as db:
-                    log_event(db, "api_key.used", user_id=user_id, 
-                             ip_address=client_ip(),
-                             detail={"endpoint": request.endpoint})
+                    log_event(
+                        db,
+                        "api_key.used",
+                        user_id=user_id,
+                        ip_address=client_ip(),
+                        detail={"endpoint": request.endpoint},
+                    )
 
     @app.after_request
     def add_request_id_header(response):
@@ -155,15 +181,15 @@ def create_app() -> Flask:
     def invalidate_old_sessions():
         """Clear any session that was created before this app boot."""
         # Skip validation in test mode
-        if app.config.get('TESTING'):
+        if app.config.get("TESTING"):
             return None
-        
+
         boot_time = app.config.get("BOOT_TIME")
         if session.get("_boot") != boot_time:
             session.clear()
             session["_boot"] = boot_time
             return
-        
+
         # Absolute maximum session lifetime (7 days)
         session_created = session.get("_created")
         if session_created:
@@ -172,27 +198,39 @@ def create_app() -> Flask:
                 max_age = timedelta(days=7)
                 if datetime.now(timezone.utc) - created_dt > max_age:
                     if session.get("user_id"):
-                        logger.info("Session expired due to maximum age | user=%s", session.get("username"))
+                        logger.info(
+                            "Session expired due to maximum age | user=%s",
+                            session.get("username"),
+                        )
                     session.clear()
                     return
             except (ValueError, TypeError):
                 pass
-        
+
         # Session inactivity timeout - applies to ALL sessions
         last_activity = session.get("_last_activity")
         if last_activity:
             try:
                 last_active_dt = datetime.fromisoformat(last_activity)
                 # Different timeout for authenticated vs unauthenticated sessions
-                timeout_minutes = Config.SESSION_TIMEOUT_AUTHENTICATED if session.get("user_id") else Config.SESSION_TIMEOUT_UNAUTHENTICATED
-                if datetime.now(timezone.utc) - last_active_dt > timedelta(minutes=timeout_minutes):
+                timeout_minutes = (
+                    Config.SESSION_TIMEOUT_AUTHENTICATED
+                    if session.get("user_id")
+                    else Config.SESSION_TIMEOUT_UNAUTHENTICATED
+                )
+                if datetime.now(timezone.utc) - last_active_dt > timedelta(
+                    minutes=timeout_minutes
+                ):
                     if session.get("user_id"):
-                        logger.info("Session expired due to inactivity | user=%s", session.get("username"))
+                        logger.info(
+                            "Session expired due to inactivity | user=%s",
+                            session.get("username"),
+                        )
                     session.clear()
                     return
             except (ValueError, TypeError):
                 pass
-        
+
         # Update last activity timestamp for all sessions
         session["_last_activity"] = datetime.now(timezone.utc).isoformat()
 
@@ -201,32 +239,54 @@ def create_app() -> Flask:
     def validate_session_binding():
         """Validate session is bound to same IP and User-Agent."""
         # Skip validation in test mode
-        if app.config.get('TESTING'):
+        if app.config.get("TESTING"):
             return None
-        
+
         from core.ip import client_ip
-        
+
         if "user_id" in session:
             # Check IP binding
             session_ip = session.get("_ip")
             current_ip = client_ip()
             if session_ip and session_ip != current_ip:
+
                 def _is_private(ip: str) -> bool:
-                    return ip.startswith("10.") or ip.startswith("127.") or ip.startswith("192.168.") or (ip.startswith("172.") and ip.split(".")[1].isdigit() and 16 <= int(ip.split(".")[1]) <= 31)
+                    return (
+                        ip.startswith("10.")
+                        or ip.startswith("127.")
+                        or ip.startswith("192.168.")
+                        or (
+                            ip.startswith("172.")
+                            and ip.split(".")[1].isdigit()
+                            and 16 <= int(ip.split(".")[1]) <= 31
+                        )
+                    )
+
                 if _is_private(session_ip) and _is_private(current_ip):
-                    logger.warning("Session IP changed within private network | user=%s from=%s to=%s", session.get("username"), session_ip, current_ip)
+                    logger.warning(
+                        "Session IP changed within private network | user=%s from=%s to=%s",
+                        session.get("username"),
+                        session_ip,
+                        current_ip,
+                    )
                     session["_ip"] = current_ip
                 else:
-                    logger.warning("Session IP mismatch | user=%s session_ip=%s current_ip=%s", session.get("username"), session_ip, current_ip)
+                    logger.warning(
+                        "Session IP mismatch | user=%s session_ip=%s current_ip=%s",
+                        session.get("username"),
+                        session_ip,
+                        current_ip,
+                    )
                     session.clear()
                     return redirect("/login")
-            
+
             # Check User-Agent binding
             session_ua = session.get("_user_agent")
             current_ua = request.headers.get("User-Agent", "")[:200]
             if session_ua and session_ua != current_ua:
-                logger.warning("Session User-Agent mismatch | user=%s",
-                              session.get("username"))
+                logger.warning(
+                    "Session User-Agent mismatch | user=%s", session.get("username")
+                )
                 session.clear()
                 return redirect("/login")
 
@@ -241,7 +301,6 @@ def create_app() -> Flask:
             if (request.headers.get("X-Forwarded-Proto") or "").lower() == "https":
                 return None
         return redirect(request.url.replace("http://", "https://", 1), code=301)
-
 
     # ── Security response headers ──────────────────────────────────────────────
     @app.after_request
@@ -277,43 +336,50 @@ def create_app() -> Flask:
             "base-uri 'self'; "
             "form-action 'self';",
         )
-        
+
         # X-Frame-Options: Don't set DENY on login/register pages (Google OAuth needs popups)
         # CSP frame-ancestors 'none' provides equivalent protection
-        if request.endpoint not in ['auth.login_page', 'auth.register_page']:
+        if request.endpoint not in ["auth.login_page", "auth.register_page"]:
             response.headers.setdefault("X-Frame-Options", "DENY")
-        
+
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        response.headers.setdefault("Permissions-Policy", 
-            "geolocation=(), camera=(), microphone=(), payment=(), usb=(), magnetometer=()")
-        
+        response.headers.setdefault(
+            "Referrer-Policy", "strict-origin-when-cross-origin"
+        )
+        response.headers.setdefault(
+            "Permissions-Policy",
+            "geolocation=(), camera=(), microphone=(), payment=(), usb=(), magnetometer=()",
+        )
+
         # Cross-Origin-Opener-Policy: Don't use same-origin on login/register (blocks OAuth popups)
-        if request.endpoint not in ['auth.login_page', 'auth.register_page']:
+        if request.endpoint not in ["auth.login_page", "auth.register_page"]:
             response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
-        
+
         # Removed Cross-Origin-Embedder-Policy as it blocks CDN resources
         response.headers.setdefault("X-XSS-Protection", "1; mode=block")
         response.headers.setdefault("X-Download-Options", "noopen")
         response.headers.setdefault("X-Permitted-Cross-Domain-Policies", "none")
-        
+
         # Additional headers for maximum compatibility
-        response.headers.setdefault("X-Content-Security-Policy", response.headers.get("Content-Security-Policy", ""))
+        response.headers.setdefault(
+            "X-Content-Security-Policy",
+            response.headers.get("Content-Security-Policy", ""),
+        )
         response.headers.setdefault("Expect-CT", "max-age=86400, enforce")
-        
+
         # HSTS header (defense-in-depth, also set by Talisman)
         if Config.ENFORCE_HTTPS:
             response.headers.setdefault(
                 "Strict-Transport-Security",
-                "max-age=31536000; includeSubDomains; preload"
+                "max-age=31536000; includeSubDomains; preload",
             )
-        
+
         return response
 
     # ── Blueprints ─────────────────────────────────────────────────────────────
     # Public routes (no versioning)
     app.register_blueprint(public_bp)
-    
+
     # API v1 routes
     app.register_blueprint(auth_bp, url_prefix="/api/v1")
     app.register_blueprint(payments_bp, url_prefix="/api/v1")
@@ -325,24 +391,30 @@ def create_app() -> Flask:
     @app.errorhandler(404)
     def not_found_error(error):
         """Handle 404 errors with a friendly message."""
-        if request.path.startswith('/api/'):
-            return jsonify({
-                "success": False,
-                "error": "NOT_FOUND",
-                "message": "The requested resource was not found"
-            }), 404
-        return render_template('base.html'), 404
+        if request.path.startswith("/api/"):
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "NOT_FOUND",
+                    "message": "The requested resource was not found",
+                }
+            ), 404
+        return render_template("base.html"), 404
 
     @app.errorhandler(413)
     def request_entity_too_large(error):
         """Handle requests that exceed MAX_CONTENT_LENGTH."""
+        from core.ip import client_ip
+
         logger.warning("Request too large | ip=%s path=%s", client_ip(), request.path)
-        return jsonify({
-            "success": False,
-            "error": "REQUEST_TOO_LARGE",
-            "message": "Request too large (max 1MB)",
-            "max_size_mb": 1
-        }), 413
+        return jsonify(
+            {
+                "success": False,
+                "error": "REQUEST_TOO_LARGE",
+                "message": "Request too large (max 1MB)",
+                "max_size_mb": 1,
+            }
+        ), 413
 
     @app.errorhandler(500)
     def internal_error(error):
@@ -352,34 +424,39 @@ def create_app() -> Flask:
             logger.error("Internal server error: %s", error, exc_info=True)
         else:
             logger.error("Internal server error: %s", str(error)[:200])
-        
+
         # Rollback any pending database transactions
         try:
             from database import get_db
+
             with get_db() as db:
                 db.rollback()
         except Exception:
             pass
-        
-        if request.path.startswith('/api/'):
-            return jsonify({
-                "success": False,
-                "error": "INTERNAL_ERROR",
-                "message": "An internal error occurred. Please try again later."
-            }), 500
-        
-        return render_template('base.html'), 500
+
+        if request.path.startswith("/api/"):
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "INTERNAL_ERROR",
+                    "message": "An internal error occurred. Please try again later.",
+                }
+            ), 500
+
+        return render_template("base.html"), 500
 
     @app.errorhandler(403)
     def forbidden_error(error):
         """Handle 403 errors."""
-        if request.path.startswith('/api/'):
-            return jsonify({
-                "success": False,
-                "error": "FORBIDDEN",
-                "message": "You don't have permission to access this resource"
-            }), 403
-        return render_template('base.html'), 403
+        if request.path.startswith("/api/"):
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "FORBIDDEN",
+                    "message": "You don't have permission to access this resource",
+                }
+            ), 403
+        return render_template("base.html"), 403
 
     @app.errorhandler(Exception)
     def handle_unexpected_error(error):
@@ -388,7 +465,7 @@ def create_app() -> Flask:
         VULN-007 FIX: Prevents stack trace leakage in production.
         """
         from core.ip import client_ip
-        
+
         # Log full error server-side with context
         logger.error(
             "Unexpected error: %s",
@@ -398,48 +475,62 @@ def create_app() -> Flask:
                 "url": request.url,
                 "method": request.method,
                 "ip": client_ip(),
-                "user_id": session.get("user_id")
-            }
+                "user_id": session.get("user_id"),
+            },
         )
-        
+
         # Rollback any pending database transactions
         try:
             from database import get_db
+
             with get_db() as db:
                 db.rollback()
         except Exception:
             pass
-        
+
         # Return generic error to client (no details in production)
-        if app.config.get('DEBUG'):
+        if app.config.get("DEBUG"):
             # In development, include error details for debugging
-            if request.path.startswith('/api/'):
-                return jsonify({
-                    "success": False,
-                    "error": "INTERNAL_ERROR",
-                    "message": str(error),
-                    "type": type(error).__name__
-                }), 500
-            return render_template('base.html'), 500
+            if request.path.startswith("/api/"):
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": "INTERNAL_ERROR",
+                        "message": str(error),
+                        "type": type(error).__name__,
+                    }
+                ), 500
+            return render_template("base.html"), 500
         else:
             # In production, generic message only
-            if request.path.startswith('/api/'):
-                return jsonify({
-                    "success": False,
-                    "error": "INTERNAL_ERROR",
-                    "message": "An internal error occurred. Please try again later."
-                }), 500
-            return render_template('base.html'), 500
+            if request.path.startswith("/api/"):
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": "INTERNAL_ERROR",
+                        "message": "An internal error occurred. Please try again later.",
+                    }
+                ), 500
+            return render_template("base.html"), 500
 
     # ── Security headers (Talisman) ────────────────────────────────────────────
     if not Config.TESTING and not Config.DEBUG:
         from flask_talisman import Talisman
-        
+
         csp = {
             "default-src": ["'self'"],
             "script-src": ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
-            "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.tailwindcss.com"],
-            "font-src": ["'self'", "https://fonts.gstatic.com", "https://fonts.googleapis.com"],
+            "style-src": [
+                "'self'",
+                "'unsafe-inline'",
+                "https://fonts.googleapis.com",
+                "https://cdn.tailwindcss.com",
+            ],
+            "font-src": [
+                "'self'",
+                "https://fonts.gstatic.com",
+                "https://fonts.googleapis.com",
+            ],
             "img-src": ["'self'", "data:", "https://lh3.googleusercontent.com"],
             "connect-src": ["'self'"],
             "frame-ancestors": ["'none'"],
@@ -467,58 +558,61 @@ def create_app() -> Flask:
     from database import get_db
     from services.webhook import retry_failed_webhooks
     from services.security_monitor import detect_suspicious_activity
-    
+
     try:
         from app_cleanup import start_cleanup_threads
     except ImportError:
         # app_cleanup module not available (e.g., in test environment)
         def start_cleanup_threads():
             pass
-    
+
+    # Shutdown event for background threads
+    _shutdown_event = threading.Event()
+
     def _webhook_retry_loop():
         """Background thread that retries failed webhook deliveries."""
         # Wait a bit for DB to be fully initialized
         time.sleep(5)
-        while True:
+        while not _shutdown_event.is_set():
             try:
                 with get_db() as db:
                     retry_failed_webhooks(db)
             except Exception as e:
-                logger.error("Webhook retry loop error: %s", e)
-            time.sleep(60)
-    
+                logger.error("Webhook retry loop error: %s")
+            if not _shutdown_event.is_set():
+                _shutdown_event.wait(60)
+
     def _security_monitor_loop():
         """Background thread that monitors for suspicious activity patterns."""
         # Wait a bit for DB to be fully initialized
         time.sleep(10)
-        while True:
+        while not _shutdown_event.is_set():
             try:
                 with get_db() as db:
                     alerts = detect_suspicious_activity(db)
                     # Alerts are automatically logged by detect_suspicious_activity
                     if alerts:
-                        logger.info("Security monitoring detected %d alerts", len(alerts))
+                        logger.info(
+                            "Security monitoring detected %d alerts", len(alerts)
+                        )
             except Exception as e:
-                logger.error("Security monitoring error: %s", e)
-            time.sleep(300)  # Every 5 minutes
-    
+                logger.error("Security monitoring error: %s")
+            if not _shutdown_event.is_set():
+                _shutdown_event.wait(300)  # Every 5 minutes
+
     webhook_thread = threading.Thread(
-        target=_webhook_retry_loop,
-        daemon=True,
-        name="webhook-retry"
+        target=_webhook_retry_loop, daemon=True, name="webhook-retry"
     )
     webhook_thread.start()
     logger.info("Webhook retry thread started")
-    
+
     # Start security monitoring thread (VULN-011 fix)
     security_monitor_thread = threading.Thread(
-        target=_security_monitor_loop,
-        daemon=True,
-        name="security-monitor"
+        target=_security_monitor_loop, daemon=True, name="security-monitor"
     )
     security_monitor_thread.start()
     logger.info("Security monitoring thread started")
-    
+
     # Start cleanup threads for audit logs and rate limits
     start_cleanup_threads()
 

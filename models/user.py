@@ -33,8 +33,14 @@ class User(Base):
     reset_token            = Column(String(255), nullable=True, index=True)
     reset_token_expires_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Two-Factor Authentication
+    two_factor_enabled     = Column(Boolean, default=True)
+    email_otp              = Column(String(10), nullable=True)
+    email_otp_expires_at   = Column(DateTime(timezone=True), nullable=True)
+
     # OAuth provider data
     google_id           = Column(String(255), unique=True, index=True, nullable=True)
+    github_id           = Column(String(255), unique=True, index=True, nullable=True)
     profile_picture_url = Column(String(500), nullable=True)
     full_name           = Column(String(255), nullable=True)
     auth_provider       = Column(String(20), default='traditional', nullable=False)
@@ -212,5 +218,47 @@ class User(Base):
             self.full_name = full_name
         
         # Update auth_provider to 'both' if currently 'traditional'
+        if self.auth_provider == 'traditional':
+            self.auth_provider = 'both'
+
+    @staticmethod
+    def find_by_github_id(db: Session, github_id: str) -> Optional['User']:
+        """Find user by GitHub ID."""
+        return db.query(User).filter(User.github_id == github_id).first()
+
+    @staticmethod
+    def create_from_github(db: Session, profile: dict) -> 'User':
+        """Create new user from GitHub profile."""
+        username = User.generate_username_from_email(db, profile['email'])
+        
+        user = User(
+            username=username,
+            email=profile['email'],
+            github_id=profile['github_id'],
+            full_name=profile.get('full_name'),
+            profile_picture_url=profile.get('profile_picture_url'),
+            auth_provider='github',
+            two_factor_enabled=True
+        )
+        
+        random_password = secrets.token_urlsafe(32)
+        user.set_password(random_password)
+        
+        db.add(user)
+        db.flush()
+        db.refresh(user)
+        
+        return user
+
+    def link_github_account(self, github_id: str, profile_picture_url: str, full_name: str):
+        """Link GitHub account to existing user."""
+        self.github_id = github_id
+        
+        if not self.profile_picture_url and profile_picture_url:
+            self.profile_picture_url = profile_picture_url
+            
+        if not self.full_name and full_name:
+            self.full_name = full_name
+            
         if self.auth_provider == 'traditional':
             self.auth_provider = 'both'

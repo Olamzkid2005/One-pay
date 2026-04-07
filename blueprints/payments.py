@@ -2,11 +2,13 @@
 OnePay — Payments blueprint
 Handles: dashboard, create link, status, history (merchant-facing)
 """
+
 import logging
 import re
 import html
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Optional
 
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for
 from sqlalchemy import func, case
@@ -18,8 +20,11 @@ from models.user import User
 from models.audit_log import AuditLog
 from services.rate_limiter import check_rate_limit
 from services.security import (
-    generate_tx_reference, generate_hash_token,
-    generate_expiration_time, validate_return_url, validate_webhook_url,
+    generate_tx_reference,
+    generate_hash_token,
+    generate_expiration_time,
+    validate_return_url,
+    validate_webhook_url,
 )
 from services.qr_code import qr_service
 from services.invoice import invoice_service
@@ -27,9 +32,12 @@ from services.email import send_invoice_email
 from services.korapay import korapay, KoraPayError
 from models.invoice import InvoiceSettings
 from core.auth import (
-    get_csrf_token, is_valid_csrf_token,
-    current_user_id, current_username,
-    login_required_redirect, valid_tx_ref,
+    get_csrf_token,
+    is_valid_csrf_token,
+    current_user_id,
+    current_username,
+    login_required_redirect,
+    valid_tx_ref,
 )
 from core.ip import client_ip
 from core.responses import error, rate_limited, unauthenticated
@@ -46,40 +54,44 @@ def _safe(val, maxlen=255):
     """
     Strip, escape HTML, remove control characters, and validate length.
     Returns None if empty after sanitization or exceeds max length.
-    
+
     VULN-008 FIX: Reject if exceeds maxlen instead of truncating.
     """
     if not val:
         return None
-    
+
     # Convert to string and strip whitespace
     sanitized = str(val).strip()
-    
+
     # VULN-008 FIX: Reject if exceeds max length (don't truncate)
     if len(sanitized) > maxlen:
         return None
-    
+
     # Remove null bytes and other control characters (except newlines/tabs)
-    sanitized = ''.join(c for c in sanitized if c == '\n' or c == '\t' or (ord(c) >= 32 and ord(c) != 127))
-    
+    sanitized = "".join(
+        c
+        for c in sanitized
+        if c == "\n" or c == "\t" or (ord(c) >= 32 and ord(c) != 127)
+    )
+
     # HTML escape
     sanitized = html.escape(sanitized)
-    
+
     return sanitized if sanitized else None
 
 
-_EMAIL_RE = re.compile(r'^[^@\s]{1,64}@[^@\s]+\.[^@\s]{2,}$')
-_PHONE_RE = re.compile(r'^\+?[0-9\s\-\(\)]{7,20}$')
+_EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]+\.[^@\s]{2,}$")
+_PHONE_RE = re.compile(r"^\+?[0-9\s\-\(\)]{7,20}$")
 
 
-def _safe_email(val) -> str | None:
+def _safe_email(val) -> Optional[str]:
     v = _safe(val, 255)
     if not v:
         return None
     return v if _EMAIL_RE.match(v) else None
 
 
-def _safe_phone(val) -> str | None:
+def _safe_phone(val) -> Optional[str]:
     v = _safe(val, 20)
     if not v:
         return None
@@ -87,6 +99,7 @@ def _safe_phone(val) -> str | None:
 
 
 # ── Dashboard ──────────────────────────────────────────────────────────────────
+
 
 @payments_bp.route("/")
 def dashboard():
@@ -115,12 +128,14 @@ def settings():
         user = db.query(User).filter(User.id == current_user_id()).first()
         webhook_url = user.webhook_url if user else ""
         profile_picture = user.profile_picture_url if user else None
-        
+
         # Load invoice settings for current user (Requirement 11.1)
-        invoice_settings = db.query(InvoiceSettings).filter(
-            InvoiceSettings.user_id == current_user_id()
-        ).first()
-        
+        invoice_settings = (
+            db.query(InvoiceSettings)
+            .filter(InvoiceSettings.user_id == current_user_id())
+            .first()
+        )
+
         # Render template while session is still active
         return render_template(
             "settings.html",
@@ -167,64 +182,77 @@ def history():
 
 # ── Update webhook settings ────────────────────────────────────────────────────
 
+
 @payments_bp.route("/settings/webhook", methods=["POST"])
 def update_webhook_settings():
     # VULN-007 FIX: Validate Content-Type for JSON API
-    if request.content_type != 'application/json':
-        return error("Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415)
+    if request.content_type != "application/json":
+        return error(
+            "Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415
+        )
     if not current_user_id():
         return unauthenticated()
-    
-    # Validate Content-Type to prevent CSRF via form submission
-    if request.content_type != 'application/json':
-        return error("Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415)
-    
+
     # Skip CSRF for API key authenticated requests
     from core.api_auth import is_api_key_authenticated
+
     if not is_api_key_authenticated():
-        csrf_header = request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token")
+        csrf_header = request.headers.get("X-CSRFToken") or request.headers.get(
+            "X-CSRF-Token"
+        )
         if not is_valid_csrf_token(csrf_header):
             return error("CSRF validation failed", "CSRF_ERROR", 403)
-    
+
     data = request.get_json(silent=True) or {}
     webhook_url = validate_webhook_url(data.get("webhook_url", ""))
-    
+
     with get_db() as db:
         user = db.query(User).filter(User.id == current_user_id()).first()
         if not user:
             return error("User not found", "NOT_FOUND", 404)
-        
+
         user.webhook_url = webhook_url
-        db.flush()
-        
-        log_event(db, "settings.webhook_updated", user_id=current_user_id(), ip_address=client_ip(),
-                  detail={"webhook_url": webhook_url or "removed"})
-        
+        with db.begin_nested():
+            db.flush()
+
+        log_event(
+            db,
+            "settings.webhook_updated",
+            user_id=current_user_id(),
+            ip_address=client_ip(),
+            detail={"webhook_url": webhook_url or "removed"},
+        )
+
         logger.info("Webhook settings updated | user=%s", current_username())
-        
-        return jsonify({
-            "success": True,
-            "message": "Webhook settings updated successfully",
-            "webhook_url": webhook_url or ""
-        })
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Webhook settings updated successfully",
+                "webhook_url": webhook_url or "",
+            }
+        )
 
 
 # ── Export transactions ────────────────────────────────────────────────────────
+
 
 @payments_bp.route("/payments/export", methods=["GET"])
 def export_transactions():
     if not current_user_id():
         return unauthenticated()
-    
+
     import csv
     from io import StringIO
     from flask import make_response
-    
+
     with get_db() as db:
         # Rate limit CSV export to prevent resource exhaustion
-        if not check_rate_limit(db, f"export:{current_user_id()}", limit=5, window_secs=300):
+        if not check_rate_limit(
+            db, f"export:{current_user_id()}", limit=5, window_secs=300
+        ):
             return rate_limited()
-        
+
         transactions = (
             db.query(Transaction)
             .filter(Transaction.user_id == current_user_id())
@@ -232,135 +260,236 @@ def export_transactions():
             .limit(MAX_EXPORT_ROWS)
             .all()
         )
-        
+
         # Create CSV
         si = StringIO()
         writer = csv.writer(si)
-        writer.writerow(['Reference', 'Amount', 'Currency', 'Status', 'Description', 'Customer Email', 'Created At', 'Expires At'])
-        
+        writer.writerow(
+            [
+                "Reference",
+                "Amount",
+                "Currency",
+                "Status",
+                "Description",
+                "Customer Email",
+                "Created At",
+                "Expires At",
+            ]
+        )
+
         for tx in transactions:
-            writer.writerow([
-                tx.tx_ref,
-                str(tx.amount),
-                tx.currency,
-                tx.status.value if hasattr(tx.status, 'value') else str(tx.status),
-                tx.description or '',
-                tx.customer_email or '',
-                tx.created_at.isoformat() if tx.created_at else '',
-                tx.expires_at.isoformat() if tx.expires_at else ''
-            ])
+            writer.writerow(
+                [
+                    tx.tx_ref,
+                    str(tx.amount),
+                    tx.currency,
+                    tx.status.value if hasattr(tx.status, "value") else str(tx.status),
+                    tx.description or "",
+                    tx.customer_email or "",
+                    tx.created_at.isoformat() if tx.created_at else "",
+                    tx.expires_at.isoformat() if tx.expires_at else "",
+                ]
+            )
 
         # Add truncation note if limit was reached
         if len(transactions) == MAX_EXPORT_ROWS:
-            writer.writerow(['Note: Export limited to most recent 1000 transactions', '', '', '', '', '', '', ''])
+            writer.writerow(
+                [
+                    "Note: Export limited to most recent 1000 transactions",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                ]
+            )
 
         output = make_response(si.getvalue())
-        output.headers["Content-Disposition"] = f"attachment; filename=onepay_transactions_{current_username()}.csv"
+        output.headers["Content-Disposition"] = (
+            f"attachment; filename=onepay_transactions_{current_username()}.csv"
+        )
         output.headers["Content-type"] = "text/csv"
-        
+
         return output
 
 
 # ── Analytics summary ──────────────────────────────────────────────────────────
 
+
 @payments_bp.route("/payments/summary", methods=["GET"])
 def payment_summary():
     if not current_user_id():
         return unauthenticated()
-    
+
     with get_db() as db:
         # Rate limit expensive aggregation queries
-        if not check_rate_limit(db, f"summary:{current_user_id()}", limit=20, window_secs=60):
+        if not check_rate_limit(
+            db, f"summary:{current_user_id()}", limit=20, window_secs=60
+        ):
             return rate_limited()
-        
+
         user_id = current_user_id()
-        
-        # Current month start
+
+        # Current month start and 30-day window
         now = datetime.now(timezone.utc)
         month_start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
-        
-        logging.info(f"Summary request - Current time: {now}, Month start: {month_start}")
-        
+        thirty_days_ago = now - timedelta(days=30)
+
         # All-time stats
-        all_time = db.query(
-            func.coalesce(func.sum(case(
-                (Transaction.status == TransactionStatus.VERIFIED, Transaction.amount),
-                else_=0
-            )), 0).label('total_verified_amount'),
-            func.count(Transaction.id).label('total_links'),
-            func.sum(case(
-                (Transaction.status == TransactionStatus.VERIFIED, 1),
-                else_=0
-            )).label('total_verified'),
-            func.sum(case(
-                (Transaction.status == TransactionStatus.EXPIRED, 1),
-                else_=0
-            )).label('total_expired'),
-        ).filter(Transaction.user_id == user_id).first()
-        
+        all_time = (
+            db.query(
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                Transaction.status == TransactionStatus.VERIFIED,
+                                Transaction.amount,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("total_verified_amount"),
+                func.count(Transaction.id).label("total_links"),
+                func.sum(
+                    case((Transaction.status == TransactionStatus.VERIFIED, 1), else_=0)
+                ).label("total_verified"),
+                func.sum(
+                    case((Transaction.status == TransactionStatus.EXPIRED, 1), else_=0)
+                ).label("total_expired"),
+            )
+            .filter(Transaction.user_id == user_id)
+            .first()
+        )
+
         # This month stats
-        this_month = db.query(
-            func.coalesce(func.sum(case(
-                (Transaction.status == TransactionStatus.VERIFIED, Transaction.amount),
-                else_=0
-            )), 0).label('total_verified_amount'),
-            func.count(Transaction.id).label('total_links'),
-            func.sum(case(
-                (Transaction.status == TransactionStatus.VERIFIED, 1),
-                else_=0
-            )).label('total_verified'),
-        ).filter(
-            Transaction.user_id == user_id,
-            Transaction.created_at >= month_start
-        ).first()
-        
-        logging.info(f"This month verified amount: {this_month.total_verified_amount}, count: {this_month.total_verified}")
-        
+        this_month = (
+            db.query(
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                Transaction.status == TransactionStatus.VERIFIED,
+                                Transaction.amount,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("total_verified_amount"),
+                func.count(Transaction.id).label("total_links"),
+                func.sum(
+                    case((Transaction.status == TransactionStatus.VERIFIED, 1), else_=0)
+                ).label("total_verified"),
+            )
+            .filter(
+                Transaction.user_id == user_id, Transaction.created_at >= month_start
+            )
+            .first()
+        )
+
+        logging.info(
+            f"This month verified amount: {this_month.total_verified_amount}, count: {this_month.total_verified}"
+        )
+
+        # 30-day Chart Data Aggregation
+        try:
+            # Group by formatted date (SQLite)
+            daily_stats = (
+                db.query(
+                    func.strftime("%Y-%m-%d", Transaction.created_at).label("day"),
+                    func.sum(Transaction.amount).label("total"),
+                )
+                .filter(
+                    Transaction.user_id == user_id,
+                    Transaction.status == TransactionStatus.VERIFIED,
+                    Transaction.created_at >= thirty_days_ago,
+                )
+                .group_by("day")
+                .all()
+            )
+
+            # Create dict for fast lookup
+            daily_dict = {row.day: float(row.total or 0) for row in daily_stats}
+        except Exception as e:
+            logging.error(f"Failed to aggregate chart data: {e}")
+            daily_dict = {}
+
+        # Backfill last 30 days including dates with 0 revenue
+        chart_labels = []
+        chart_values = []
+        import datetime as dt_module
+
+        for i in range(29, -1, -1):
+            date_val = now - dt_module.timedelta(days=i)
+            day_str = date_val.strftime("%Y-%m-%d")
+
+            # Formatting labels like 'Oct 14'
+            chart_labels.append(date_val.strftime("%b %d"))
+            chart_values.append(daily_dict.get(day_str, 0.0))
+
         # Calculate conversion rates
         all_time_rate = 0
         if all_time.total_links > 0:
-            all_time_rate = round((all_time.total_verified or 0) / all_time.total_links * 100, 1)
-        
+            all_time_rate = round(
+                (all_time.total_verified or 0) / all_time.total_links * 100, 1
+            )
+
         this_month_rate = 0
         if this_month.total_links > 0:
-            this_month_rate = round((this_month.total_verified or 0) / this_month.total_links * 100, 1)
-        
-        return jsonify({
-            "success": True,
-            "all_time": {
-                "total_collected": str(all_time.total_verified_amount or 0),
-                "total_links": all_time.total_links or 0,
-                "total_verified": all_time.total_verified or 0,
-                "total_expired": all_time.total_expired or 0,
-                "conversion_rate": all_time_rate,
-            },
-            "this_month": {
-                "total_collected": str(this_month.total_verified_amount or 0),
-                "total_links": this_month.total_links or 0,
-                "total_verified": this_month.total_verified or 0,
-                "conversion_rate": this_month_rate,
-            },
-        })
+            this_month_rate = round(
+                (this_month.total_verified or 0) / this_month.total_links * 100, 1
+            )
+
+        return jsonify(
+            {
+                "success": True,
+                "all_time": {
+                    "total_collected": str(all_time.total_verified_amount or 0),
+                    "total_links": all_time.total_links or 0,
+                    "total_verified": all_time.total_verified or 0,
+                    "total_expired": all_time.total_expired or 0,
+                    "conversion_rate": all_time_rate,
+                },
+                "this_month": {
+                    "total_collected": str(this_month.total_verified_amount or 0),
+                    "total_links": this_month.total_links or 0,
+                    "total_verified": this_month.total_verified or 0,
+                    "conversion_rate": this_month_rate,
+                },
+                "chart_data": {"labels": chart_labels, "dataset": chart_values},
+            }
+        )
 
 
 # ── Create payment link ────────────────────────────────────────────────────────
 
+
 @payments_bp.route("/payments/link", methods=["POST"])
 def create_payment_link():
     # VULN-007 FIX: Validate Content-Type for JSON API
-    if request.content_type != 'application/json':
-        return error("Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415)
+    if request.content_type != "application/json":
+        return error(
+            "Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415
+        )
     if not current_user_id():
         return unauthenticated()
 
     # Validate Content-Type to prevent CSRF via form submission
-    if request.content_type != 'application/json':
-        return error("Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415)
+    if request.content_type != "application/json":
+        return error(
+            "Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415
+        )
 
     # Skip CSRF for API key authenticated requests
     from core.api_auth import is_api_key_authenticated
+
     if not is_api_key_authenticated():
-        csrf_header = request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token")
+        csrf_header = request.headers.get("X-CSRFToken") or request.headers.get(
+            "X-CSRF-Token"
+        )
         if not is_valid_csrf_token(csrf_header):
             return error("CSRF validation failed", "CSRF_ERROR", 403)
 
@@ -368,14 +497,14 @@ def create_payment_link():
         # Separate rate limits for API vs web clients
         from core.api_auth import is_api_key_authenticated
         from flask import g
-        
+
         if is_api_key_authenticated():
             rate_key = f"api_link:{g.api_key}"
             limit = Config.RATE_LIMIT_API_LINK_CREATE
         else:
             rate_key = f"link:user:{current_user_id()}"
             limit = Config.RATE_LIMIT_LINK_CREATE
-        
+
         if not check_rate_limit(db, rate_key, limit):
             return rate_limited()
 
@@ -385,34 +514,50 @@ def create_payment_link():
         idempotency_key = request.headers.get("X-Idempotency-Key")
         if idempotency_key:
             # Sanitize and truncate FIRST to prevent ReDoS
-            idempotency_key = idempotency_key[:255].replace('\x00', '').strip()
+            idempotency_key = idempotency_key[:255].replace("\x00", "").strip()
             # Simple validation without complex regex
-            if not idempotency_key or not all(c.isalnum() or c in '-_' for c in idempotency_key):
-                return error("X-Idempotency-Key must be alphanumeric with hyphens/underscores (1-255 chars)", "VALIDATION_ERROR", 400)
+            if not idempotency_key or not all(
+                c.isalnum() or c in "-_" for c in idempotency_key
+            ):
+                return error(
+                    "X-Idempotency-Key must be alphanumeric with hyphens/underscores (1-255 chars)",
+                    "VALIDATION_ERROR",
+                    400,
+                )
         if idempotency_key:
-            existing = db.query(Transaction).filter(
-                Transaction.idempotency_key == idempotency_key,
-                Transaction.user_id == current_user_id(),
-            ).first()
+            existing = (
+                db.query(Transaction)
+                .filter(
+                    Transaction.idempotency_key == idempotency_key,
+                    Transaction.user_id == current_user_id(),
+                )
+                .first()
+            )
             if existing:
-                base_url    = request.host_url.rstrip("/")
+                base_url = request.host_url.rstrip("/")
                 payment_url = f"{base_url}/pay/{existing.tx_ref}"
-                logger.info("Idempotent link returned | merchant=%s ref=%s", current_username(), existing.tx_ref)
-                return jsonify({
-                    "success":     True,
-                    "message":     "Existing payment link returned (idempotent)",
-                    "tx_ref":      existing.tx_ref,
-                    "payment_url": payment_url,
-                    "amount":      str(existing.amount),
-                    "currency":    existing.currency,
-                    "description": existing.description,
-                    "expires_at":  existing.expires_at_utc_iso(),
-                    "virtual_account_number": existing.virtual_account_number,
-                    "virtual_bank_name":      existing.virtual_bank_name,
-                    "virtual_account_name":   existing.virtual_account_name,
-                    "qr_code_payment_url":     existing.qr_code_payment_url,
-                    "qr_code_virtual_account": existing.qr_code_virtual_account,
-                }), 200
+                logger.info(
+                    "Idempotent link returned | merchant=%s ref=%s",
+                    current_username(),
+                    existing.tx_ref,
+                )
+                return jsonify(
+                    {
+                        "success": True,
+                        "message": "Existing payment link returned (idempotent)",
+                        "tx_ref": existing.tx_ref,
+                        "payment_url": payment_url,
+                        "amount": str(existing.amount),
+                        "currency": existing.currency,
+                        "description": existing.description,
+                        "expires_at": existing.expires_at_utc_iso(),
+                        "virtual_account_number": existing.virtual_account_number,
+                        "virtual_bank_name": existing.virtual_bank_name,
+                        "virtual_account_name": existing.virtual_account_name,
+                        "qr_code_payment_url": existing.qr_code_payment_url,
+                        "qr_code_virtual_account": existing.qr_code_virtual_account,
+                    }
+                ), 200
 
         # ── Validate amount ────────────────────────────────────────────────────
         raw_amount = data.get("amount")
@@ -420,18 +565,25 @@ def create_payment_link():
             return error("amount is required", "VALIDATION_ERROR", 400)
         try:
             from decimal import InvalidOperation, ROUND_HALF_UP
+
             amount = Decimal(str(raw_amount))
             # Reject negative zero, NaN, infinity
             if amount <= 0 or not amount.is_finite():
-                return error("amount must be a positive finite number", "VALIDATION_ERROR", 400)
+                return error(
+                    "amount must be a positive finite number", "VALIDATION_ERROR", 400
+                )
             if amount > Decimal("100000000.00"):
-                return error("amount exceeds maximum allowed (100,000,000.00)", "VALIDATION_ERROR", 400)
+                return error(
+                    "amount exceeds maximum allowed (100,000,000.00)",
+                    "VALIDATION_ERROR",
+                    400,
+                )
             # Normalize to remove trailing zeros and enforce 2 decimal places
             amount = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         except (ValueError, TypeError, ArithmeticError, InvalidOperation):
             return error("amount must be a valid number", "VALIDATION_ERROR", 400)
 
-        tx_ref     = generate_tx_reference()
+        tx_ref = generate_tx_reference()
         expires_at = generate_expiration_time()
         hash_token = generate_hash_token(tx_ref, amount, expires_at)
 
@@ -442,21 +594,23 @@ def create_payment_link():
         # Validate description length
         description = _safe(data.get("description"))
         if description and len(description) > 255:
-            return error("Description too long (max 255 characters)", "VALIDATION_ERROR", 400)
+            return error(
+                "Description too long (max 255 characters)", "VALIDATION_ERROR", 400
+            )
 
         transaction = Transaction(
-            tx_ref          = tx_ref,
-            idempotency_key = idempotency_key,
-            user_id         = current_user_id(),
-            amount          = amount,
-            currency        = str(data.get("currency", "NGN")).upper()[:3],
-            description     = description,
-            customer_email  = _safe_email(data.get("customer_email")),
-            customer_phone  = _safe_phone(data.get("customer_phone")),
-            return_url      = validate_return_url(data.get("return_url")),
-            webhook_url     = webhook_url,
-            hash_token      = hash_token,
-            expires_at      = expires_at,
+            tx_ref=tx_ref,
+            idempotency_key=idempotency_key,
+            user_id=current_user_id(),
+            amount=amount,
+            currency=str(data.get("currency", "NGN")).upper()[:3],
+            description=description,
+            customer_email=_safe_email(data.get("customer_email")),
+            customer_phone=_safe_phone(data.get("customer_phone")),
+            return_url=validate_return_url(data.get("return_url")),
+            webhook_url=webhook_url,
+            hash_token=hash_token,
+            expires_at=expires_at,
         )
 
         # Create virtual account with KoraPay
@@ -466,13 +620,17 @@ def create_payment_link():
                 va = korapay.create_virtual_account(
                     transaction_reference=tx_ref,
                     amount_kobo=amount_kobo,
-                    account_name=f"{current_username()} - OnePay Payment"
+                    account_name=f"{current_username()} - OnePay Payment",
                 )
                 # Store virtual account details
                 transaction.virtual_account_number = va.get("accountNumber")
                 transaction.virtual_bank_name = va.get("bankName")
                 transaction.virtual_account_name = va.get("accountName")
-                logger.info("Virtual account created | ref=%s acct=%s", tx_ref, va.get("accountNumber"))
+                logger.info(
+                    "Virtual account created | ref=%s acct=%s",
+                    tx_ref,
+                    va.get("accountNumber"),
+                )
             except KoraPayError as e:
                 logger.error("Virtual account creation failed: %s", e)
                 return error("Payment provider unavailable", "PROVIDER_ERROR", 500)
@@ -482,33 +640,36 @@ def create_payment_link():
         db.refresh(transaction)
 
         # Build payment URL BEFORE generating QR codes
-        base_url    = request.host_url.rstrip("/")
+        base_url = request.host_url.rstrip("/")
         payment_url = f"{base_url}/pay/{tx_ref}"
 
-        # Generate QR codes
+        # Generate QR codes safely without manually flushing midway to avoid transaction invalidation.
         try:
             # QR code for payment URL
             transaction.qr_code_payment_url = qr_service.generate_payment_qr(
                 payment_url=payment_url,
                 amount=str(amount),
                 description=description,
-                style="rounded"
+                style="rounded",
             )
-            
+
             # QR code for virtual account (if available)
-            if (transaction.virtual_account_number and 
-                transaction.virtual_bank_name and 
-                transaction.virtual_account_name):
-                transaction.qr_code_virtual_account = qr_service.generate_virtual_account_qr(
-                    account_number=transaction.virtual_account_number,
-                    bank_name=transaction.virtual_bank_name,
-                    account_name=transaction.virtual_account_name,
-                    amount=str(amount)
+            if (
+                transaction.virtual_account_number
+                and transaction.virtual_bank_name
+                and transaction.virtual_account_name
+            ):
+                transaction.qr_code_virtual_account = (
+                    qr_service.generate_virtual_account_qr(
+                        account_number=transaction.virtual_account_number,
+                        bank_name=transaction.virtual_bank_name,
+                        account_name=transaction.virtual_account_name,
+                        amount=str(amount),
+                    )
                 )
-            
-            db.flush()  # Save QR codes to database
-            logger.debug("QR codes generated for transaction %s", tx_ref)
-            
+
+            logger.debug("QR codes generated natively for transaction %s", tx_ref)
+
         except Exception as e:
             logger.warning("QR code generation failed for %s: %s", tx_ref, e)
             # Continue without QR codes - they're optional
@@ -517,25 +678,25 @@ def create_payment_link():
         invoice_number = None
         try:
             # Check if user has invoice settings
-            invoice_settings = db.query(InvoiceSettings).filter(
-                InvoiceSettings.user_id == current_user_id()
-            ).first()
-            
+            invoice_settings = (
+                db.query(InvoiceSettings)
+                .filter(InvoiceSettings.user_id == current_user_id())
+                .first()
+            )
+
             if invoice_settings:
                 # Create invoice automatically
                 invoice = invoice_service.create_invoice(
-                    db=db,
-                    transaction=transaction,
-                    user=user,
-                    settings=invoice_settings
+                    db=db, transaction=transaction, user=user, settings=invoice_settings
                 )
                 invoice_number = invoice.invoice_number
-                
+
                 logger.info(
                     "Invoice created automatically | invoice_number=%s tx_ref=%s",
-                    invoice_number, tx_ref
+                    invoice_number,
+                    tx_ref,
                 )
-                
+
                 # If auto_send_email enabled and customer_email provided, send invoice
                 if invoice_settings.auto_send_email and transaction.customer_email:
                     try:
@@ -543,55 +704,72 @@ def create_payment_link():
                         pdf_bytes = invoice_service.generate_invoice_pdf(
                             invoice=invoice,
                             transaction=transaction,
-                            payment_url=payment_url
+                            payment_url=payment_url,
                         )
-                        
+
                         # Send email with payment_url and QR code
                         email_sent = send_invoice_email(
                             to_email=transaction.customer_email,
                             invoice=invoice,
                             pdf_bytes=pdf_bytes,
                             payment_url=payment_url,
-                            qr_code_data_uri=transaction.qr_code_payment_url
+                            qr_code_data_uri=transaction.qr_code_payment_url,
                         )
-                        
+
                         if email_sent:
                             from models.invoice import InvoiceStatus
-                            invoice.status = InvoiceStatus.SENT
-                            invoice.email_sent = True
-                            invoice.email_sent_at = datetime.now(timezone.utc)
-                            invoice.sent_at = datetime.now(timezone.utc)
-                            db.flush()
-                            
+
+                            with db.begin_nested():
+                                invoice.status = InvoiceStatus.SENT
+                                invoice.email_sent = True
+                                invoice.email_sent_at = datetime.now(timezone.utc)
+                                invoice.sent_at = datetime.now(timezone.utc)
+                                db.flush()
+
                             logger.info(
                                 "Invoice emailed automatically | invoice_number=%s to=%s",
-                                invoice_number, transaction.customer_email
+                                invoice_number,
+                                transaction.customer_email,
                             )
                         else:
                             logger.warning(
                                 "Invoice email failed | invoice_number=%s to=%s",
-                                invoice_number, transaction.customer_email
+                                invoice_number,
+                                transaction.customer_email,
                             )
                     except Exception as email_error:
                         # Log error but don't fail payment link creation
                         logger.error(
                             "Invoice email generation/sending failed | invoice_number=%s error=%s",
-                            invoice_number, email_error
+                            invoice_number,
+                            email_error,
                         )
                         # Continue - invoice created, email failed
         except Exception as invoice_error:
             # Log error but don't fail payment link creation (graceful degradation)
             logger.error(
                 "Invoice creation failed for tx_ref=%s | error=%s",
-                tx_ref, invoice_error
+                tx_ref,
+                invoice_error,
             )
             # Continue without invoice - payment link still works
 
-        log_event(db, "link.created", user_id=current_user_id(), tx_ref=tx_ref, ip_address=client_ip(), 
-                  detail={"amount": str(amount), "currency": transaction.currency})
+        log_event(
+            db,
+            "link.created",
+            user_id=current_user_id(),
+            tx_ref=tx_ref,
+            ip_address=client_ip(),
+            detail={"amount": str(amount), "currency": transaction.currency},
+        )
 
-        logger.info("Payment link created | merchant=%s ref=%s amount=%s", current_username(), tx_ref, amount)
-        
+        logger.info(
+            "Payment link created | merchant=%s ref=%s amount=%s",
+            current_username(),
+            tx_ref,
+            amount,
+        )
+
         # VoicePay-specific logging
         if tx_ref.startswith("VP-BILL-"):
             logger.info(
@@ -599,50 +777,52 @@ def create_payment_link():
                 tx_ref,
                 current_username(),
                 float(amount),
-                description or "N/A"
+                description or "N/A",
             )
 
         response_data = {
-            "success":     True,
-            "message":     "Payment link created successfully",
-            "tx_ref":      tx_ref,
+            "success": True,
+            "message": "Payment link created successfully",
+            "tx_ref": tx_ref,
             "payment_url": payment_url,
-            "amount":      str(amount),
-            "currency":    transaction.currency,
+            "amount": str(amount),
+            "currency": transaction.currency,
             "description": transaction.description,
-            "expires_at":  transaction.expires_at_utc_iso(),
+            "expires_at": transaction.expires_at_utc_iso(),
             "virtual_account_number": transaction.virtual_account_number,
-            "virtual_bank_name":      transaction.virtual_bank_name,
-            "virtual_account_name":   transaction.virtual_account_name,
-            "qr_code_payment_url":     transaction.qr_code_payment_url,
+            "virtual_bank_name": transaction.virtual_bank_name,
+            "virtual_account_name": transaction.virtual_account_name,
+            "qr_code_payment_url": transaction.qr_code_payment_url,
             "qr_code_virtual_account": transaction.qr_code_virtual_account,
         }
-        
+
         # Include invoice_number in response if invoice was created
         if invoice_number:
             response_data["invoice_number"] = invoice_number
-        
+
         return jsonify(response_data), 201
 
 
 # ── Transaction status ─────────────────────────────────────────────────────────
 
+
 @payments_bp.route("/payments/status/<tx_ref>", methods=["GET"])
 def transaction_status(tx_ref):
     """
     Get transaction status by reference.
-    
+
     SECURITY (VULN-003): Implements constant-time response to prevent timing attacks
     that could enumerate valid transaction references.
     """
     if not current_user_id():
         return unauthenticated()
-    
+
     # Start timing for constant-time response
     import time
     import secrets
+
     start_time = time.perf_counter()
-    
+
     if not valid_tx_ref(tx_ref):
         # Add delay to match DB query time
         elapsed = time.perf_counter() - start_time
@@ -654,18 +834,23 @@ def transaction_status(tx_ref):
 
     with get_db() as db:
         # Rate limit status checks to prevent enumeration
-        if not check_rate_limit(db, f"status:{current_user_id()}", limit=100, window_secs=60):
+        if not check_rate_limit(
+            db, f"status:{current_user_id()}", limit=100, window_secs=60
+        ):
             return rate_limited()
-        
+
         # Query with user_id filter to prevent enumeration
-        t = db.query(Transaction).filter(
-            Transaction.tx_ref == tx_ref,
-            Transaction.user_id == current_user_id()
-        ).first()
-        
+        t = (
+            db.query(Transaction)
+            .filter(
+                Transaction.tx_ref == tx_ref, Transaction.user_id == current_user_id()
+            )
+            .first()
+        )
+
         # Calculate elapsed time
         elapsed = time.perf_counter() - start_time
-        
+
         if not t:
             # Add delay to match successful query time
             target_delay = 0.05  # 50ms baseline
@@ -674,24 +859,25 @@ def transaction_status(tx_ref):
             time.sleep(remaining)
             # Same error for both "not found" and "unauthorized"
             return error("Transaction not found", "NOT_FOUND", 404)
-        
+
         # VoicePay-specific logging
         if t.tx_ref.startswith("VP-BILL-"):
             logger.info(
                 "VoicePay status check | tx_ref=%s status=%s merchant=%s",
                 t.tx_ref,
                 t.status.value if t.status else "UNKNOWN",
-                current_username()
+                current_username(),
             )
-        
+
         # Add jitter to successful responses too
         jitter = secrets.randbelow(40) / 1000.0
         time.sleep(jitter)
-        
+
         return jsonify({"success": True, **t.to_dict()})
 
 
 # ── Transaction history (paginated) ───────────────────────────────────────────
+
 
 @payments_bp.route("/payments/history", methods=["GET"])
 def transaction_history():
@@ -706,9 +892,11 @@ def transaction_history():
     offset = (page - 1) * PAGE_SIZE
 
     with get_db() as db:
-        total = db.query(Transaction).filter(
-            Transaction.user_id == current_user_id()
-        ).count()
+        total = (
+            db.query(Transaction)
+            .filter(Transaction.user_id == current_user_id())
+            .count()
+        )
 
         transactions = (
             db.query(Transaction)
@@ -719,38 +907,48 @@ def transaction_history():
             .all()
         )
 
-        return jsonify({
-            "success":      True,
-            "transactions": [t.to_dict() for t in transactions],
-            "pagination": {
-                "page":        page,
-                "page_size":   PAGE_SIZE,
-                "total":       total,
-                "total_pages": max(1, -(-total // PAGE_SIZE)),
-                "has_next":    offset + PAGE_SIZE < total,
-                "has_prev":    page > 1,
-            },
-        })
+        return jsonify(
+            {
+                "success": True,
+                "transactions": [t.to_dict() for t in transactions],
+                "pagination": {
+                    "page": page,
+                    "page_size": PAGE_SIZE,
+                    "total": total,
+                    "total_pages": max(1, -(-total // PAGE_SIZE)),
+                    "has_next": offset + PAGE_SIZE < total,
+                    "has_prev": page > 1,
+                },
+            }
+        )
 
 
 # ── Re-issue expired link ──────────────────────────────────────────────────────
 
+
 @payments_bp.route("/payments/reissue/<tx_ref>", methods=["POST"])
 def reissue_payment_link(tx_ref):
     # VULN-007 FIX: Validate Content-Type for JSON API
-    if request.content_type != 'application/json':
-        return error("Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415)
+    if request.content_type != "application/json":
+        return error(
+            "Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415
+        )
     if not current_user_id():
         return unauthenticated()
 
     # Validate Content-Type to prevent CSRF via form submission
-    if request.content_type != 'application/json':
-        return error("Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415)
+    if request.content_type != "application/json":
+        return error(
+            "Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415
+        )
 
     # Skip CSRF for API key authenticated requests
     from core.api_auth import is_api_key_authenticated
+
     if not is_api_key_authenticated():
-        csrf_header = request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token")
+        csrf_header = request.headers.get("X-CSRFToken") or request.headers.get(
+            "X-CSRF-Token"
+        )
         if not is_valid_csrf_token(csrf_header):
             return error("CSRF validation failed", "CSRF_ERROR", 403)
 
@@ -760,23 +958,27 @@ def reissue_payment_link(tx_ref):
     with get_db() as db:
         # Fetch original transaction
         original = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
-        
+
         if not original:
             return error("Transaction not found", "NOT_FOUND", 404)
-        
+
         # Verify ownership
         if original.user_id != current_user_id():
             return error("Transaction not found", "NOT_FOUND", 404)
-        
+
         # Don't re-issue verified transactions
         if original.status == TransactionStatus.VERIFIED or original.transfer_confirmed:
-            return error("Cannot re-issue a verified transaction", "ALREADY_VERIFIED", 400)
-        
+            return error(
+                "Cannot re-issue a verified transaction", "ALREADY_VERIFIED", 400
+            )
+
         # Generate new transaction with same details
         new_tx_ref = generate_tx_reference()
         new_expires_at = generate_expiration_time()
-        new_hash_token = generate_hash_token(new_tx_ref, original.amount, new_expires_at)
-        
+        new_hash_token = generate_hash_token(
+            new_tx_ref, original.amount, new_expires_at
+        )
+
         new_transaction = Transaction(
             tx_ref=new_tx_ref,
             user_id=current_user_id(),
@@ -790,7 +992,7 @@ def reissue_payment_link(tx_ref):
             hash_token=new_hash_token,
             expires_at=new_expires_at,
         )
-        
+
         # Create virtual account with KoraPay
         if korapay.is_transfer_configured():
             amount_kobo = int(round(original.amount * 100))
@@ -798,146 +1000,184 @@ def reissue_payment_link(tx_ref):
                 va = korapay.create_virtual_account(
                     transaction_reference=new_tx_ref,
                     amount_kobo=amount_kobo,
-                    account_name=f"{current_username()} - OnePay Payment"
+                    account_name=f"{current_username()} - OnePay Payment",
                 )
                 # Store virtual account details
                 new_transaction.virtual_account_number = va.get("accountNumber")
                 new_transaction.virtual_bank_name = va.get("bankName")
                 new_transaction.virtual_account_name = va.get("accountName")
-                logger.info("Virtual account created for reissue | ref=%s acct=%s", new_tx_ref, va.get("accountNumber"))
+                logger.info(
+                    "Virtual account created for reissue | ref=%s acct=%s",
+                    new_tx_ref,
+                    va.get("accountNumber"),
+                )
             except KoraPayError as e:
                 logger.error("Virtual account creation failed for reissue: %s", e)
                 return error("Payment provider unavailable", "PROVIDER_ERROR", 500)
-        
+
         db.add(new_transaction)
         db.flush()
         db.refresh(new_transaction)
-        
-        log_event(db, "link.reissued", user_id=current_user_id(), tx_ref=new_tx_ref, ip_address=client_ip(),
-                  detail={"original_tx_ref": tx_ref, "amount": str(original.amount)})
-        
+
+        log_event(
+            db,
+            "link.reissued",
+            user_id=current_user_id(),
+            tx_ref=new_tx_ref,
+            ip_address=client_ip(),
+            detail={"original_tx_ref": tx_ref, "amount": str(original.amount)},
+        )
+
         base_url = request.host_url.rstrip("/")
         payment_url = f"{base_url}/pay/{new_tx_ref}"
-        
-        logger.info("Payment link re-issued | merchant=%s original=%s new=%s", 
-                    current_username(), tx_ref, new_tx_ref)
-        
-        return jsonify({
-            "success": True,
-            "message": "Payment link re-issued successfully",
-            "tx_ref": new_tx_ref,
-            "payment_url": payment_url,
-            "amount": str(new_transaction.amount),
-            "currency": new_transaction.currency,
-            "description": new_transaction.description,
-            "expires_at": new_transaction.expires_at_utc_iso(),
-            "virtual_account_number": new_transaction.virtual_account_number,
-            "virtual_bank_name": new_transaction.virtual_bank_name,
-            "virtual_account_name": new_transaction.virtual_account_name,
-        }), 201
 
+        logger.info(
+            "Payment link re-issued | merchant=%s original=%s new=%s",
+            current_username(),
+            tx_ref,
+            new_tx_ref,
+        )
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Payment link re-issued successfully",
+                "tx_ref": new_tx_ref,
+                "payment_url": payment_url,
+                "amount": str(new_transaction.amount),
+                "currency": new_transaction.currency,
+                "description": new_transaction.description,
+                "expires_at": new_transaction.expires_at_utc_iso(),
+                "virtual_account_number": new_transaction.virtual_account_number,
+                "virtual_bank_name": new_transaction.virtual_bank_name,
+                "virtual_account_name": new_transaction.virtual_account_name,
+            }
+        ), 201
 
 
 # ── Audit log for transaction ─────────────────────────────────────────────────
+
 
 @payments_bp.route("/payments/audit/<tx_ref>", methods=["GET"])
 def transaction_audit(tx_ref):
     if not current_user_id():
         return unauthenticated()
-    
+
     if not valid_tx_ref(tx_ref):
         return error("Invalid transaction reference format", "INVALID_REF", 400)
-    
+
     with get_db() as db:
         # Rate limit audit log access
-        if not check_rate_limit(db, f"audit:{current_user_id()}", limit=20, window_secs=60):
+        if not check_rate_limit(
+            db, f"audit:{current_user_id()}", limit=20, window_secs=60
+        ):
             return rate_limited()
-        
+
         # Verify ownership
         transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
         if not transaction:
             return error("Transaction not found", "NOT_FOUND", 404)
-        
+
         if transaction.user_id != current_user_id():
             return error("Transaction not found", "NOT_FOUND", 404)
-        
-        # Fetch audit logs for this transaction
-        logs = db.query(AuditLog).filter(
-            AuditLog.tx_ref == tx_ref
-        ).order_by(AuditLog.created_at.asc()).all()
-        
-        return jsonify({
-            "success": True,
-            "tx_ref": tx_ref,
-            "audit_logs": [log.to_dict() for log in logs],
-        })
 
+        # Fetch audit logs for this transaction
+        logs = (
+            db.query(AuditLog)
+            .filter(AuditLog.tx_ref == tx_ref)
+            .order_by(AuditLog.created_at.asc())
+            .all()
+        )
+
+        return jsonify(
+            {
+                "success": True,
+                "tx_ref": tx_ref,
+                "audit_logs": [log.to_dict() for log in logs],
+            }
+        )
 
 
 # ── Expired payment link page ─────────────────────────────────────────────────
+
 
 @payments_bp.route("/expired/<tx_ref>")
 def expired_link(tx_ref):
     """Display expired payment link page to customer"""
     if not valid_tx_ref(tx_ref):
-        return render_template("expired.html", reference="Invalid", transaction_id="N/A"), 404
-    
+        return render_template(
+            "expired.html", reference="Invalid", transaction_id="N/A"
+        ), 404
+
     with get_db() as db:
         transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
         if not transaction:
-            return render_template("expired.html", reference="Not Found", transaction_id=tx_ref), 404
-        
+            return render_template(
+                "expired.html", reference="Not Found", transaction_id=tx_ref
+            ), 404
+
         return render_template(
             "expired.html",
             reference=transaction.description or tx_ref,
-            transaction_id=tx_ref
+            transaction_id=tx_ref,
         )
 
 
 # ── Download receipt ───────────────────────────────────────────────────────────
+
 
 @payments_bp.route("/payments/receipt/<tx_ref>", methods=["GET"])
 def download_receipt(tx_ref):
     """Generate and download a PDF receipt for a transaction"""
     if not current_user_id():
         return error("Authentication required", "UNAUTHENTICATED", 401)
-    
+
     if not valid_tx_ref(tx_ref):
         return error("Invalid transaction reference format", "INVALID_REF", 400)
-    
+
     with get_db() as db:
         # Rate limit receipt generation
-        if not check_rate_limit(db, f"receipt:{current_user_id()}", limit=10, window_secs=60):
+        if not check_rate_limit(
+            db, f"receipt:{current_user_id()}", limit=10, window_secs=60
+        ):
             return rate_limited()
-        
+
         transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
-        
+
         if not transaction:
             return error("Transaction not found", "NOT_FOUND", 404)
-        
+
         # Verify ownership
         if transaction.user_id != current_user_id():
             return error("Transaction not found", "NOT_FOUND", 404)
-        
+
         # Generate PDF receipt
         from services.pdf_receipt import generate_receipt_pdf
         from flask import make_response, send_file
         import io
-        
+
         try:
             pdf_bytes = generate_receipt_pdf(transaction)
-            
+
             # Create response with PDF
             response = make_response(pdf_bytes)
             response.headers["Content-Type"] = "application/pdf"
-            response.headers["Content-Disposition"] = f"attachment; filename=OnePay_Receipt_{tx_ref}.pdf"
-            
-            logger.info("PDF receipt downloaded | user=%s tx_ref=%s", current_username(), tx_ref)
+            response.headers["Content-Disposition"] = (
+                f"attachment; filename=OnePay_Receipt_{tx_ref}.pdf"
+            )
+
+            logger.info(
+                "PDF receipt downloaded | user=%s tx_ref=%s", current_username(), tx_ref
+            )
             return response
-            
+
         except Exception as e:
-            logger.error("PDF receipt generation failed | user=%s tx_ref=%s error=%s", 
-                        current_username(), tx_ref, e)
+            logger.error(
+                "PDF receipt generation failed | user=%s tx_ref=%s error=%s",
+                current_username(),
+                tx_ref,
+                e,
+            )
             return error("Failed to generate receipt", "PDF_GENERATION_ERROR", 500)
 
 
@@ -946,47 +1186,50 @@ def preview_receipt_html(tx_ref):
     """Generate and return HTML preview of receipt (for debugging/testing)"""
     if not current_user_id():
         return error("Authentication required", "UNAUTHENTICATED", 401)
-    
+
     if not valid_tx_ref(tx_ref):
         return error("Invalid transaction reference format", "INVALID_REF", 400)
-    
+
     with get_db() as db:
         transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
-        
+
         if not transaction:
             return error("Transaction not found", "NOT_FOUND", 404)
-        
+
         if transaction.user_id != current_user_id():
             return error("Transaction not found", "NOT_FOUND", 404)
-        
+
         from services.pdf_receipt import generate_receipt_html
         from flask import make_response
-        
+
         try:
             html = generate_receipt_html(transaction)
-            
+
             response = make_response(html)
             response.headers["Content-Type"] = "text/html"
             return response
-            
-        except Exception as e:
-            logger.error("Receipt HTML preview failed | user=%s tx_ref=%s error=%s",
-                        current_username(), tx_ref, e)
-            return error("Failed to generate preview", "PREVIEW_ERROR", 500)
 
+        except Exception as e:
+            logger.error(
+                "Receipt HTML preview failed | user=%s tx_ref=%s error=%s",
+                current_username(),
+                tx_ref,
+                e,
+            )
+            return error("Failed to generate preview", "PREVIEW_ERROR", 500)
 
 
 @payments_bp.route("/payments/refund/<tx_ref>", methods=["POST"])
 def initiate_refund(tx_ref):
     """
     Initiate a refund for a verified transaction.
-    
+
     Request body:
         {
             "amount": 1000,  # Optional, full refund if omitted
             "reason": "Customer request"  # Optional
         }
-    
+
     Returns:
         {
             "success": true,
@@ -997,57 +1240,54 @@ def initiate_refund(tx_ref):
     # Authentication required
     if not current_user_id():
         return error("Authentication required", "UNAUTHENTICATED", 401)
-    
+
     # Validate transaction reference format
     if not valid_tx_ref(tx_ref):
         return error("Invalid transaction reference format", "INVALID_REF", 400)
-    
+
     # Parse request body
     data = request.get_json() or {}
     refund_amount = data.get("amount")
     refund_reason = data.get("reason")
-    
+
     with get_db() as db:
         # Find transaction
         transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
-        
+
         if not transaction:
             return error("Transaction not found", "NOT_FOUND", 404)
-        
+
         # Verify ownership
         if transaction.user_id != current_user_id():
             return error("Transaction not found", "NOT_FOUND", 404)
-        
+
         # Validate transaction is VERIFIED
         if transaction.status != TransactionStatus.VERIFIED:
             return error(
-                "Cannot refund transaction that is not verified",
-                "INVALID_STATUS",
-                400
+                "Cannot refund transaction that is not verified", "INVALID_STATUS", 400
             )
-        
+
         # Check if already refunded
         from models.refund import Refund
-        existing_refund = db.query(Refund).filter(
-            Refund.transaction_id == transaction.id
-        ).first()
-        
+
+        existing_refund = (
+            db.query(Refund).filter(Refund.transaction_id == transaction.id).first()
+        )
+
         if existing_refund:
             return error(
-                "Transaction has already been refunded",
-                "ALREADY_REFUNDED",
-                400
+                "Transaction has already been refunded", "ALREADY_REFUNDED", 400
             )
-        
+
         try:
             # Call KoraPay to initiate refund
             refund_data = korapay.initiate_refund(
                 payment_reference=tx_ref,
                 refund_reference=None,  # Auto-generate
                 amount=refund_amount,
-                reason=refund_reason
+                reason=refund_reason,
             )
-            
+
             # Create refund record in database
             refund = Refund(
                 transaction_id=transaction.id,
@@ -1055,10 +1295,10 @@ def initiate_refund(tx_ref):
                 amount=Decimal(str(refund_data["amount"])),
                 currency=refund_data["currency"],
                 status=refund_data["status"],
-                reason=refund_reason
+                reason=refund_reason,
             )
             db.add(refund)
-            
+
             log_event(
                 db,
                 "payment.refund_initiated",
@@ -1068,50 +1308,44 @@ def initiate_refund(tx_ref):
                     "tx_ref": tx_ref,
                     "refund_reference": refund_data["reference"],
                     "amount": refund_data["amount"],
-                    "reason": refund_reason
-                }
+                    "reason": refund_reason,
+                },
             )
-            
+
             db.commit()
-            
+
             logger.info(
                 "Refund initiated | user=%s tx_ref=%s refund_ref=%s amount=%s",
                 current_username(),
                 tx_ref,
                 refund_data["reference"],
-                refund_data["amount"]
+                refund_data["amount"],
             )
-            
-            return jsonify({
-                "success": True,
-                "refund_reference": refund_data["reference"],
-                "status": refund_data["status"],
-                "amount": refund_data["amount"],
-                "currency": refund_data["currency"]
-            }), 200
-            
+
+            return jsonify(
+                {
+                    "success": True,
+                    "refund_reference": refund_data["reference"],
+                    "status": refund_data["status"],
+                    "amount": refund_data["amount"],
+                    "currency": refund_data["currency"],
+                }
+            ), 200
+
         except KoraPayError as e:
             logger.error(
                 "Refund initiation failed | user=%s tx_ref=%s error=%s",
                 current_username(),
                 tx_ref,
-                str(e)
+                str(e),
             )
-            return error(
-                "Failed to initiate refund",
-                "REFUND_FAILED",
-                500
-            )
+            return error("Failed to initiate refund", "REFUND_FAILED", 500)
         except Exception as e:
             logger.error(
                 "Unexpected error during refund | user=%s tx_ref=%s error=%s",
                 current_username(),
                 tx_ref,
-                str(e)
+                str(e),
             )
             db.rollback()
-            return error(
-                "An unexpected error occurred",
-                "INTERNAL_ERROR",
-                500
-            )
+            return error("An unexpected error occurred", "INTERNAL_ERROR", 500)

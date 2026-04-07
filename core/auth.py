@@ -6,6 +6,7 @@ eliminating the circular import workaround.
 import hmac
 import re
 import secrets
+from typing import Optional
 
 from flask import session, redirect, url_for
 
@@ -24,7 +25,7 @@ def get_csrf_token() -> str:
     return token
 
 
-def is_valid_csrf_token(submitted: str | None) -> bool:
+def is_valid_csrf_token(submitted: Optional[str]) -> bool:
     """Constant-time comparison to prevent timing attacks."""
     expected = session.get("csrf_token")
     if not expected or not submitted:
@@ -32,7 +33,7 @@ def is_valid_csrf_token(submitted: str | None) -> bool:
     return hmac.compare_digest(expected, submitted)
 
 
-def validate_csrf_with_origin() -> tuple[bool, str | None]:
+def validate_csrf_with_origin() -> tuple[bool, Optional[str]]:
     """
     Validate CSRF token with additional Origin/Referer header check for defense-in-depth.
     
@@ -86,11 +87,11 @@ def validate_csrf_with_origin() -> tuple[bool, str | None]:
 
 # ── Session ───────────────────────────────────────────────────────────────────
 
-def current_user_id() -> int | None:
+def current_user_id() -> Optional[int]:
     """Get user ID from session OR API key
     
     Returns:
-        int | None: User ID if authenticated via session or API key, None otherwise
+        Optional[int]: User ID if authenticated via session or API key, None otherwise
     """
     from flask import g
     
@@ -102,7 +103,7 @@ def current_user_id() -> int | None:
     return session.get("user_id")
 
 
-def current_username() -> str | None:
+def current_username() -> Optional[str]:
     return session.get("username")
 
 

@@ -34,15 +34,17 @@ def log_event(
     try:
         detail_json = json.dumps(detail) if detail else None
         
-        audit = AuditLog(
-            event=event,
-            user_id=user_id,
-            tx_ref=tx_ref,
-            ip_address=ip_address,
-            detail=detail_json,
-        )
-        db.add(audit)
-        db.flush()
+        # Use a SAVEPOINT so an audit logging failure doesn't drop the entire surrounding transaction checkout 
+        with db.begin_nested():
+            audit = AuditLog(
+                event=event,
+                user_id=user_id,
+                tx_ref=tx_ref,
+                ip_address=ip_address,
+                detail=detail_json,
+            )
+            db.add(audit)
+            db.flush()
         
         logger.debug("Audit event logged: %s (user=%s, tx=%s)", event, user_id, tx_ref)
     except Exception as e:

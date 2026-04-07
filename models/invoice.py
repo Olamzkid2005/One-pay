@@ -3,6 +3,7 @@ OnePay — Invoice database models
 """
 import enum
 from datetime import datetime, timezone
+from typing import Optional
 from sqlalchemy import (
     Column, String, Numeric, DateTime, Integer,
     Enum, Boolean, ForeignKey, Text, Index,
@@ -91,15 +92,15 @@ class Invoice(Base):
             return dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(timezone.utc)
 
-    def created_at_utc_iso(self) -> str | None:
+    def created_at_utc_iso(self) -> Optional[str]:
         dt = self._to_utc(self.created_at)
         return dt.isoformat() if dt else None
 
-    def sent_at_utc_iso(self) -> str | None:
+    def sent_at_utc_iso(self) -> Optional[str]:
         dt = self._to_utc(self.sent_at)
         return dt.isoformat() if dt else None
 
-    def paid_at_utc_iso(self) -> str | None:
+    def paid_at_utc_iso(self) -> Optional[str]:
         dt = self._to_utc(self.paid_at)
         return dt.isoformat() if dt else None
 

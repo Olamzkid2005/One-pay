@@ -10,6 +10,7 @@ import ipaddress
 import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
+from typing import Optional
 from urllib.parse import urlparse
 
 from config import Config
@@ -96,7 +97,7 @@ def generate_reset_token() -> str:
     return secrets.token_urlsafe(48)
 
 
-def validate_return_url(value: str) -> str | None:
+def validate_return_url(value: str) -> Optional[str]:
     """
     Validate and normalize a customer return URL to prevent open redirects.
     - Allow relative paths starting with /
@@ -158,7 +159,7 @@ def validate_hash_token_format(hash_token: str) -> bool:
     return bool(re.match(r'^[A-Za-z0-9_-]{20,300}$', hash_token))
 
 
-def validate_webhook_url(value: str) -> str | None:
+def validate_webhook_url(value: str) -> Optional[str]:
     """
     Validate a merchant webhook URL.
     Must be an absolute HTTPS URL pointing to a public host.

@@ -918,7 +918,85 @@ async function saveSettings() {
   }
 }
 
-// ── Init ────────────────────────────────────────────────────────────────────────
+// ── Init and Analytics ────────────────────────────────────────────────────────
+let analyticsChartInstance = null;
+
+function renderAnalyticsChart(chartData) {
+  const container = document.getElementById('analytics-chart-container');
+  const ctx = document.getElementById('revenueChart');
+  if (!container || !ctx || !chartData || !chartData.dataset || chartData.dataset.length === 0) return;
+  
+  container.classList.remove('hidden');
+
+  if (analyticsChartInstance) {
+    analyticsChartInstance.data.labels = chartData.labels;
+    analyticsChartInstance.data.datasets[0].data = chartData.dataset;
+    analyticsChartInstance.update();
+    return;
+  }
+
+  // Create Dribbble style gradient
+  const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 200);
+  gradient.addColorStop(0, 'rgba(65, 143, 255, 0.4)');
+  gradient.addColorStop(1, 'rgba(65, 143, 255, 0.0)');
+
+  analyticsChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: chartData.labels,
+      datasets: [{
+        label: 'Daily Revenue',
+        data: chartData.dataset,
+        borderColor: '#418fff',
+        backgroundColor: gradient,
+        borderWidth: 2,
+        tension: 0.4,
+        fill: true,
+        pointBackgroundColor: '#ffffff',
+        pointBorderColor: '#418fff',
+        pointBorderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1c2330',
+          titleColor: '#dfe2eb',
+          bodyColor: '#aac7ff',
+          borderColor: 'rgba(170, 199, 255, 0.15)',
+          borderWidth: 1,
+          padding: 10,
+          displayColors: false,
+          callbacks: {
+            label: function(context) {
+              return '₦' + context.parsed.y.toLocaleString('en-NG');
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false, drawBorder: false },
+          ticks: { maxTicksLimit: 7, color: 'rgba(150,150,150,0.5)', font: { size: 10 } }
+        },
+        y: {
+          grid: { display: false, drawBorder: false },
+          ticks: { display: false },
+          beginAtZero: true
+        }
+      },
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      }
+    }
+  });
+}
 
 async function loadPerformanceStats() {
   try {
@@ -947,16 +1025,24 @@ async function loadPerformanceStats() {
     console.log('Performance stats loaded:', amount, 'NGN');
     console.log('Amount >= 1M?', amount >= 1000000);
     
+    
     // Format: if >= 1 million, show as "1.2M", otherwise show full amount
     if (amount >= 1000000) {
       const millions = (amount / 1000000).toFixed(1);
       const formatted = `₦${millions}M`;
       console.log('Formatted as:', formatted);
       statsEl.textContent = formatted;
+      document.getElementById('chart-total-amount').textContent = formatted;
     } else {
       const formatted = fmtAmount(amount, 'NGN');
       console.log('Formatted as:', formatted);
       statsEl.textContent = formatted;
+      document.getElementById('chart-total-amount').textContent = formatted;
+    }
+    
+    // Render analytics chart
+    if (data.chart_data) {
+      renderAnalyticsChart(data.chart_data);
     }
     
     console.log('Final display value:', statsEl.textContent);

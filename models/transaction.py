@@ -3,6 +3,7 @@ OnePay — Transaction database model
 """
 import enum
 from datetime import datetime, timezone
+from typing import Optional
 from sqlalchemy import (
     Column, String, Numeric, DateTime, Integer,
     Enum, Boolean, ForeignKey, Text, Index,
@@ -101,15 +102,15 @@ class Transaction(Base):
             return dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(timezone.utc)
 
-    def expires_at_utc_iso(self) -> str | None:
+    def expires_at_utc_iso(self) -> Optional[str]:
         dt = self._to_utc(self.expires_at)
         return dt.isoformat() if dt else None
 
-    def created_at_utc_iso(self) -> str | None:
+    def created_at_utc_iso(self) -> Optional[str]:
         dt = self._to_utc(self.created_at)
         return dt.isoformat() if dt else None
 
-    def verified_at_utc_iso(self) -> str | None:
+    def verified_at_utc_iso(self) -> Optional[str]:
         dt = self._to_utc(self.verified_at)
         return dt.isoformat() if dt else None
 

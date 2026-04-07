@@ -13,6 +13,7 @@ import time
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Optional, Union
 from enum import Enum
 from typing import Any, Optional
 
@@ -313,11 +314,11 @@ class RedisCache:
 
 
 # Global cache instance
-_cache: Optional[RedisCache | MemoryCache] = None
+_cache: Optional[Union[RedisCache, MemoryCache]] = None
 _cache_lock = threading.Lock()
 
 
-def get_cache(config: Optional[CacheConfig] = None) -> RedisCache | MemoryCache:
+def get_cache(config: Optional[CacheConfig] = None) -> Union[RedisCache, MemoryCache]:
     """
     Get cache instance.
 

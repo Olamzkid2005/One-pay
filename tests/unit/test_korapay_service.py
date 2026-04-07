@@ -1256,10 +1256,10 @@ class TestResponseNormalization:
             importlib.reload(config_module)
             
             from services.korapay import korapay
-            from datetime import datetime, timedelta
+            from datetime import datetime, timedelta, timezone
             
             # Create expiry 30 minutes from now
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             expiry = now + timedelta(minutes=30)
             expiry_str = expiry.strftime("%Y-%m-%dT%H:%M:%SZ")
             

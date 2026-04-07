@@ -8,6 +8,7 @@ Usage:
         user = db.query(User).first()
         # session auto-commits on clean exit, rolls back on exception
 """
+
 import contextlib
 import logging
 
@@ -31,14 +32,15 @@ else:
     # Postgres / MySQL — sensible pool defaults
     _engine_kwargs["pool_size"] = 10
     _engine_kwargs["max_overflow"] = 20
-    _engine_kwargs["pool_pre_ping"] = True   # detect stale connections
-    _engine_kwargs["pool_recycle"] = 3600    # recycle connections after 1 hour
-    _engine_kwargs["pool_timeout"] = 30      # wait max 30s for connection
+    _engine_kwargs["pool_pre_ping"] = True  # detect stale connections
+    _engine_kwargs["pool_recycle"] = 3600  # recycle connections after 1 hour
+    _engine_kwargs["pool_timeout"] = 30  # wait max 30s for connection
 
 engine = create_engine(Config.DATABASE_URL, **_engine_kwargs)
 
 # SQLite pragmas: WAL mode + foreign keys
 if "sqlite" in Config.DATABASE_URL:
+
     @_sa_event.listens_for(engine, "connect")
     def set_sqlite_pragmas(dbapi_conn, _):
         cursor = dbapi_conn.cursor()
@@ -46,6 +48,7 @@ if "sqlite" in Config.DATABASE_URL:
         cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+
 
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
@@ -58,6 +61,7 @@ def get_db():
     - Commits on clean exit
     - Rolls back and re-raises on any exception
     - Always closes the session
+    - Skips commit if session was already rolled back inside the block
 
     Example:
         with get_db() as db:
@@ -67,7 +71,11 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
-        db.commit()
+        # Only commit if the session is still in a valid state
+        # After db.rollback() the session enters a "partial rollback" state
+        # and committing would raise PendingRollbackError
+        if db.in_transaction():
+            db.commit()
     except Exception:
         db.rollback()
         raise
@@ -77,6 +85,7 @@ def get_db():
 
 _db_initialised = False
 
+
 def init_db():
     """Create all tables. Called once at app startup — safe to call multiple times."""
     global _db_initialised
@@ -84,6 +93,7 @@ def init_db():
         return
     import models  # noqa: F401 — registers all models against Base
     from models.base import Base
+
     Base.metadata.create_all(bind=engine)
     _db_initialised = True
     logger.info("Database initialised")

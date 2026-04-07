@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}OnePay — Verify Two-Factor Authentication{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .editorial-shadow {
+        box-shadow: 0 64px 64px -12px rgba(10, 14, 20, 0.4);
+    }
+    
+    .gradient-cta {
+        background: linear-gradient(135deg, #aac7ff 0%, #418fff 50%, #aac7ff 100%);
+        background-size: 200% 200%;
+        animation: gradient-shift 3s ease infinite;
+        box-shadow: 0 8px 24px rgba(170, 199, 255, 0.25);
+    }
+    
+    @keyframes gradient-shift {
+        0%, 100% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+    }
+    
+    /* Code input styles */
+    .code-input-container {
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+    }
+    
+    .code-input {
+        width: 48px;
+        height: 60px;
+        text-align: center;
+        font-size: 24px;
+        font-weight: 700;
+        border-radius: 12px;
+        background: var(--surface-container-high, rgba(255,255,255,0.05));
+        border: 1px solid rgba(170, 199, 255, 0.15);
+        color: var(--on-surface, #dfe2eb);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .code-input:focus {
+        outline: none;
+        border-color: #418fff;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(170, 199, 255, 0.15);
+    }
+    
+    /* Chrome, Safari, Edge, Opera */
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    /* Firefox */
+    input[type=number] {
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<main class="flex-grow flex items-center justify-center px-6 relative overflow-hidden">
+    <!-- Abstract Background elements matching new design -->
+    <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px] mix-blend-screen"></div>
+    <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 rounded-full blur-[120px] mix-blend-screen"></div>
+    
+    <div class="w-full max-w-[450px] z-10 glass-panel p-10 rounded-2xl editorial-shadow bg-surface-container-high/80 dark:bg-surface-container/60 backdrop-blur-xl border border-white/10">
+        <div class="flex flex-col items-center mb-8 text-center">
+            <div class="mb-6 flex items-center justify-center bg-primary/10 w-16 h-16 rounded-2xl text-primary">
+                <span class="material-symbols-outlined text-3xl">mark_email_read</span>
+            </div>
+            <h1 class="font-headline text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white mb-3">Two-Factor Auth</h1>
+            <p class="font-body text-sm text-gray-500 dark:text-gray-400">
+                Please enter the 6-digit verification code sent to your email to continue.
+            </p>
+        </div>
+        
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="mb-6 p-4 rounded-xl {% if category == 'error' %}bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400{% else %}bg-green-500/10 border border-green-500/20 text-green-600 dark:text-green-400{% endif %}">
+                    <div class="flex items-center gap-2 text-sm font-medium">
+                        <span class="material-symbols-outlined text-lg">
+                            {% if category == 'error' %}error{% else %}check_circle{% endif %}
+                        </span>
+                        <span>{{ message }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <form method="POST" class="flex flex-col gap-8" id="2fa-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            
+            <div class="code-input-container">
+                <input type="text" name="code1" class="code-input dark:bg-surface-variant/50" maxlength="1" required autocomplete="off" autofocus>
+                <input type="text" name="code2" class="code-input dark:bg-surface-variant/50" maxlength="1" required autocomplete="off">
+                <input type="text" name="code3" class="code-input dark:bg-surface-variant/50" maxlength="1" required autocomplete="off">
+                <input type="text" name="code4" class="code-input dark:bg-surface-variant/50" maxlength="1" required autocomplete="off">
+                <input type="text" name="code5" class="code-input dark:bg-surface-variant/50" maxlength="1" required autocomplete="off">
+                <input type="text" name="code6" class="code-input dark:bg-surface-variant/50" maxlength="1" required autocomplete="off">
+            </div>
+            
+            <button 
+                type="submit"
+                class="gradient-cta h-14 w-full rounded-xl flex items-center justify-center gap-2 text-white font-headline font-bold text-base hover:opacity-90 active:scale-95 transition-all shadow-lg"
+            >
+                Verify Code
+                <span class="material-symbols-outlined text-xl">security</span>
+            </button>
+            
+            <div class="text-center mt-2">
+                <a href="{{ url_for('auth.login_page') }}" class="text-sm text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">
+                    Back to login
+                </a>
+            </div>
+        </form>
+    </div>
+</main>
+
+<script>
+    // Handle OTP input auto-advance
+    const inputs = document.querySelectorAll('.code-input');
+    
+    inputs.forEach((input, index) => {
+        // Only allow numbers
+        input.addEventListener('input', function(e) {
+            this.value = this.value.replace(/[^0-9]/g, '');
+            
+            if (this.value !== '') {
+                if (index < inputs.length - 1) {
+                    inputs[index + 1].focus();
+                } else {
+                    this.blur();
+                }
+            }
+        });
+        
+        // Handle backspace
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Backspace' && this.value === '') {
+                if (index > 0) {
+                    inputs[index - 1].focus();
+                }
+            } else if (e.key === 'ArrowLeft' && index > 0) {
+                inputs[index - 1].focus();
+            } else if (e.key === 'ArrowRight' && index < inputs.length - 1) {
+                inputs[index + 1].focus();
+            }
+        });
+
+        // Handle Paste event
+        input.addEventListener('paste', function(e) {
+            e.preventDefault();
+            const pastedData = e.clipboardData.getData('text').replace(/[^0-9]/g, '').slice(0, inputs.length);
+            for(let i=0; i<pastedData.length; i++) {
+                if(i + index < inputs.length) {
+                    inputs[i + index].value = pastedData[i];
+                    if(i + index < inputs.length - 1) {
+                        inputs[i + index + 1].focus();
+                    } else {
+                        inputs[i + index].blur();
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}
