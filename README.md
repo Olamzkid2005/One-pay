@@ -2,14 +2,12 @@
 
 A modern, secure payment verification and invoice management platform that integrates with KoraPay API. OnePay eliminates fake payment confirmations by allowing merchants to generate secure, time-bound payment links, automatically create professional invoices, and verify transactions directly from the payment infrastructure.
 
-## 🚀 Latest Updates (v1.6.0)
+## 🚀 Latest Updates (v1.6.5)
 
-### VoicePay Integration - Merchant Payment Gateway
-- 🎤 **VoicePay Gateway**: OnePay now serves as merchant payment gateway for VoicePay
-- 🔔 **Webhook Forwarding**: Automatic payment confirmations to VoicePay with HMAC signatures
-- 📊 **Monitoring**: Comprehensive metrics, dashboards, and alerting for VoicePay integration
-- 🔐 **Security**: HMAC-SHA256 signatures, HTTPS enforcement, separate secrets
-- 📱 **Bill Payments**: Support for DSTV, electricity, airtime, and more
+### Dashboard & Payment Page Improvements
+- 📊 **Chart.js Integration**: Added Chart.js CDN to Content Security Policy for revenue analytics
+- 🔲 **QR Code Cleanup**: Removed duplicate virtual account QR code from customer payment page
+- 📈 **Chart Rendering Fix**: Improved chart display logic to properly render when all values are zero
 
 ### Previous Updates (v1.5.5)
 
@@ -513,7 +511,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 📊 Project Status
 
-- **Version**: 1.6.0
+- **Version**: 1.6.5
 - **Status**: Production Ready ✅
 - **Payment Provider**: KoraPay ✅
 - **VoicePay Integration**: Complete ✅
