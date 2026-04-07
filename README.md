@@ -2,7 +2,7 @@
 
 A modern, secure payment verification and invoice management platform that integrates with KoraPay API. OnePay eliminates fake payment confirmations by allowing merchants to generate secure, time-bound payment links, automatically create professional invoices, and verify transactions directly from the payment infrastructure.
 
-## 🚀 Latest Updates (v1.6.5)
+## 🚀 Latest Updates (v1.6.0)
 
 ### Dashboard & Payment Page Improvements
 - 📊 **Chart.js Integration**: Added Chart.js CDN to Content Security Policy for revenue analytics
