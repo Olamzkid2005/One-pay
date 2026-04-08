@@ -1,0 +1,4 @@
+# file: /Users/mac/Documents/One-pay/blueprints/api_keys.py
+# hypothesis_version: 6.141.1
+
+[404, '/api-keys', 'API key not found', 'API key revoked', 'DELETE', 'GET', 'NOT_FOUND', 'POST', 'api_key', 'api_keys', 'message', 'name', 'success']

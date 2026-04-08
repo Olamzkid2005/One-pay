@@ -24,6 +24,7 @@ from database import get_db
 from models.user import User
 from services.rate_limiter import check_rate_limit
 from services.security import generate_reset_token, validate_webhook_url
+from core.decorators import rate_limit
 from services.email import send_password_reset
 from services.google_oauth import GoogleTokenValidator, GoogleProfileExtractor
 from services.github_oauth import GitHubOAuthService
@@ -37,6 +38,8 @@ from core.auth import (
 from core.ip import client_ip
 from core.responses import error
 from core.audit import log_event
+from services.validators import validate_email, validate_phone
+from core.exceptions import ValidationError, AuthenticationError, AuthorizationError
 
 logger = logging.getLogger(__name__)
 auth_bp = Blueprint("auth", __name__)
@@ -124,14 +127,15 @@ def register_page():
         return render_template("register.html", csrf_token=get_csrf_token())
 
     username = (request.form.get("username") or "").strip()
-    email = (request.form.get("email") or "").strip().lower()
+    raw_email = (request.form.get("email") or "").strip()
+    email = validate_email(raw_email)
     password = request.form.get("password") or ""
     password2 = request.form.get("password2") or ""
 
     if not is_valid_csrf_token(request.form.get("csrf_token")):
         flash("Session expired — please refresh and try again.", "error")
         return render_template(
-            "register.html", username=username, email=email, csrf_token=get_csrf_token()
+            "register.html", username=username, email=raw_email, csrf_token=get_csrf_token()
         )
 
     if not valid_username(username):
@@ -140,13 +144,13 @@ def register_page():
             "error",
         )
         return render_template(
-            "register.html", username=username, email=email, csrf_token=get_csrf_token()
+            "register.html", username=username, email=raw_email, csrf_token=get_csrf_token()
         )
 
-    if not email or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+    if not email:
         flash("Please enter a valid email address.", "error")
         return render_template(
-            "register.html", username=username, email=email, csrf_token=get_csrf_token()
+            "register.html", username=username, email=raw_email, csrf_token=get_csrf_token()
         )
 
     # Validate password strength (VULN-006 fix)
@@ -504,13 +508,11 @@ def reset_password(token: str):
 @auth_bp.route("/account/settings", methods=["POST"])
 def update_settings():
     if not current_user_id():
-        return error("Authentication required", "UNAUTHENTICATED", 401)
+        raise AuthenticationError()
 
     # Validate Content-Type to prevent CSRF via form submission
     if request.content_type != "application/json":
-        return error(
-            "Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415
-        )
+        raise ValidationError("Content-Type must be application/json")
 
     # Skip CSRF for API key authenticated requests
     from core.api_auth import is_api_key_authenticated
@@ -520,21 +522,19 @@ def update_settings():
             "X-CSRF-Token"
         )
         if not is_valid_csrf_token(csrf_header):
-            return error("CSRF validation failed", "CSRF_ERROR", 403)
+            raise AuthorizationError("CSRF validation failed")
 
     data = request.get_json(silent=True) or {}
     raw_webhook = data.get("webhook_url", "")
     webhook_url = validate_webhook_url(raw_webhook) if raw_webhook else None
 
     if raw_webhook and not webhook_url:
-        return error(
-            "Invalid webhook URL — must be a public HTTPS URL", "VALIDATION_ERROR", 400
-        )
+        raise ValidationError("Invalid webhook URL — must be a public HTTPS URL")
 
     with get_db() as db:
         user = db.query(User).filter(User.id == current_user_id()).first()
         if not user:
-            return error("User not found", "NOT_FOUND", 404)
+            raise ValidationError("User not found")
 
         old_webhook = user.webhook_url
         user.webhook_url = webhook_url
@@ -583,9 +583,7 @@ def google_callback():
     """
     # Validate Content-Type
     if request.content_type != "application/json":
-        return error(
-            "Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415
-        )
+        raise ValidationError("Content-Type must be application/json")
 
     data = request.get_json(silent=True) or {}
     credential = data.get("credential", "").strip()
@@ -593,13 +591,11 @@ def google_callback():
 
     # Validate CSRF token
     if not is_valid_csrf_token(csrf_token):
-        return error(
-            "Session expired. Please refresh and try again.", "CSRF_ERROR", 403
-        )
+        raise AuthorizationError("Session expired. Please refresh and try again.")
 
     # Validate credential is present
     if not credential:
-        return error("Missing credential", "INVALID_REQUEST", 400)
+        raise ValidationError("Missing credential")
 
     with get_db() as db:
         # Apply rate limiting (5 requests per IP per 60 seconds)
@@ -612,10 +608,11 @@ def google_callback():
                 ip_address=client_ip(),
                 detail={"provider": "google"},
             )
-            return error(
+            from core.exceptions import OnePayError
+            raise OnePayError(
                 "Too many authentication attempts. Please wait and try again.",
                 "RATE_LIMIT_EXCEEDED",
-                429,
+                429
             )
 
         try:
@@ -623,10 +620,11 @@ def google_callback():
             client_id = Config.GOOGLE_CLIENT_ID
             if not client_id:
                 logger.error("Google OAuth not configured (missing GOOGLE_CLIENT_ID)")
-                return error(
+                from core.exceptions import OnePayError
+                raise OnePayError(
                     "Google authentication is not available.",
                     "SERVICE_UNAVAILABLE",
-                    503,
+                    503
                 )
 
             validator = GoogleTokenValidator(client_id)
@@ -678,10 +676,11 @@ def google_callback():
                         ip_address=client_ip(),
                         detail={"provider": "google", "email": profile["email"]},
                     )
-                    return error(
+                    from core.exceptions import OnePayError
+                    raise OnePayError(
                         "This email is already linked to a different Google account.",
                         "ACCOUNT_CONFLICT",
-                        409,
+                        409
                     )
 
                 # Link Google account to existing user
@@ -763,15 +762,11 @@ def google_callback():
 
             # Return user-friendly error message
             if "not verified" in error_msg.lower():
-                return error(
-                    "Please verify your email address with Google before signing in.",
-                    "UNVERIFIED_EMAIL",
-                    401,
+                raise AuthenticationError(
+                    "Please verify your email address with Google before signing in."
                 )
             else:
-                return error(
-                    "Authentication failed. Please try again.", "INVALID_TOKEN", 401
-                )
+                raise AuthenticationError("Authentication failed. Please try again.")
 
         except Exception as e:
             # Unexpected error
@@ -787,8 +782,11 @@ def google_callback():
                 ip_address=client_ip(),
                 detail={"provider": "google", "error": "Internal error"},
             )
-            return error(
-                "An error occurred. Please try again later.", "INTERNAL_ERROR", 500
+            from core.exceptions import OnePayError
+            raise OnePayError(
+                "An error occurred. Please try again later.",
+                "INTERNAL_ERROR",
+                500
             )
 
 
@@ -960,6 +958,6 @@ def github_callback():
             return redirect(url_for("payments.dashboard"))
 
         except Exception as e:
-            logger.error(f"GitHub OAuth error: {e}", exc_info=True)
+            logger.error("GitHub OAuth error: %s", e, exc_info=True)
             flash("An error occurred during authentication.", "error")
             return redirect(url_for("auth.login_page"))

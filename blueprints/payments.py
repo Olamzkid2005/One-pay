@@ -6,12 +6,13 @@ Handles: dashboard, create link, status, history (merchant-facing)
 import logging
 import re
 import html
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 from typing import Optional
 
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for
 from sqlalchemy import func, case
+from sqlalchemy.orm import selectinload
 
 from config import Config
 from database import get_db
@@ -19,6 +20,7 @@ from models.transaction import Transaction, TransactionStatus
 from models.user import User
 from models.audit_log import AuditLog
 from services.rate_limiter import check_rate_limit
+from core.decorators import rate_limit
 from services.security import (
     generate_tx_reference,
     generate_hash_token,
@@ -42,6 +44,9 @@ from core.auth import (
 from core.ip import client_ip
 from core.responses import error, rate_limited, unauthenticated
 from core.audit import log_event
+from services.validators import validate_email, validate_phone
+from services.cache import cache_get, cache_set, cache_delete
+from core.exceptions import ValidationError, AuthenticationError, AuthorizationError, ProviderError
 
 logger = logging.getLogger(__name__)
 payments_bp = Blueprint("payments", __name__)
@@ -80,22 +85,20 @@ def _safe(val, maxlen=255):
     return sanitized if sanitized else None
 
 
-_EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]+\.[^@\s]{2,}$")
-_PHONE_RE = re.compile(r"^\+?[0-9\s\-\(\)]{7,20}$")
-
-
 def _safe_email(val) -> Optional[str]:
+    """Validate and normalize email using centralized validator."""
     v = _safe(val, 255)
     if not v:
         return None
-    return v if _EMAIL_RE.match(v) else None
+    return validate_email(v)
 
 
 def _safe_phone(val) -> Optional[str]:
+    """Validate and normalize phone using centralized validator."""
     v = _safe(val, 20)
     if not v:
         return None
-    return v if _PHONE_RE.match(v) else None
+    return validate_phone(v)
 
 
 # ── Dashboard ──────────────────────────────────────────────────────────────────
@@ -187,9 +190,7 @@ def history():
 def update_webhook_settings():
     # VULN-007 FIX: Validate Content-Type for JSON API
     if request.content_type != "application/json":
-        return error(
-            "Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415
-        )
+        raise ValidationError("Content-Type must be application/json")
     if not current_user_id():
         return unauthenticated()
 
@@ -201,7 +202,7 @@ def update_webhook_settings():
             "X-CSRF-Token"
         )
         if not is_valid_csrf_token(csrf_header):
-            return error("CSRF validation failed", "CSRF_ERROR", 403)
+            raise AuthorizationError("CSRF validation failed")
 
     data = request.get_json(silent=True) or {}
     webhook_url = validate_webhook_url(data.get("webhook_url", ""))
@@ -209,7 +210,7 @@ def update_webhook_settings():
     with get_db() as db:
         user = db.query(User).filter(User.id == current_user_id()).first()
         if not user:
-            return error("User not found", "NOT_FOUND", 404)
+            raise ValidationError("User not found")
 
         user.webhook_url = webhook_url
         with db.begin_nested():
@@ -237,6 +238,7 @@ def update_webhook_settings():
 # ── Export transactions ────────────────────────────────────────────────────────
 
 
+@rate_limit("export:{user_id}", limit=5, window_secs=300)
 @payments_bp.route("/payments/export", methods=["GET"])
 def export_transactions():
     if not current_user_id():
@@ -246,39 +248,32 @@ def export_transactions():
     from io import StringIO
     from flask import make_response
 
-    with get_db() as db:
-        # Rate limit CSV export to prevent resource exhaustion
-        if not check_rate_limit(
-            db, f"export:{current_user_id()}", limit=5, window_secs=300
-        ):
-            return rate_limited()
+    transactions = (
+        db.query(Transaction)
+        .filter(Transaction.user_id == current_user_id())
+        .order_by(Transaction.created_at.desc())
+        .limit(MAX_EXPORT_ROWS)
+        .all()
+    )
 
-        transactions = (
-            db.query(Transaction)
-            .filter(Transaction.user_id == current_user_id())
-            .order_by(Transaction.created_at.desc())
-            .limit(MAX_EXPORT_ROWS)
-            .all()
-        )
+    # Create CSV
+    si = StringIO()
+    writer = csv.writer(si)
+    writer.writerow(
+        [
+            "Reference",
+            "Amount",
+            "Currency",
+            "Status",
+            "Description",
+            "Customer Email",
+            "Created At",
+            "Expires At",
+        ]
+    )
 
-        # Create CSV
-        si = StringIO()
-        writer = csv.writer(si)
+    for tx in transactions:
         writer.writerow(
-            [
-                "Reference",
-                "Amount",
-                "Currency",
-                "Status",
-                "Description",
-                "Customer Email",
-                "Created At",
-                "Expires At",
-            ]
-        )
-
-        for tx in transactions:
-            writer.writerow(
                 [
                     tx.tx_ref,
                     str(tx.amount),
@@ -318,19 +313,21 @@ def export_transactions():
 # ── Analytics summary ──────────────────────────────────────────────────────────
 
 
+@rate_limit("summary:{user_id}", limit=20, window_secs=60)
 @payments_bp.route("/payments/summary", methods=["GET"])
 def payment_summary():
     if not current_user_id():
         return unauthenticated()
 
-    with get_db() as db:
-        # Rate limit expensive aggregation queries
-        if not check_rate_limit(
-            db, f"summary:{current_user_id()}", limit=20, window_secs=60
-        ):
-            return rate_limited()
+    user_id = current_user_id()
+    cache_key = f"payment_summary:{user_id}"
 
-        user_id = current_user_id()
+    # Check cache before hitting the database (Requirement 11.1, 11.2)
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+
+    with get_db() as db:
 
         # Current month start and 30-day window
         now = datetime.now(timezone.utc)
@@ -396,10 +393,20 @@ def payment_summary():
 
         # 30-day Chart Data Aggregation
         try:
-            # Group by formatted date (SQLite)
+            # Use dialect-appropriate date formatting:
+            # PostgreSQL: func.to_char  |  SQLite: func.strftime
+            from database import engine as _engine
+
+            dialect = _engine.dialect.name
+            if dialect == "sqlite":
+                day_expr = func.strftime("%Y-%m-%d", Transaction.created_at).label("day")
+            else:
+                # PostgreSQL (and compatible dialects)
+                day_expr = func.to_char(Transaction.created_at, "YYYY-MM-DD").label("day")
+
             daily_stats = (
                 db.query(
-                    func.strftime("%Y-%m-%d", Transaction.created_at).label("day"),
+                    day_expr,
                     func.sum(Transaction.amount).label("total"),
                 )
                 .filter(
@@ -443,25 +450,28 @@ def payment_summary():
                 (this_month.total_verified or 0) / this_month.total_links * 100, 1
             )
 
-        return jsonify(
-            {
-                "success": True,
-                "all_time": {
-                    "total_collected": str(all_time.total_verified_amount or 0),
-                    "total_links": all_time.total_links or 0,
-                    "total_verified": all_time.total_verified or 0,
-                    "total_expired": all_time.total_expired or 0,
-                    "conversion_rate": all_time_rate,
-                },
-                "this_month": {
-                    "total_collected": str(this_month.total_verified_amount or 0),
-                    "total_links": this_month.total_links or 0,
-                    "total_verified": this_month.total_verified or 0,
-                    "conversion_rate": this_month_rate,
-                },
-                "chart_data": {"labels": chart_labels, "dataset": chart_values},
-            }
-        )
+        result = {
+            "success": True,
+            "all_time": {
+                "total_collected": str(all_time.total_verified_amount or 0),
+                "total_links": all_time.total_links or 0,
+                "total_verified": all_time.total_verified or 0,
+                "total_expired": all_time.total_expired or 0,
+                "conversion_rate": all_time_rate,
+            },
+            "this_month": {
+                "total_collected": str(this_month.total_verified_amount or 0),
+                "total_links": this_month.total_links or 0,
+                "total_verified": this_month.total_verified or 0,
+                "conversion_rate": this_month_rate,
+            },
+            "chart_data": {"labels": chart_labels, "dataset": chart_values},
+        }
+
+        # Store in cache with 60-second TTL on miss (Requirement 11.3, 11.4)
+        cache_set(cache_key, result, ttl=60)
+
+        return jsonify(result)
 
 
 # ── Create payment link ────────────────────────────────────────────────────────
@@ -471,17 +481,9 @@ def payment_summary():
 def create_payment_link():
     # VULN-007 FIX: Validate Content-Type for JSON API
     if request.content_type != "application/json":
-        return error(
-            "Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415
-        )
+        raise ValidationError("Content-Type must be application/json")
     if not current_user_id():
         return unauthenticated()
-
-    # Validate Content-Type to prevent CSRF via form submission
-    if request.content_type != "application/json":
-        return error(
-            "Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415
-        )
 
     # Skip CSRF for API key authenticated requests
     from core.api_auth import is_api_key_authenticated
@@ -491,7 +493,7 @@ def create_payment_link():
             "X-CSRF-Token"
         )
         if not is_valid_csrf_token(csrf_header):
-            return error("CSRF validation failed", "CSRF_ERROR", 403)
+            raise AuthorizationError("CSRF validation failed")
 
     with get_db() as db:
         # Separate rate limits for API vs web clients
@@ -519,10 +521,8 @@ def create_payment_link():
             if not idempotency_key or not all(
                 c.isalnum() or c in "-_" for c in idempotency_key
             ):
-                return error(
-                    "X-Idempotency-Key must be alphanumeric with hyphens/underscores (1-255 chars)",
-                    "VALIDATION_ERROR",
-                    400,
+                raise ValidationError(
+                    "X-Idempotency-Key must be alphanumeric with hyphens/underscores (1-255 chars)"
                 )
         if idempotency_key:
             existing = (
@@ -562,26 +562,20 @@ def create_payment_link():
         # ── Validate amount ────────────────────────────────────────────────────
         raw_amount = data.get("amount")
         if not raw_amount:
-            return error("amount is required", "VALIDATION_ERROR", 400)
+            raise ValidationError("amount is required")
         try:
             from decimal import InvalidOperation, ROUND_HALF_UP
 
             amount = Decimal(str(raw_amount))
             # Reject negative zero, NaN, infinity
             if amount <= 0 or not amount.is_finite():
-                return error(
-                    "amount must be a positive finite number", "VALIDATION_ERROR", 400
-                )
+                raise ValidationError("amount must be a positive finite number")
             if amount > Decimal("100000000.00"):
-                return error(
-                    "amount exceeds maximum allowed (100,000,000.00)",
-                    "VALIDATION_ERROR",
-                    400,
-                )
+                raise ValidationError("amount exceeds maximum allowed (100,000,000.00)")
             # Normalize to remove trailing zeros and enforce 2 decimal places
             amount = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         except (ValueError, TypeError, ArithmeticError, InvalidOperation):
-            return error("amount must be a valid number", "VALIDATION_ERROR", 400)
+            raise ValidationError("amount must be a valid number")
 
         tx_ref = generate_tx_reference()
         expires_at = generate_expiration_time()
@@ -594,9 +588,7 @@ def create_payment_link():
         # Validate description length
         description = _safe(data.get("description"))
         if description and len(description) > 255:
-            return error(
-                "Description too long (max 255 characters)", "VALIDATION_ERROR", 400
-            )
+            raise ValidationError("Description too long (max 255 characters)")
 
         transaction = Transaction(
             tx_ref=tx_ref,
@@ -633,11 +625,14 @@ def create_payment_link():
                 )
             except KoraPayError as e:
                 logger.error("Virtual account creation failed: %s", e)
-                return error("Payment provider unavailable", "PROVIDER_ERROR", 500)
+                raise ProviderError("Payment provider unavailable", provider="KoraPay")
 
         db.add(transaction)
         db.flush()
         db.refresh(transaction)
+
+        # Invalidate payment summary cache on new transaction (Requirement 11.5)
+        cache_delete(f"payment_summary:{current_user_id()}")
 
         # Build payment URL BEFORE generating QR codes
         base_url = request.host_url.rstrip("/")
@@ -806,6 +801,7 @@ def create_payment_link():
 # ── Transaction status ─────────────────────────────────────────────────────────
 
 
+@rate_limit("status:{user_id}", limit=100, window_secs=60)
 @payments_bp.route("/payments/status/<tx_ref>", methods=["GET"])
 def transaction_status(tx_ref):
     """
@@ -830,15 +826,9 @@ def transaction_status(tx_ref):
         jitter = secrets.randbelow(40) / 1000.0  # 0-40ms jitter
         remaining = max(0, target_delay + jitter - elapsed)
         time.sleep(remaining)
-        return error("Invalid transaction reference format", "INVALID_REF", 400)
+        raise ValidationError("Invalid transaction reference format")
 
     with get_db() as db:
-        # Rate limit status checks to prevent enumeration
-        if not check_rate_limit(
-            db, f"status:{current_user_id()}", limit=100, window_secs=60
-        ):
-            return rate_limited()
-
         # Query with user_id filter to prevent enumeration
         t = (
             db.query(Transaction)
@@ -858,7 +848,7 @@ def transaction_status(tx_ref):
             remaining = max(0, target_delay + jitter - elapsed)
             time.sleep(remaining)
             # Same error for both "not found" and "unauthorized"
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         # VoicePay-specific logging
         if t.tx_ref.startswith("VP-BILL-"):
@@ -900,6 +890,7 @@ def transaction_history():
 
         transactions = (
             db.query(Transaction)
+            .options(selectinload(Transaction.invoice))
             .filter(Transaction.user_id == current_user_id())
             .order_by(Transaction.created_at.desc())
             .offset(offset)
@@ -930,17 +921,9 @@ def transaction_history():
 def reissue_payment_link(tx_ref):
     # VULN-007 FIX: Validate Content-Type for JSON API
     if request.content_type != "application/json":
-        return error(
-            "Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415
-        )
+        raise ValidationError("Content-Type must be application/json")
     if not current_user_id():
         return unauthenticated()
-
-    # Validate Content-Type to prevent CSRF via form submission
-    if request.content_type != "application/json":
-        return error(
-            "Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415
-        )
 
     # Skip CSRF for API key authenticated requests
     from core.api_auth import is_api_key_authenticated
@@ -950,27 +933,25 @@ def reissue_payment_link(tx_ref):
             "X-CSRF-Token"
         )
         if not is_valid_csrf_token(csrf_header):
-            return error("CSRF validation failed", "CSRF_ERROR", 403)
+            raise AuthorizationError("CSRF validation failed")
 
     if not valid_tx_ref(tx_ref):
-        return error("Invalid transaction reference format", "INVALID_REF", 400)
+        raise ValidationError("Invalid transaction reference format")
 
     with get_db() as db:
         # Fetch original transaction
         original = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
 
         if not original:
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         # Verify ownership
         if original.user_id != current_user_id():
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         # Don't re-issue verified transactions
         if original.status == TransactionStatus.VERIFIED or original.transfer_confirmed:
-            return error(
-                "Cannot re-issue a verified transaction", "ALREADY_VERIFIED", 400
-            )
+            raise ValidationError("Cannot re-issue a verified transaction")
 
         # Generate new transaction with same details
         new_tx_ref = generate_tx_reference()
@@ -1013,7 +994,7 @@ def reissue_payment_link(tx_ref):
                 )
             except KoraPayError as e:
                 logger.error("Virtual account creation failed for reissue: %s", e)
-                return error("Payment provider unavailable", "PROVIDER_ERROR", 500)
+                raise ProviderError("Payment provider unavailable", provider="KoraPay")
 
         db.add(new_transaction)
         db.flush()
@@ -1058,28 +1039,23 @@ def reissue_payment_link(tx_ref):
 # ── Audit log for transaction ─────────────────────────────────────────────────
 
 
+@rate_limit("audit:{user_id}", limit=20, window_secs=60)
 @payments_bp.route("/payments/audit/<tx_ref>", methods=["GET"])
 def transaction_audit(tx_ref):
     if not current_user_id():
         return unauthenticated()
 
     if not valid_tx_ref(tx_ref):
-        return error("Invalid transaction reference format", "INVALID_REF", 400)
+        raise ValidationError("Invalid transaction reference format")
 
     with get_db() as db:
-        # Rate limit audit log access
-        if not check_rate_limit(
-            db, f"audit:{current_user_id()}", limit=20, window_secs=60
-        ):
-            return rate_limited()
-
         # Verify ownership
         transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
         if not transaction:
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         if transaction.user_id != current_user_id():
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         # Fetch audit logs for this transaction
         logs = (
@@ -1126,30 +1102,25 @@ def expired_link(tx_ref):
 # ── Download receipt ───────────────────────────────────────────────────────────
 
 
+@rate_limit("receipt:{user_id}", limit=10, window_secs=60)
 @payments_bp.route("/payments/receipt/<tx_ref>", methods=["GET"])
 def download_receipt(tx_ref):
     """Generate and download a PDF receipt for a transaction"""
     if not current_user_id():
-        return error("Authentication required", "UNAUTHENTICATED", 401)
+        raise AuthenticationError()
 
     if not valid_tx_ref(tx_ref):
-        return error("Invalid transaction reference format", "INVALID_REF", 400)
+        raise ValidationError("Invalid transaction reference format")
 
     with get_db() as db:
-        # Rate limit receipt generation
-        if not check_rate_limit(
-            db, f"receipt:{current_user_id()}", limit=10, window_secs=60
-        ):
-            return rate_limited()
-
         transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
 
         if not transaction:
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         # Verify ownership
         if transaction.user_id != current_user_id():
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         # Generate PDF receipt
         from services.pdf_receipt import generate_receipt_pdf
@@ -1178,26 +1149,27 @@ def download_receipt(tx_ref):
                 tx_ref,
                 e,
             )
-            return error("Failed to generate receipt", "PDF_GENERATION_ERROR", 500)
+            from core.exceptions import OnePayError
+            raise OnePayError("Failed to generate receipt", "PDF_GENERATION_ERROR", 500)
 
 
 @payments_bp.route("/payments/receipt/<tx_ref>/preview", methods=["GET"])
 def preview_receipt_html(tx_ref):
     """Generate and return HTML preview of receipt (for debugging/testing)"""
     if not current_user_id():
-        return error("Authentication required", "UNAUTHENTICATED", 401)
+        raise AuthenticationError()
 
     if not valid_tx_ref(tx_ref):
-        return error("Invalid transaction reference format", "INVALID_REF", 400)
+        raise ValidationError("Invalid transaction reference format")
 
     with get_db() as db:
         transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
 
         if not transaction:
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         if transaction.user_id != current_user_id():
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         from services.pdf_receipt import generate_receipt_html
         from flask import make_response
@@ -1216,7 +1188,8 @@ def preview_receipt_html(tx_ref):
                 tx_ref,
                 e,
             )
-            return error("Failed to generate preview", "PREVIEW_ERROR", 500)
+            from core.exceptions import OnePayError
+            raise OnePayError("Failed to generate preview", "PREVIEW_ERROR", 500)
 
 
 @payments_bp.route("/payments/refund/<tx_ref>", methods=["POST"])
@@ -1239,11 +1212,11 @@ def initiate_refund(tx_ref):
     """
     # Authentication required
     if not current_user_id():
-        return error("Authentication required", "UNAUTHENTICATED", 401)
+        raise AuthenticationError()
 
     # Validate transaction reference format
     if not valid_tx_ref(tx_ref):
-        return error("Invalid transaction reference format", "INVALID_REF", 400)
+        raise ValidationError("Invalid transaction reference format")
 
     # Parse request body
     data = request.get_json() or {}
@@ -1255,17 +1228,15 @@ def initiate_refund(tx_ref):
         transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
 
         if not transaction:
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         # Verify ownership
         if transaction.user_id != current_user_id():
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         # Validate transaction is VERIFIED
         if transaction.status != TransactionStatus.VERIFIED:
-            return error(
-                "Cannot refund transaction that is not verified", "INVALID_STATUS", 400
-            )
+            raise ValidationError("Cannot refund transaction that is not verified")
 
         # Check if already refunded
         from models.refund import Refund
@@ -1275,9 +1246,7 @@ def initiate_refund(tx_ref):
         )
 
         if existing_refund:
-            return error(
-                "Transaction has already been refunded", "ALREADY_REFUNDED", 400
-            )
+            raise ValidationError("Transaction has already been refunded")
 
         try:
             # Call KoraPay to initiate refund
@@ -1289,10 +1258,14 @@ def initiate_refund(tx_ref):
             )
 
             # Create refund record in database
+            refund_amount_val = refund_data.get("amount")
+            if refund_amount_val is None:
+                from core.exceptions import OnePayError
+                raise OnePayError("Refund amount not returned by payment provider", "REFUND_ERROR", 500)
             refund = Refund(
                 transaction_id=transaction.id,
                 refund_reference=refund_data["reference"],
-                amount=Decimal(str(refund_data["amount"])),
+                amount=Decimal(str(refund_amount_val)),
                 currency=refund_data["currency"],
                 status=refund_data["status"],
                 reason=refund_reason,
@@ -1339,7 +1312,7 @@ def initiate_refund(tx_ref):
                 tx_ref,
                 str(e),
             )
-            return error("Failed to initiate refund", "REFUND_FAILED", 500)
+            raise ProviderError("Failed to initiate refund", provider="KoraPay", original_error=str(e))
         except Exception as e:
             logger.error(
                 "Unexpected error during refund | user=%s tx_ref=%s error=%s",
@@ -1348,4 +1321,5 @@ def initiate_refund(tx_ref):
                 str(e),
             )
             db.rollback()
-            return error("An unexpected error occurred", "INTERNAL_ERROR", 500)
+            from core.exceptions import OnePayError
+            raise OnePayError("An unexpected error occurred", "INTERNAL_ERROR", 500)

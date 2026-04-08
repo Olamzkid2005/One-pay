@@ -10,6 +10,7 @@ from flask import Blueprint, request, jsonify, render_template
 from database import get_db
 from models.user import User
 from services.rate_limiter import check_rate_limit
+from services.validators import validate_email, validate_phone
 from core.auth import (
     current_user_id,
     current_username,
@@ -17,6 +18,7 @@ from core.auth import (
     login_required_redirect,
 )
 from core.responses import error, rate_limited, unauthenticated
+from core.exceptions import ValidationError, AuthenticationError, ProviderError
 
 logger = logging.getLogger(__name__)
 invoices_bp = Blueprint("invoices", __name__)
@@ -33,9 +35,7 @@ def create_invoice():
 
     # Validate Content-Type to prevent CSRF via form submission
     if request.content_type != "application/json":
-        return error(
-            "Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415
-        )
+        raise ValidationError("Content-Type must be application/json")
 
     with get_db() as db:
         # Rate limit: 20 requests per minute
@@ -49,7 +49,7 @@ def create_invoice():
         # Validate transaction_reference parameter
         transaction_reference = data.get("transaction_reference")
         if not transaction_reference:
-            return error("transaction_reference is required", "VALIDATION_ERROR", 400)
+            raise ValidationError("transaction_reference is required")
 
         # Fetch transaction
         from models.transaction import Transaction
@@ -61,13 +61,11 @@ def create_invoice():
         )
 
         if not transaction:
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         # Verify transaction ownership
         if transaction.user_id != current_user_id():
-            return error(
-                "Transaction not found", "NOT_FOUND", 404
-            )  # Security through obscurity
+            raise ValidationError("Transaction not found")
 
         # Check if invoice already exists (idempotency)
         from models.invoice import Invoice, InvoiceSettings
@@ -109,7 +107,7 @@ def create_invoice():
 
         user = db.query(User).filter(User.id == current_user_id()).first()
         if not user:
-            return error("User not found", "NOT_FOUND", 404)
+            raise ValidationError("User not found")
 
         settings = (
             db.query(InvoiceSettings)
@@ -146,7 +144,8 @@ def create_invoice():
                     current_user_id(),
                     e,
                 )
-                return error("Failed to create invoice", "INTERNAL_ERROR", 500)
+                from core.exceptions import OnePayError
+                raise OnePayError("Failed to create invoice", "INTERNAL_ERROR", 500)
 
             # Optionally send email if auto_send_email enabled
             auto_send_email = data.get("auto_send_email", False)
@@ -272,16 +271,16 @@ def list_invoices():
             page = int(request.args.get("page", 1))
             page_size = int(request.args.get("page_size", 20))
         except (ValueError, TypeError):
-            return error("Invalid pagination parameters", "VALIDATION_ERROR", 400)
+            raise ValidationError("Invalid pagination parameters")
 
         # Validate page and page_size
         if page < 1:
-            return error("Page must be >= 1", "VALIDATION_ERROR", 400)
+            raise ValidationError("Page must be >= 1")
 
         # Limit page_size to 100
         page_size = min(page_size, 100)
         if page_size < 1:
-            return error("Page size must be >= 1", "VALIDATION_ERROR", 400)
+            raise ValidationError("Page size must be >= 1")
 
         # Parse optional status filter
         status_filter = request.args.get("status")
@@ -292,10 +291,8 @@ def list_invoices():
         # Validate sort parameter
         valid_sorts = ["created_desc", "created_asc", "amount_desc", "amount_asc"]
         if sort not in valid_sorts:
-            return error(
-                f"Invalid sort parameter. Must be one of: {', '.join(valid_sorts)}",
-                "VALIDATION_ERROR",
-                400,
+            raise ValidationError(
+                f"Invalid sort parameter. Must be one of: {', '.join(valid_sorts)}"
             )
 
         # Get invoice history using service
@@ -369,7 +366,8 @@ def list_invoices():
             logger.error(
                 "Invoice list failed | user_id=%d error=%s", current_user_id(), e
             )
-            return error("Failed to retrieve invoices", "INTERNAL_ERROR", 500)
+            from core.exceptions import OnePayError
+            raise OnePayError("Failed to retrieve invoices", "INTERNAL_ERROR", 500)
 
 
 # ── Get invoice details ────────────────────────────────────────────────────────
@@ -392,7 +390,7 @@ def get_invoice(invoice_number):
         import re
 
         if not re.match(r"^INV-\d{4}-\d{6}$", invoice_number):
-            return error("Invalid invoice number format", "VALIDATION_ERROR", 400)
+            raise ValidationError("Invalid invoice number format")
 
         # Fetch invoice with ownership verification
         from services.invoice import invoice_service
@@ -403,7 +401,7 @@ def get_invoice(invoice_number):
         )
 
         if not invoice:
-            return error("Invoice not found", "NOT_FOUND", 404)
+            raise ValidationError("Invoice not found")
 
         # Add audit logging
         log_event(
@@ -478,7 +476,7 @@ def download_invoice(invoice_number):
         import re
 
         if not re.match(r"^INV-\d{4}-\d{6}$", invoice_number):
-            return error("Invalid invoice number format", "VALIDATION_ERROR", 400)
+            raise ValidationError("Invalid invoice number format")
 
         # Fetch invoice with ownership verification
         from services.invoice import invoice_service
@@ -489,7 +487,7 @@ def download_invoice(invoice_number):
         )
 
         if not invoice:
-            return error("Invoice not found", "NOT_FOUND", 404)
+            raise ValidationError("Invoice not found")
 
         # Fetch associated transaction
         from models.transaction import Transaction
@@ -506,7 +504,8 @@ def download_invoice(invoice_number):
                 invoice.invoice_number,
                 invoice.transaction_id,
             )
-            return error("Transaction not found", "INTERNAL_ERROR", 500)
+            from core.exceptions import OnePayError
+            raise OnePayError("Transaction not found", "INTERNAL_ERROR", 500)
 
         # Generate PDF using InvoiceService
         try:
@@ -558,7 +557,8 @@ def download_invoice(invoice_number):
                 current_user_id(),
                 e,
             )
-            return error("PDF generation timed out", "PDF_GENERATION_TIMEOUT", 500)
+            from core.exceptions import OnePayError
+            raise OnePayError("PDF generation timed out", "PDF_GENERATION_TIMEOUT", 500)
         except Exception as e:
             logger.error(
                 "PDF generation failed | invoice=%s user_id=%d error=%s",
@@ -566,7 +566,8 @@ def download_invoice(invoice_number):
                 current_user_id(),
                 e,
             )
-            return error("Failed to generate PDF", "PDF_GENERATION_ERROR", 500)
+            from core.exceptions import OnePayError
+            raise OnePayError("Failed to generate PDF", "PDF_GENERATION_ERROR", 500)
 
 
 # ── Send invoice via email ─────────────────────────────────────────────────────
@@ -580,9 +581,7 @@ def send_invoice(invoice_number):
 
     # Validate Content-Type to prevent CSRF via form submission
     if request.content_type != "application/json":
-        return error(
-            "Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415
-        )
+        raise ValidationError("Content-Type must be application/json")
 
     with get_db() as db:
         # Rate limit: 10 requests per minute
@@ -595,7 +594,7 @@ def send_invoice(invoice_number):
         import re
 
         if not re.match(r"^INV-\d{4}-\d{6}$", invoice_number):
-            return error("Invalid invoice number format", "VALIDATION_ERROR", 400)
+            raise ValidationError("Invalid invoice number format")
 
         # Fetch invoice with ownership verification
         from services.invoice import invoice_service
@@ -606,7 +605,7 @@ def send_invoice(invoice_number):
         )
 
         if not invoice:
-            return error("Invoice not found", "NOT_FOUND", 404)
+            raise ValidationError("Invoice not found")
 
         # Parse optional recipient_email parameter
         data = request.get_json(silent=True) or {}
@@ -618,7 +617,7 @@ def send_invoice(invoice_number):
 
         # Validate recipient email exists
         if not recipient_email:
-            return error("No recipient email available", "VALIDATION_ERROR", 400)
+            raise ValidationError("No recipient email available")
 
         # Get merchant email for BCC (merchant receives a copy)
         from models.user import User
@@ -641,7 +640,8 @@ def send_invoice(invoice_number):
                 invoice.invoice_number,
                 invoice.transaction_id,
             )
-            return error("Transaction not found", "INTERNAL_ERROR", 500)
+            from core.exceptions import OnePayError
+            raise OnePayError("Transaction not found", "INTERNAL_ERROR", 500)
 
         # Generate PDF
         try:
@@ -711,9 +711,8 @@ def send_invoice(invoice_number):
                     recipient_email,
                     current_user_id(),
                 )
-                return error(
-                    "Failed to send invoice email", "EMAIL_DELIVERY_FAILED", 500
-                )
+                from core.exceptions import OnePayError
+                raise OnePayError("Failed to send invoice email", "EMAIL_DELIVERY_FAILED", 500)
 
         except TimeoutError as e:
             logger.error(
@@ -722,7 +721,8 @@ def send_invoice(invoice_number):
                 current_user_id(),
                 e,
             )
-            return error("PDF generation timed out", "PDF_GENERATION_TIMEOUT", 500)
+            from core.exceptions import OnePayError
+            raise OnePayError("PDF generation timed out", "PDF_GENERATION_TIMEOUT", 500)
         except Exception as e:
             logger.error(
                 "Invoice email failed | invoice=%s user_id=%d error=%s",
@@ -730,7 +730,8 @@ def send_invoice(invoice_number):
                 current_user_id(),
                 e,
             )
-            return error("Failed to send invoice", "INTERNAL_ERROR", 500)
+            from core.exceptions import OnePayError
+            raise OnePayError("Failed to send invoice", "INTERNAL_ERROR", 500)
 
 
 # ── Get invoice settings ───────────────────────────────────────────────────────
@@ -799,9 +800,7 @@ def update_invoice_settings():
 
     # Validate Content-Type to prevent CSRF via form submission
     if request.content_type != "application/json":
-        return error(
-            "Content-Type must be application/json", "INVALID_CONTENT_TYPE", 415
-        )
+        raise ValidationError("Content-Type must be application/json")
 
     with get_db() as db:
         # Rate limit: 10 requests per minute
@@ -812,7 +811,7 @@ def update_invoice_settings():
 
         from models.invoice import InvoiceSettings
         from core.audit import log_event
-        from services.security import validate_webhook_url
+        from services.url_validator import validate_url_for_ssrf
         import html
 
         # Parse request data
@@ -845,29 +844,39 @@ def update_invoice_settings():
             # Sanitize and validate URL format
             logo_url = _safe(raw_logo_url, 500)
             if logo_url:
-                # Use webhook URL validator as it checks for HTTPS and public hosts
-                validated_url = validate_webhook_url(logo_url)
-                if not validated_url:
-                    return error(
-                        "Invalid logo URL - must be a public HTTPS URL",
-                        "VALIDATION_ERROR",
-                        400,
+                # Use SSRF-protected URL validator (Requirement 3.1, 3.2, 3.3, 3.4)
+                is_valid, resolved_ip, error_msg = validate_url_for_ssrf(logo_url)
+                if not is_valid:
+                    logger.warning(
+                        "Logo URL validation failed (SSRF protection) | user_id=%d url=%s error=%s",
+                        current_user_id(),
+                        logo_url,
+                        error_msg,
                     )
+                    raise ValidationError(f"Invalid logo URL: {error_msg}")
 
                 # Validate URL is accessible and returns an image
+                # Use resolved IP with Host header to prevent DNS rebinding (Requirement 3.3)
                 try:
                     import requests
+                    from urllib.parse import urlparse
 
+                    parsed = urlparse(logo_url)
+                    # Construct URL using resolved IP
+                    ip_url = f"{parsed.scheme}://{resolved_ip}{parsed.path}"
+                    if parsed.query:
+                        ip_url += f"?{parsed.query}"
+
+                    # Make request with original hostname in Host header
+                    headers = {"Host": parsed.hostname}
                     response = requests.head(
-                        validated_url, timeout=5, allow_redirects=True
+                        ip_url, headers=headers, timeout=5, allow_redirects=True
                     )
 
                     # Check if URL is accessible
                     if response.status_code != 200:
-                        return error(
-                            f"Logo URL is not accessible (HTTP {response.status_code})",
-                            "VALIDATION_ERROR",
-                            400,
+                        raise ValidationError(
+                            f"Logo URL is not accessible (HTTP {response.status_code})"
                         )
 
                     # Check content type is an image
@@ -879,35 +888,27 @@ def update_invoice_settings():
                         "image/svg+xml",
                     ]
                     if not any(ct in content_type for ct in valid_types):
-                        return error(
-                            "Logo URL must return a valid image format (PNG, JPG, or SVG)",
-                            "VALIDATION_ERROR",
-                            400,
+                        raise ValidationError(
+                            "Logo URL must return a valid image format (PNG, JPG, or SVG)"
                         )
 
-                    business_logo_url = validated_url
+                    business_logo_url = logo_url  # Store original URL, not IP
 
                 except requests.Timeout:
-                    return error(
-                        "Logo URL request timed out - URL may be inaccessible",
-                        "VALIDATION_ERROR",
-                        400,
-                    )
+                    raise ValidationError("Logo URL request timed out - URL may be inaccessible")
                 except requests.RequestException as e:
                     logger.error(
                         "Logo URL validation failed | user_id=%d url=%s error=%s",
                         current_user_id(),
-                        validated_url,
+                        logo_url,
                         e,
                     )
-                    return error("Logo URL is not accessible", "VALIDATION_ERROR", 400)
+                    raise ValidationError("Logo URL is not accessible")
 
         # Validate auto_send_email is boolean
         auto_send_email = data.get("auto_send_email")
         if auto_send_email is not None and not isinstance(auto_send_email, bool):
-            return error(
-                "auto_send_email must be a boolean value", "VALIDATION_ERROR", 400
-            )
+            raise ValidationError("auto_send_email must be a boolean value")
 
         # Fetch or create settings record
         settings = (
@@ -979,4 +980,5 @@ def update_invoice_settings():
                 current_user_id(),
                 e,
             )
-            return error("Failed to update invoice settings", "INTERNAL_ERROR", 500)
+            from core.exceptions import OnePayError
+            raise OnePayError("Failed to update invoice settings", "INTERNAL_ERROR", 500)

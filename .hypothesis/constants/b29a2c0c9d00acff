@@ -1,0 +1,4 @@
+# file: /Users/mac/Documents/One-pay/models/user.py
+# hypothesis_version: 6.141.1
+
+[255, 500, '@', 'User', '[^a-zA-Z0-9_]', '_', 'both', 'email', 'full_name', 'github', 'github_id', 'google', 'google_id', 'profile_picture_url', 'traditional', 'users', 'utf-8']

@@ -10,6 +10,7 @@ from models.rate_limit import RateLimit  # noqa: F401
 from models.audit_log import AuditLog  # noqa: F401
 from models.invoice import Invoice, InvoiceSettings, InvoiceStatus  # noqa: F401
 from models.webhook_blacklist import WebhookBlacklist  # noqa: F401
+from models.webhook_idempotency import WebhookIdempotency  # noqa: F401
 from models.refund import Refund, RefundStatus  # noqa: F401
 
 __all__ = [
@@ -23,6 +24,7 @@ __all__ = [
     "InvoiceSettings",
     "InvoiceStatus",
     "WebhookBlacklist",
+    "WebhookIdempotency",
     "Refund",
     "RefundStatus",
 ]

@@ -74,7 +74,7 @@ class TestGoogleOAuthCallback:
         Test that complete OAuth flow creates new account.
         Property 14: Authentication Success Logging
         """
-        with patch('services.google_oauth.id_token.verify_oauth2_token', return_value=mock_token_payload):
+        with patch('services.google_oauth.GoogleTokenValidator.validate_token', return_value=mock_token_payload):
             with patch('blueprints.auth.get_db') as mock_get_db:
                 mock_db = MagicMock()
                 mock_get_db.return_value.__enter__.return_value = mock_db
@@ -88,7 +88,7 @@ class TestGoogleOAuthCallback:
                     with client.session_transaction() as sess:
                         sess['csrf_token'] = 'test-csrf-token'
                     
-                    response = client.post('/auth/google/callback',
+                    response = client.post('/api/v1/auth/google/callback',
                         json={
                             'credential': 'valid.jwt.token',
                             'csrf_token': 'test-csrf-token'
@@ -106,7 +106,7 @@ class TestGoogleOAuthCallback:
         Test that OAuth flow links to existing account with matching email.
         Property 8: Account Linking for Existing Users
         """
-        with patch('services.google_oauth.id_token.verify_oauth2_token', return_value=mock_token_payload):
+        with patch('services.google_oauth.GoogleTokenValidator.validate_token', return_value=mock_token_payload):
             with patch('blueprints.auth.get_db') as mock_get_db:
                 mock_db = MagicMock()
                 mock_get_db.return_value.__enter__.return_value = mock_db
@@ -126,7 +126,7 @@ class TestGoogleOAuthCallback:
                     with client.session_transaction() as sess:
                         sess['csrf_token'] = 'test-csrf-token'
                     
-                    response = client.post('/auth/google/callback',
+                    response = client.post('/api/v1/auth/google/callback',
                         json={
                             'credential': 'valid.jwt.token',
                             'csrf_token': 'test-csrf-token'
@@ -146,7 +146,7 @@ class TestGoogleOAuthCallback:
         Test that session is created after successful authentication.
         Property 10: Session Creation Completeness
         """
-        with patch('services.google_oauth.id_token.verify_oauth2_token', return_value=mock_token_payload):
+        with patch('services.google_oauth.GoogleTokenValidator.validate_token', return_value=mock_token_payload):
             with patch('blueprints.auth.get_db') as mock_get_db:
                 mock_db = MagicMock()
                 mock_get_db.return_value.__enter__.return_value = mock_db
@@ -161,7 +161,7 @@ class TestGoogleOAuthCallback:
                     with client.session_transaction() as sess:
                         sess['csrf_token'] = 'test-csrf-token'
                     
-                    response = client.post('/auth/google/callback',
+                    response = client.post('/api/v1/auth/google/callback',
                         json={
                             'credential': 'valid.jwt.token',
                             'csrf_token': 'test-csrf-token'
@@ -181,7 +181,7 @@ class TestGoogleOAuthCallback:
         Test that CSRF validation is enforced.
         Property 11: Session Validation Consistency
         """
-        response = client.post('/auth/google/callback',
+        response = client.post('/api/v1/auth/google/callback',
             json={
                 'credential': 'valid.jwt.token',
                 'csrf_token': 'invalid-token'
@@ -199,7 +199,7 @@ class TestGoogleOAuthCallback:
         Test that rate limiting is enforced.
         Property 17: Rate Limiting Enforcement
         """
-        with patch('services.google_oauth.id_token.verify_oauth2_token', return_value=mock_token_payload):
+        with patch('services.google_oauth.GoogleTokenValidator.validate_token', return_value=mock_token_payload):
             with patch('blueprints.auth.get_db') as mock_get_db:
                 mock_db = MagicMock()
                 mock_get_db.return_value.__enter__.return_value = mock_db
@@ -209,7 +209,7 @@ class TestGoogleOAuthCallback:
                     with client.session_transaction() as sess:
                         sess['csrf_token'] = 'test-csrf-token'
                     
-                    response = client.post('/auth/google/callback',
+                    response = client.post('/api/v1/auth/google/callback',
                         json={
                             'credential': 'valid.jwt.token',
                             'csrf_token': 'test-csrf-token'
@@ -227,7 +227,7 @@ class TestGoogleOAuthCallback:
         Test that account linking conflict is rejected.
         Property 9: Account Linking Conflict Prevention
         """
-        with patch('services.google_oauth.id_token.verify_oauth2_token', return_value=mock_token_payload):
+        with patch('services.google_oauth.GoogleTokenValidator.validate_token', return_value=mock_token_payload):
             with patch('blueprints.auth.get_db') as mock_get_db:
                 mock_db = MagicMock()
                 mock_get_db.return_value.__enter__.return_value = mock_db
@@ -246,7 +246,7 @@ class TestGoogleOAuthCallback:
                     with client.session_transaction() as sess:
                         sess['csrf_token'] = 'test-csrf-token'
                     
-                    response = client.post('/auth/google/callback',
+                    response = client.post('/api/v1/auth/google/callback',
                         json={
                             'credential': 'valid.jwt.token',
                             'csrf_token': 'test-csrf-token'
@@ -264,7 +264,7 @@ class TestGoogleOAuthCallback:
         Test that OAuth tokens are not stored in database.
         Property 12: No Token Storage
         """
-        with patch('services.google_oauth.id_token.verify_oauth2_token', return_value=mock_token_payload):
+        with patch('services.google_oauth.GoogleTokenValidator.validate_token', return_value=mock_token_payload):
             with patch('blueprints.auth.get_db') as mock_get_db:
                 mock_db = MagicMock()
                 mock_get_db.return_value.__enter__.return_value = mock_db
@@ -276,7 +276,7 @@ class TestGoogleOAuthCallback:
                     with client.session_transaction() as sess:
                         sess['csrf_token'] = 'test-csrf-token'
                     
-                    response = client.post('/auth/google/callback',
+                    response = client.post('/api/v1/auth/google/callback',
                         json={
                             'credential': 'valid.jwt.token',
                             'csrf_token': 'test-csrf-token'
@@ -300,7 +300,7 @@ class TestGoogleOAuthCallback:
         Test that authentication failures are logged.
         Property 13: Authentication Failure Logging
         """
-        with patch('services.google_oauth.id_token.verify_oauth2_token', side_effect=ValueError("Invalid token")):
+        with patch('services.google_oauth.GoogleTokenValidator.validate_token', side_effect=ValueError("Invalid token")):
             with patch('blueprints.auth.get_db') as mock_get_db:
                 mock_db = MagicMock()
                 mock_get_db.return_value.__enter__.return_value = mock_db
@@ -310,7 +310,7 @@ class TestGoogleOAuthCallback:
                         with client.session_transaction() as sess:
                             sess['csrf_token'] = 'test-csrf-token'
                         
-                        response = client.post('/auth/google/callback',
+                        response = client.post('/api/v1/auth/google/callback',
                             json={
                                 'credential': 'invalid.token',
                                 'csrf_token': 'test-csrf-token'
@@ -330,7 +330,7 @@ class TestGoogleOAuthCallback:
         Test that successful authentication is logged.
         Property 14: Authentication Success Logging
         """
-        with patch('services.google_oauth.id_token.verify_oauth2_token', return_value=mock_token_payload):
+        with patch('services.google_oauth.GoogleTokenValidator.validate_token', return_value=mock_token_payload):
             with patch('blueprints.auth.get_db') as mock_get_db:
                 mock_db = MagicMock()
                 mock_get_db.return_value.__enter__.return_value = mock_db
@@ -346,7 +346,7 @@ class TestGoogleOAuthCallback:
                         with client.session_transaction() as sess:
                             sess['csrf_token'] = 'test-csrf-token'
                         
-                        response = client.post('/auth/google/callback',
+                        response = client.post('/api/v1/auth/google/callback',
                             json={
                                 'credential': 'valid.jwt.token',
                                 'csrf_token': 'test-csrf-token'
@@ -383,7 +383,7 @@ class TestGoogleOAuthConfig:
         with patch('blueprints.auth.Config') as mock_config:
             mock_config.GOOGLE_CLIENT_ID = 'test-client-id.apps.googleusercontent.com'
             
-            response = client.get('/auth/google/config')
+            response = client.get('/api/v1/auth/google/config')
             
             assert response.status_code == 200
             data = json.loads(response.data)
@@ -398,7 +398,7 @@ class TestGoogleOAuthConfig:
         with patch('blueprints.auth.Config') as mock_config:
             mock_config.GOOGLE_CLIENT_ID = ''
             
-            response = client.get('/auth/google/config')
+            response = client.get('/api/v1/auth/google/config')
             
             assert response.status_code == 200
             data = json.loads(response.data)

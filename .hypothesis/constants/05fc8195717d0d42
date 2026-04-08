@@ -1,0 +1,4 @@
+# file: /Users/mac/Documents/One-pay/services/qr_code.py
+# hypothesis_version: 6.141.1
+
+[5.0, 'PNG', 'black', 'provider:OnePay', 'rounded', 'standard', 'white', '|']

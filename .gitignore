@@ -51,3 +51,6 @@ Thumbs.db
 
 # Docker
 *.env.docker
+
+# Environment files (contain secrets)
+.env

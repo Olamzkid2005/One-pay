@@ -2,6 +2,7 @@
 from flask import Blueprint, request, jsonify
 from core.auth import current_user_id
 from core.responses import unauthenticated
+from core.exceptions import ValidationError
 from database import get_db
 from models.api_key import APIKey
 
@@ -61,8 +62,6 @@ def create_api_key():
 @api_keys_bp.route("/api-keys/<int:key_id>", methods=["DELETE"])
 def revoke_api_key(key_id):
     """Revoke (deactivate) an API key"""
-    from core.responses import error
-    
     user_id = current_user_id()
     if not user_id:
         return unauthenticated()
@@ -74,7 +73,7 @@ def revoke_api_key(key_id):
         ).first()
         
         if not api_key:
-            return error("API key not found", "NOT_FOUND", 404)
+            raise ValidationError("API key not found")
         
         api_key.is_active = False
         db.flush()

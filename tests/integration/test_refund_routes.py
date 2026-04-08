@@ -70,7 +70,7 @@ class TestRefundRoutes:
         Test that initiate_refund returns 401 when not authenticated.
         """
         with patch('blueprints.payments.get_db'):
-            response = client.post('/api/payments/refund/ONEPAY-TEST-123',
+            response = client.post('/api/v1/payments/refund/ONEPAY-TEST-123',
                 json={}
             )
             assert response.status_code == 401
@@ -95,7 +95,7 @@ class TestRefundRoutes:
                 mock_tx_query.filter.return_value = mock_tx_filter
                 mock_tx_filter.first.return_value = mock_tx
 
-                response = client.post('/api/payments/refund/ONEPAY-TEST-123',
+                response = client.post('/api/v1/payments/refund/ONEPAY-TEST-123',
                     json={}
                 )
 
@@ -122,7 +122,7 @@ class TestRefundRoutes:
                         "currency": "NGN"
                     }
 
-                    response = client.post('/api/payments/refund/ONEPAY-TEST-123',
+                    response = client.post('/api/v1/payments/refund/ONEPAY-TEST-123',
                         json={}
                     )
 
@@ -150,7 +150,7 @@ class TestRefundRoutes:
                         "currency": "NGN"
                     }
 
-                    response = client.post('/api/payments/refund/ONEPAY-TEST-123',
+                    response = client.post('/api/v1/payments/refund/ONEPAY-TEST-123',
                         json={}
                     )
 
@@ -180,7 +180,7 @@ class TestRefundRoutes:
                             "currency": "NGN"
                         }
 
-                        response = client.post('/api/payments/refund/ONEPAY-TEST-123',
+                        response = client.post('/api/v1/payments/refund/ONEPAY-TEST-123',
                             json={}
                         )
 
@@ -206,7 +206,7 @@ class TestRefundRoutes:
                         error_code="REFUND_FAILED"
                     )
 
-                    response = client.post('/api/payments/refund/ONEPAY-TEST-123',
+                    response = client.post('/api/v1/payments/refund/ONEPAY-TEST-123',
                         json={}
                     )
 
@@ -233,7 +233,7 @@ class TestRefundRoutes:
                         "currency": "NGN"
                     }
 
-                    response = client.post('/api/payments/refund/ONEPAY-TEST-123',
+                    response = client.post('/api/v1/payments/refund/ONEPAY-TEST-123',
                         json={}
                     )
 

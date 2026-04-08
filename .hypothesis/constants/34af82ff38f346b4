@@ -1,0 +1,4 @@
+# file: /Users/mac/Documents/One-pay/services/sla_monitor.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.95, 99.5, 100.0, 1000.0, 2000.0, 100, 1000, 'all', 'confirm_transfer', 'duration_ms', 'endpoint', 'error_rate', 'failed_requests', 'response_time', 'should_alert', 'success', 'success_rate', 'successful_requests', 'timestamp', 'total_requests']

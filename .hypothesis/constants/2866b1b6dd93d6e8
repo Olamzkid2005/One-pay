@@ -1,0 +1,4 @@
+# file: /Users/mac/Documents/One-pay/models/webhook_blacklist.py
+# hypothesis_version: 6.141.1
+
+[500, 'webhook_blacklist']

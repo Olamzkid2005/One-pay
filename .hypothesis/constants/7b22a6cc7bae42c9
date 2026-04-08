@@ -1,0 +1,4 @@
+# file: /Users/mac/Documents/One-pay/services/google_oauth.py
+# hypothesis_version: 6.141.1
+
+[10000, 'accounts.google.com', 'aud', 'email', 'email_verified', 'full_name', 'google_id', 'iss', 'name', 'picture', 'profile_picture_url', 'sub']

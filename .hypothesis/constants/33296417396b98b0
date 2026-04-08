@@ -1,0 +1,4 @@
+# file: /Users/mac/Documents/One-pay/services/rate_limiter.py
+# hypothesis_version: 6.141.1
+
+[255, 300, 3600, 7200, '\x00', 'count', 'window_start']

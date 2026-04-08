@@ -60,18 +60,19 @@ class TestPaymentLinkRoutes:
         Test that creating a link strictly requires Content-Type application/json.
         """
         with patch('blueprints.payments.current_user_id', return_value=1):
-            response = client.post('/api/v1/payments/link',
-                data="amount=5000",
-                headers={"Content-Type": "application/x-www-form-urlencoded"}
-            )
-            assert response.status_code == 415
+            with patch('core.api_auth.validate_api_key', return_value=(True, 1)):
+                response = client.post('/api/v1/payments/link',
+                    data="amount=5000",
+                    headers={"Content-Type": "application/x-www-form-urlencoded", "Authorization": "Bearer onepay_live_test_key"}
+                )
+                assert response.status_code == 415
 
     def test_payment_link_rejects_negative_amounts(self, client):
         """
         Test edge case rejecting negative amounts.
         """
         with patch('blueprints.payments.current_user_id', return_value=1):
-            with patch('core.api_auth.is_api_key_authenticated', return_value=True):
+            with patch('core.api_auth.validate_api_key', return_value=(True, 1)):
                 with patch('blueprints.payments.get_db') as mock_get_db:
                     mock_db = MagicMock()
                     mock_get_db.return_value.__enter__.return_value = mock_db
@@ -80,19 +81,19 @@ class TestPaymentLinkRoutes:
 
                     response = client.post('/api/v1/payments/link',
                         json={"amount": -5000},
-                        headers={"Content-Type": "application/json"}
+                        headers={"Content-Type": "application/json", "Authorization": "Bearer onepay_live_test_key"}
                     )
                     
                     assert response.status_code == 400
                     data = json.loads(response.data)
-                    assert "positive finite number" in data.get("error", "")
+                    assert "positive finite number" in data.get("message", "")
 
     def test_payment_link_rejects_too_high_amounts(self, client):
         """
         Test edge case rejecting amounts over 100 million.
         """
         with patch('blueprints.payments.current_user_id', return_value=1):
-            with patch('core.api_auth.is_api_key_authenticated', return_value=True):
+            with patch('core.api_auth.validate_api_key', return_value=(True, 1)):
                 with patch('blueprints.payments.get_db') as mock_get_db:
                     mock_db = MagicMock()
                     mock_get_db.return_value.__enter__.return_value = mock_db
@@ -101,7 +102,7 @@ class TestPaymentLinkRoutes:
 
                     response = client.post('/api/v1/payments/link',
                         json={"amount": 150000000},  # 150 Million
-                        headers={"Content-Type": "application/json"}
+                        headers={"Content-Type": "application/json", "Authorization": "Bearer onepay_live_test_key"}
                     )
                     
                     assert response.status_code == 400
@@ -111,7 +112,7 @@ class TestPaymentLinkRoutes:
         Test generating a payment link works and creates DB records correctly.
         """
         with patch('blueprints.payments.current_user_id', return_value=1):
-            with patch('core.api_auth.is_api_key_authenticated', return_value=True):
+            with patch('core.api_auth.validate_api_key', return_value=(True, 1)):
                 with patch('blueprints.payments.get_db') as mock_get_db:
                     with patch('blueprints.payments.korapay') as mock_kora:
                         mock_kora.is_transfer_configured.return_value = False
@@ -126,10 +127,13 @@ class TestPaymentLinkRoutes:
                                 "description": "Test integration item",
                                 "customer_email": "test@onepay.com"
                             },
-                            headers={"Content-Type": "application/json"}
+                            headers={
+                                "Content-Type": "application/json",
+                                "Authorization": "Bearer onepay_live_test_key"
+                            }
                         )
                         
-                        assert response.status_code == 200
+                        assert response.status_code == 201
                         add_calls = mock_db.add.call_args_list
                         assert len(add_calls) >= 1  # Verify Transaction was added
 
@@ -144,7 +148,7 @@ class TestPaymentLinkRoutes:
         Test that supplying the same idempotency key returns the existing transaction.
         """
         with patch('blueprints.payments.current_user_id', return_value=1):
-            with patch('core.api_auth.is_api_key_authenticated', return_value=True):
+            with patch('core.api_auth.validate_api_key', return_value=(True, 1)):
                 with patch('blueprints.payments.get_db') as mock_get_db:
                     mock_db = MagicMock()
                     mock_get_db.return_value.__enter__.return_value = mock_db
@@ -168,7 +172,8 @@ class TestPaymentLinkRoutes:
                         json={"amount": 5000},
                         headers={
                             "Content-Type": "application/json",
-                            "X-Idempotency-Key": "UNIQUE-CLIENT-POST-12345"
+                            "X-Idempotency-Key": "UNIQUE-CLIENT-POST-12345",
+                            "Authorization": "Bearer onepay_live_test_key"
                         }
                     )
                     

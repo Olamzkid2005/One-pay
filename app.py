@@ -28,6 +28,10 @@ from blueprints.public import public_bp
 from blueprints.invoices import invoices_bp
 from blueprints.api_keys import api_keys_bp
 from blueprints.webhooks import webhooks_bp
+from core.exceptions import OnePayError
+
+# Huey task queue (for worker command: huey_consumer app.huey)
+from services.task_queue import huey
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 
@@ -388,6 +392,22 @@ def create_app() -> Flask:
     app.register_blueprint(webhooks_bp, url_prefix="/api/v1")
 
     # ── Error handlers ─────────────────────────────────────────────────────────
+    @app.errorhandler(OnePayError)
+    def handle_onepay_error(error: OnePayError):
+        """Handle all OnePay exceptions consistently."""
+        logger.error(
+            "OnePay error | code=%s message=%s correlation_id=%s",
+            error.error_code,
+            error.message,
+            g.get("correlation_id")
+        )
+        
+        return jsonify({
+            "success": False,
+            "message": error.message,
+            "error_code": error.error_code
+        }), error.status_code
+
     @app.errorhandler(404)
     def not_found_error(error):
         """Handle 404 errors with a friendly message."""
@@ -556,6 +576,29 @@ def create_app() -> Flask:
 
     # ── Database ───────────────────────────────────────────────────────────────
     init_db()
+
+    # ── Development query count monitoring (Requirement 9.3) ──────────────────
+    if Config.DEBUG:
+        from sqlalchemy import event as _sa_event
+        from database import engine as _engine
+
+        @_sa_event.listens_for(_engine, "before_cursor_execute")
+        def _count_queries(conn, cursor, statement, parameters, context, executemany):
+            if not hasattr(g, "_query_count"):
+                g._query_count = 0
+            g._query_count += 1
+
+        @app.after_request
+        def _log_query_count(response):
+            count = getattr(g, "_query_count", 0)
+            if count > Config.QUERY_COUNT_WARN_THRESHOLD:
+                logger.warning(
+                    "High query count | endpoint=%s count=%d threshold=%d",
+                    request.endpoint,
+                    count,
+                    Config.QUERY_COUNT_WARN_THRESHOLD,
+                )
+            return response
 
     # ── Background threads ─────────────────────────────────────────────────────
     import threading

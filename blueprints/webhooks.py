@@ -4,6 +4,7 @@ import hmac
 import hashlib
 import logging
 from flask import Blueprint, request, jsonify
+from core.exceptions import ValidationError, AuthenticationError
 
 webhooks_bp = Blueprint("webhooks", __name__)
 logger = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ def receive_payment_status():
     from models.transaction import Transaction, TransactionStatus
     from core.responses import error
     from core.ip import client_ip
+    from services.webhook import check_webhook_idempotency, store_webhook_idempotency
 
     # Verify signature
     signature = request.headers.get("X-Webhook-Signature", "")
@@ -44,7 +46,7 @@ def receive_payment_status():
         request.data, signature, Config.INBOUND_WEBHOOK_SECRET
     ):
         logger.warning("Invalid webhook signature | ip=%s", client_ip())
-        return error("Invalid signature", "UNAUTHORIZED", 401)
+        raise AuthenticationError("Invalid signature")
 
     # Parse payload
     data = request.get_json(silent=True) or {}
@@ -52,22 +54,39 @@ def receive_payment_status():
     status = data.get("status")
 
     if not tx_ref or not status:
-        return error("Missing required fields", "VALIDATION_ERROR", 400)
+        raise ValidationError("Missing required fields")
+
+    # Check idempotency - extract unique identifier from payload
+    webhook_id = data.get("webhook_id") or data.get("event_id") or tx_ref
+    source = data.get("source", "unknown")
 
     # Update transaction
     with get_db() as db:
+        # Check if webhook already processed
+        if check_webhook_idempotency(db, webhook_id, source):
+            logger.info(
+                "Duplicate webhook detected | webhook_id=%s tx_ref=%s source=%s",
+                webhook_id,
+                tx_ref,
+                source,
+            )
+            return jsonify({"success": True, "tx_ref": tx_ref}), 200
+
         transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
 
         if not transaction:
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         try:
             transaction.status = TransactionStatus(status)
         except ValueError:
             logger.warning("Invalid transaction status from webhook: %s", status)
-            return error("Invalid status", "BAD_REQUEST", 400)
+            raise ValidationError("Invalid status")
         db.flush()
 
-        logger.info("Webhook processed | tx_ref=%s status=%s", tx_ref, status)
+        # Store webhook identifier after successful processing
+        store_webhook_idempotency(db, webhook_id, source, tx_ref)
+
+        logger.info("Webhook processed | tx_ref=%s status=%s webhook_id=%s", tx_ref, status, webhook_id)
 
         return jsonify({"success": True, "tx_ref": tx_ref})

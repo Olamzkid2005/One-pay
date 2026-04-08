@@ -242,12 +242,14 @@ class InvoiceService:
         page_size = min(page_size, 100)
         offset = (page - 1) * page_size
 
-        # Build query with eager loading of transaction relationship
-        from sqlalchemy.orm import joinedload
+        # Build query with eager loading of transaction relationship.
+        # selectinload is used instead of joinedload to avoid a Cartesian product
+        # when combined with LIMIT/OFFSET pagination (Requirement 9.1, 9.2).
+        from sqlalchemy.orm import selectinload
 
         query = (
             db.query(Invoice)
-            .options(joinedload(Invoice.transaction))
+            .options(selectinload(Invoice.transaction))
             .filter(Invoice.user_id == user_id)
         )
 

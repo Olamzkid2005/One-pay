@@ -32,8 +32,115 @@ from datetime import datetime, timezone
 import requests
 
 from config import Config
+from services.cache import cache_delete
 
 logger = logging.getLogger(__name__)
+
+
+def verify_inbound_webhook_signature(payload: bytes, signature: str) -> bool:
+    """
+    Verify HMAC-SHA256 signature for inbound webhooks.
+    
+    Uses constant-time comparison to prevent timing attacks.
+    Extracts signature from request headers and compares against
+    computed HMAC using INBOUND_WEBHOOK_SECRET.
+    
+    Args:
+        payload: Raw request body as bytes
+        signature: Signature header value (format: "sha256=<hex>")
+    
+    Returns:
+        bool: True if signature is valid, False otherwise
+    
+    **Validates: Requirements 1.2**
+    """
+    if not signature or not signature.startswith("sha256="):
+        logger.warning("Invalid signature format | signature=%s", signature[:20] if signature else "None")
+        return False
+    
+    # Extract hex digest from "sha256=<hex>" format
+    received_sig = signature[7:]
+    
+    # Compute HMAC-SHA256 using configured secret
+    secret = Config.INBOUND_WEBHOOK_SECRET
+    if not secret:
+        logger.error("INBOUND_WEBHOOK_SECRET not configured")
+        return False
+    
+    computed_sig = hmac.new(
+        secret.encode("utf-8"),
+        payload,
+        hashlib.sha256
+    ).hexdigest()
+    
+    # Use constant-time comparison to prevent timing attacks
+    is_valid = hmac.compare_digest(received_sig, computed_sig)
+    
+    if not is_valid:
+        logger.warning(
+            "Signature verification failed | received=%s computed=%s",
+            received_sig[:8],
+            computed_sig[:8]
+        )
+    
+    return is_valid
+
+
+def check_webhook_idempotency(db, webhook_id: str, source: str) -> bool:
+    """
+    Check if webhook has already been processed.
+    
+    Args:
+        db: Database session
+        webhook_id: Unique webhook identifier
+        source: Webhook source (korapay, voicepay, etc.)
+    
+    Returns:
+        bool: True if webhook already processed, False otherwise
+    
+    **Validates: Requirements 2.1, 2.2**
+    """
+    from models.webhook_idempotency import WebhookIdempotency
+    
+    existing = (
+        db.query(WebhookIdempotency)
+        .filter(WebhookIdempotency.id == webhook_id)
+        .filter(WebhookIdempotency.source == source)
+        .first()
+    )
+    
+    return existing is not None
+
+
+def store_webhook_idempotency(db, webhook_id: str, source: str, tx_ref: str = None):
+    """
+    Store webhook identifier to prevent duplicate processing.
+    
+    Args:
+        db: Database session
+        webhook_id: Unique webhook identifier
+        source: Webhook source (korapay, voicepay, etc.)
+        tx_ref: Associated transaction reference (optional)
+    
+    **Validates: Requirements 2.3, 2.4**
+    """
+    from models.webhook_idempotency import WebhookIdempotency
+    
+    idempotency_record = WebhookIdempotency(
+        id=webhook_id,
+        source=source,
+        tx_ref=tx_ref
+    )
+    
+    db.add(idempotency_record)
+    db.flush()
+    
+    logger.debug(
+        "Webhook idempotency stored | webhook_id=%s source=%s tx_ref=%s",
+        webhook_id,
+        source,
+        tx_ref
+    )
 
 
 def _sign_payload(payload_bytes: bytes) -> str:
@@ -300,6 +407,53 @@ def deliver_webhook_from_dict(wh_data: dict) -> bool:
     return _send_with_retries(url, payload_bytes, headers, wh_data.get("tx_ref", "?"))
 
 
+def queue_webhook_delivery(wh_data: dict) -> bool:
+    """
+    Queue webhook delivery via task queue with fallback to thread-based delivery.
+
+    Uses Huey task queue when available (production/staging).
+    Falls back to thread-based delivery in development for simplicity.
+
+    Args:
+        wh_data: Dict with webhook_url, tx_ref, amount, currency, status, etc.
+
+    Returns:
+        bool: True if queued/dispatched successfully, False otherwise
+
+    **Validates: Requirements 10.2, 10.5**
+    """
+    # Check if Huey is available and not in immediate mode
+    try:
+        from services.task_queue import huey, deliver_webhook_task
+
+        # In immediate mode (debug), just call directly for testing
+        if huey.immediate:
+            logger.debug("Huey in immediate mode, delivering webhook directly")
+            result = deliver_webhook_task(wh_data)
+            return result.result if hasattr(result, 'result') else result
+
+        # Queue the task for async processing
+        result = deliver_webhook_task(wh_data)
+        logger.info("Webhook delivery queued | tx_ref=%s task_id=%s",
+                   wh_data.get("tx_ref"), result.id)
+        return True
+
+    except ImportError:
+        # Huey not configured - fall back to thread-based delivery
+        logger.warning("Huey not available, using thread-based webhook delivery")
+        try:
+            import threading
+            thread = threading.Thread(target=deliver_webhook_from_dict, args=(wh_data,))
+            thread.daemon = True
+            thread.start()
+            logger.info("Webhook delivery dispatched via thread | tx_ref=%s",
+                       wh_data.get("tx_ref"))
+            return True
+        except Exception as e:
+            logger.error("Failed to dispatch webhook via thread: %s", e)
+            return False
+
+
 def deliver_webhook(db, transaction) -> bool:
     """
     Deliver a webhook for a confirmed transaction (ORM object variant).
@@ -339,6 +493,8 @@ def deliver_webhook(db, transaction) -> bool:
             transaction.webhook_delivered = True
             transaction.webhook_delivered_at = datetime.now(timezone.utc)
             transaction.webhook_last_error = None
+            # Invalidate payment summary cache on transaction status update (Requirement 11.5)
+            cache_delete(f"payment_summary:{transaction.user_id}")
             log_event(
                 db,
                 "webhook.delivered",
@@ -455,6 +611,9 @@ def sync_invoice_on_transaction_update(db, transaction):
     if invoice.status != old_status:
         db.flush()
 
+        # Invalidate payment summary cache on invoice/transaction status update (Requirement 11.5)
+        cache_delete(f"payment_summary:{transaction.user_id}")
+
         # Add audit logging
         log_event(
             db,
@@ -556,8 +715,8 @@ def send_payment_notification_emails(db, transaction, user):
             try:
                 # Generate payment URL for invoice (use transaction's existing payment URL if available)
                 payment_url = None
-                if hasattr(transaction, "payment_url") and transaction.payment_url:
-                    payment_url = transaction.payment_url
+                if hasattr(transaction, "qr_code_payment_url") and transaction.qr_code_payment_url:
+                    payment_url = transaction.qr_code_payment_url
 
                 pdf_bytes = invoice_service.generate_invoice_pdf(
                     invoice=invoice, transaction=transaction, payment_url=payment_url

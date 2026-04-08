@@ -441,6 +441,61 @@ sudo systemctl start onepay
 sudo systemctl status onepay
 ```
 
+### 4b. Huey Worker Service (Task Queue)
+
+Create `/etc/systemd/system/onepay-worker.service`:
+
+```ini
+[Unit]
+Description=OnePay Huey Task Queue Worker
+After=network.target postgresql.service onepay.service
+Wants=onepay.service
+
+[Service]
+Type=simple
+User=onepay
+Group=onepay
+WorkingDirectory=/home/onepay/app
+Environment="PATH=/home/onepay/app/venv/bin"
+ExecStart=/home/onepay/app/venv/bin/huey_consumer app.huey --workers 2 --log-level info
+Restart=always
+RestartSec=5
+
+# Logging
+StandardOutput=append:/var/log/onepay/worker.log
+StandardError=append:/var/log/onepay/worker.log
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable onepay-worker
+sudo systemctl start onepay-worker
+sudo systemctl status onepay-worker
+```
+
+**Worker Command Options:**
+- `--workers 2`: Number of worker threads (adjust based on CPU cores)
+- `--log-level info`: Log level (debug, info, warning, error)
+- `--immediate`: Run tasks synchronously (for testing only)
+- `--logfile /var/log/onepay/worker.log`: Alternative logging
+
+**Monitoring Workers:**
+```bash
+# Check worker status
+sudo systemctl status onepay-worker
+
+# View worker logs
+tail -f /var/log/onepay/worker.log | grep "Task"
+
+# Check pending tasks
+python -c "from services.task_queue import huey; print(huey.pending())"
+```
+
 ### 5. Nginx Configuration
 
 Create `/etc/nginx/sites-available/onepay`:

@@ -29,6 +29,7 @@ from core.auth import valid_tx_ref
 from core.ip import client_ip
 from core.responses import error, rate_limited
 from core.audit import log_event
+from core.exceptions import ValidationError, AuthenticationError, AuthorizationError, ProviderError
 import sqlalchemy
 
 logger = logging.getLogger(__name__)
@@ -423,18 +424,18 @@ def verify_page(tx_ref, hash_in_path=None):
 @public_bp.route("/api/payments/preview/<tx_ref>", methods=["GET"])
 def get_preview(tx_ref):
     if not valid_tx_ref(tx_ref):
-        return error("Invalid transaction reference format", "INVALID_REF", 400)
+        raise ValidationError("Invalid transaction reference format")
 
     with get_db() as db:
         t = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
         if not t:
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         # Access control: session token set by pay_page, OR re-validate hash from DB
         # (fallback covers cookie-disabled browsers and direct API calls with valid links)
         if not session.get(f"pay_access_{tx_ref}"):
             if not verify_hash_token(tx_ref, t.amount, t.expires_at, t.hash_token):
-                return error("Access denied", "FORBIDDEN", 403)
+                raise AuthorizationError("Access denied")
             # Grant session access for subsequent poll calls
             session[f"pay_access_{tx_ref}"] = True
 
@@ -472,11 +473,11 @@ def transfer_status(tx_ref):
     Uses optimistic locking to prevent race conditions.
     """
     if not valid_tx_ref(tx_ref):
-        return error("Invalid transaction reference format", "INVALID_REF", 400)
+        raise ValidationError("Invalid transaction reference format")
 
     # Only allow browsers that loaded the /pay/ page for this tx_ref
     if not session.get(f"pay_access_{tx_ref}"):
-        return error("Access denied", "FORBIDDEN", 403)
+        raise AuthorizationError("Access denied")
 
     ip = client_ip()
 
@@ -488,7 +489,7 @@ def transfer_status(tx_ref):
         t = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
 
         if not t:
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         # Fast path: already confirmed
         if t.transfer_confirmed:
@@ -524,7 +525,7 @@ def transfer_status(tx_ref):
         )
 
         if not t_locked:
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         # Double-check after lock acquisition: another request may have confirmed it
         if t_locked.transfer_confirmed:
@@ -604,14 +605,15 @@ def korapay_webhook():
         # Rate limiting: 100 requests/min per IP
         if not check_rate_limit(db, f"webhook:korapay:{ip}", limit=100, window_secs=60):
             logger.warning("Webhook rate limit exceeded | ip=%s", ip)
-            return error("Rate limit exceeded", "RATE_LIMIT", 429)
+            from core.exceptions import OnePayError
+            raise OnePayError("Rate limit exceeded", "RATE_LIMIT", 429)
 
         # Extract signature header
         signature = request.headers.get("x-korapay-signature")
         if not signature:
             logger.warning("Webhook missing signature | ip=%s", ip)
             log_event(db, "webhook.signature_missing", None, detail={"ip": ip})
-            return error("Missing signature", "UNAUTHORIZED", 401)
+            raise AuthenticationError("Missing signature")
 
         # Get raw request body for signature verification
         try:
@@ -619,12 +621,12 @@ def korapay_webhook():
             payload = json.loads(raw_body)
         except json.JSONDecodeError:
             logger.warning("Webhook invalid JSON | ip=%s", ip)
-            return error("Invalid JSON", "BAD_REQUEST", 400)
+            raise ValidationError("Invalid JSON")
 
         # Validate payload has data object
         if "data" not in payload:
             logger.warning("Webhook missing data object | ip=%s", ip)
-            return error("Missing data object", "BAD_REQUEST", 400)
+            raise ValidationError("Missing data object")
 
         # Verify signature using webhook signature verification function
         from services.korapay import verify_korapay_webhook_signature
@@ -641,7 +643,7 @@ def korapay_webhook():
                 None,
                 {"ip": ip, "reference": payload.get("data", {}).get("reference")},
             )
-            return error("Invalid signature", "UNAUTHORIZED", 401)
+            raise AuthenticationError("Invalid signature")
 
         # Extract webhook data
         event = payload.get("event")
@@ -656,7 +658,7 @@ def korapay_webhook():
             logger.warning(
                 "Webhook transaction not found | ref=%s ip=%s", reference, ip
             )
-            return error("Transaction not found", "NOT_FOUND", 404)
+            raise ValidationError("Transaction not found")
 
         # Validate amount matches (KoraPay sends amount in kobo/minor units)
         # Transaction amount is stored as Decimal in Naira, so convert to kobo for comparison
@@ -668,7 +670,7 @@ def korapay_webhook():
                 expected_kobo,
                 amount,
             )
-            return error("Amount mismatch", "BAD_REQUEST", 400)
+            raise ValidationError("Amount mismatch")
 
         # Check if already confirmed (idempotency)
         if t.transfer_confirmed:

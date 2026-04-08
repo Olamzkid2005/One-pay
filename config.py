@@ -19,7 +19,13 @@ class BaseConfig:
     TESTING = False
 
     # ── Database ─────────────────────────────────────────────────────────────
-    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///onepay.db")
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL",
+        "postgresql://onepay_user:onepay_pass@localhost:5432/onepay",
+    )
+
+    # ── Task Queue ───────────────────────────────────────────────────────────
+    HUEY_DB_PATH = os.getenv("HUEY_DB_PATH", "huey.db")
 
     # ── Security ─────────────────────────────────────────────────────────────
     HMAC_SECRET = os.getenv("HMAC_SECRET", "change-this-hmac-secret")
@@ -100,6 +106,9 @@ class BaseConfig:
     WEBHOOK_TIMEOUT_SECS = int(os.getenv("WEBHOOK_TIMEOUT_SECS", "10"))
     WEBHOOK_MAX_RETRIES = int(os.getenv("WEBHOOK_MAX_RETRIES", "3"))
 
+    # ── Development Query Monitoring ─────────────────────────────────────────
+    QUERY_COUNT_WARN_THRESHOLD = int(os.getenv("QUERY_COUNT_WARN_THRESHOLD", "10"))
+
     # ── VoicePay Integration ──────────────────────────────────────────────────
     VOICEPAY_WEBHOOK_URL = os.getenv("VOICEPAY_WEBHOOK_URL", "")
     VOICEPAY_WEBHOOK_SECRET = os.getenv("VOICEPAY_WEBHOOK_SECRET", "")
@@ -165,6 +174,10 @@ class BaseConfig:
         # Check DEBUG mode in production
         app_env = _os.getenv("APP_ENV", "development").lower()
 
+        # Check inbound webhook secret (required in all environments)
+        if not cls.INBOUND_WEBHOOK_SECRET:
+            errors.append("INBOUND_WEBHOOK_SECRET is required")
+
         # Check KoraPay configuration in production
         if app_env == "production":
             if not cls.KORAPAY_SECRET_KEY:
@@ -208,12 +221,10 @@ class BaseConfig:
             if cls.KORAPAY_USE_SANDBOX:
                 errors.append("KORAPAY_USE_SANDBOX must be false in production")
 
-            # Check inbound webhook secret
-            if not cls.INBOUND_WEBHOOK_SECRET:
-                errors.append("INBOUND_WEBHOOK_SECRET is required in production")
-            elif len(cls.INBOUND_WEBHOOK_SECRET) < 32:
+            # Check inbound webhook secret length in production
+            if cls.INBOUND_WEBHOOK_SECRET and len(cls.INBOUND_WEBHOOK_SECRET) < 32:
                 errors.append(
-                    "INBOUND_WEBHOOK_SECRET too short (minimum 32 characters)"
+                    "INBOUND_WEBHOOK_SECRET too short (minimum 32 characters in production)"
                 )
 
         # Check Google OAuth configuration in production

@@ -1,0 +1,4 @@
+# file: /Users/mac/Documents/One-pay/core/decorators.py
+# hypothesis_version: 6.141.1
+
+[429, 'RATE_LIMIT_EXCEEDED', 'Retry-After', 'anon', 'api_key', 'error', 'message', 'none', 'retry_after', 'success', 'user_id']

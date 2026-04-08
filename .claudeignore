@@ -1,0 +1,28 @@
+# Environment files containing secrets
+.env
+.env.production.example
+.env.example
+
+# Hypothesis testing artifacts (auto-generated, large)
+.hypothesis/
+
+# Virtual environments
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.mypy_cache/
+.pytest_cache/
+
+# Test generated files
+tests/conftest.py
+
+# Lock files (not needed for AI context)
+poetry.lock
+Pipfile.lock
+
+# OS files
+.DS_Store
