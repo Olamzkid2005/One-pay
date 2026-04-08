@@ -1,5 +1,46 @@
 # OnePay Changelog
 
+## Version 1.7.0 - April 8, 2026
+
+### 🔒 Security, Architecture, Performance & Frontend Improvements
+
+Comprehensive codebase hardening across four phases. See `.kiro/specs/codebase-improvements/` for full spec.
+
+#### Phase 1 — Security
+
+- **Webhook signature validation**: HMAC-SHA256 enforcement on all inbound webhooks; startup aborts if `INBOUND_WEBHOOK_SECRET` is missing or weak
+- **Webhook idempotency**: `webhook_idempotency` table prevents duplicate payment processing; 24-hour record retention with periodic cleanup
+- **SSRF prevention**: `services/url_validator.py` blocks private IPs, loopback, link-local, and multicast ranges; DNS rebinding detection via TTL checks
+- **Strong secret enforcement**: `SECRET_KEY` and `HMAC_SECRET` must be ≥32 chars and different; production startup aborts on violation, development warns
+
+#### Phase 2 — Architecture
+
+- **Rate limit decorator**: `@rate_limit(key, limit, window_secs)` in `core/decorators.py` with `{user_id}`, `{ip}`, `{api_key}` placeholder support; replaces 20+ inline checks
+- **Input validation service**: `services/validators.py` with `validate_email()` and `validate_phone()`; used by all blueprints
+- **Custom exception hierarchy**: `core/exceptions.py` — `OnePayError`, `ValidationError`, `ProviderError`, `AuthenticationError`, `AuthorizationError`; global handler returns standardized JSON
+- **Huey task queue**: `services/task_queue.py` with SQLite backend; webhook delivery, rate limit cleanup, and audit log cleanup as async tasks; thread-based fallback for development
+
+#### Phase 3 — Performance
+
+- **Database indexes**: Alembic migrations add 6 indexes — `transactions(created_at)`, `transactions(status)`, `transactions(user_id, created_at)`, `transactions(user_id, status)`, `audit_logs(created_at)`, `audit_logs(user_id)`
+- **N+1 query prevention**: `selectinload(Transaction.invoice)` in `transaction_history`; `selectinload(Invoice.transaction)` in `get_invoice_history`; query count logging in development
+- **Caching layer**: `payment_summary` endpoint uses 60-second cache with per-user keys; invalidated on transaction create/update
+- **PostgreSQL default**: All environments now default to PostgreSQL; `func.strftime` replaced with dialect-aware `func.to_char`; migration guide at `docs/POSTGRESQL_MIGRATION.md`
+
+#### Phase 4 — Frontend
+
+- **Tailwind CSS build pipeline**: `tailwind.config.js`, `static/css/input.css`, `package.json` with `build:css`/`watch:css`/`build:js` scripts; `output.css` at 43KB raw / 8KB gzipped (was ~3MB CDN)
+- **JavaScript extraction**: `static/js/login.js` extracted from `templates/login.html` with `defer`; nonce-based CSP replaces `unsafe-inline`
+- **Form loading states**: `static/js/loading-states.js` with `disableButton`/`enableButton`/`attachToForm`/`withLoading`; integrated into login and dashboard forms; prevents double submission
+- **Accessibility**: `aria-label` on all icon-only buttons; `for`/`id` label associations on all form inputs; `:focus-visible` styles; `<main>` landmarks; WCAG 2.1 AA contrast ratios documented
+
+#### Tests Added
+
+- 58 new unit/integration tests across security, architecture, performance, and frontend phases
+- All existing tests continue to pass
+
+---
+
 ## Version 1.6.0 - April 1, 2026
 
 ### 🎤 VoicePay Integration - Merchant Payment Gateway

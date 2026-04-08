@@ -424,8 +424,12 @@ async function createLink(event) {
     return;
   }
 
-  btn.disabled = true;
-  btn.innerHTML = `<span class="spinner-sm"></span> Generating…`;
+  if (typeof LoadingStates !== 'undefined') {
+    LoadingStates.disableButton(btn, 'Generating…');
+  } else {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-sm"></span> Generating…`;
+  }
 
   const body = {
     amount:         normalizedAmount,
@@ -461,8 +465,12 @@ async function createLink(event) {
     showToast('Payment link created!', 'success');
   } catch (err) {
     showToast(err.message, 'error');
-    btn.disabled = false;
-    btn.textContent = 'Generate Secure Link';
+    if (typeof LoadingStates !== 'undefined') {
+      LoadingStates.enableButton(btn);
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Generate Secure Link';
+    }
   }
 }
 
@@ -637,8 +645,12 @@ async function checkStatus(event) {
   }
 
   const btn = document.getElementById('check-btn');
-  btn.disabled = true;
-  btn.innerHTML = `<span class="spinner-sm"></span> Checking…`;
+  if (typeof LoadingStates !== 'undefined') {
+    LoadingStates.disableButton(btn, 'Checking…');
+  } else {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-sm"></span> Checking…`;
+  }
 
   try {
     const res  = await fetch(`/api/payments/status/${encodeURIComponent(txRef)}`);
@@ -653,8 +665,12 @@ async function checkStatus(event) {
   } catch (err) {
     showToast(err.message || 'Could not check transaction', 'error');
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Check Status';
+    if (typeof LoadingStates !== 'undefined') {
+      LoadingStates.enableButton(btn);
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Check Status';
+    }
   }
 }
 
@@ -883,8 +899,12 @@ async function saveSettings() {
   const msg = document.getElementById('settings-msg');
   const url = document.getElementById('webhook-url').value.trim();
 
-  btn.disabled = true;
-  btn.innerHTML = `<span class="spinner-sm"></span> Saving…`;
+  if (typeof LoadingStates !== 'undefined') {
+    LoadingStates.disableButton(btn, 'Saving…');
+  } else {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-sm"></span> Saving…`;
+  }
 
   try {
     const res  = await fetch('/api/account/settings', {
@@ -912,8 +932,12 @@ async function saveSettings() {
     msg.classList.remove('hidden');
     showToast(err.message, 'error');
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Save settings';
+    if (typeof LoadingStates !== 'undefined') {
+      LoadingStates.enableButton(btn);
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Save settings';
+    }
     setTimeout(() => msg.classList.add('hidden'), 4000);
   }
 }
@@ -1080,4 +1104,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const checkForm = document.getElementById('check-form');
   if (checkForm) checkForm.addEventListener('submit', checkStatus);
+
+  // Apply loading states to all forms making HTTP requests (Requirement 15.5)
+  if (typeof LoadingStates !== 'undefined') {
+    // Settings form uses saveSettings() directly — attach loading state to its button
+    const saveBtn = document.getElementById('save-settings-btn');
+    if (saveBtn) {
+      const originalSaveSettings = window.saveSettings;
+      if (typeof originalSaveSettings === 'function') {
+        // saveSettings already manages its own button state; LoadingStates guards double-click
+        saveBtn.addEventListener('click', (e) => {
+          if (saveBtn.disabled) e.stopImmediatePropagation();
+        });
+      }
+    }
+  }
 });

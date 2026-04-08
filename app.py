@@ -9,6 +9,7 @@ All routes live in blueprints:
 import logging
 import warnings
 import uuid
+import secrets
 from datetime import timedelta, datetime, timezone
 
 # Silence warnings
@@ -144,6 +145,7 @@ def create_app() -> Flask:
     @app.before_request
     def inject_request_id():
         g.request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        g.csp_nonce = secrets.token_urlsafe(16)
 
     # ── API Key Authentication ─────────────────────────────────────────────────
     @app.before_request
@@ -326,10 +328,11 @@ def create_app() -> Flask:
         X-XSS-Protection: enables browser XSS filter (legacy browsers).
         X-Download-Options: prevents IE from executing downloads in site context.
         """
+        nonce = g.get('csp_nonce', '')
         response.headers.setdefault(
             "Content-Security-Policy",
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://accounts.google.com/gsi/ https://accounts.google.com; "
+            f"default-src 'self'; "
+            f"script-src 'self' 'nonce-{nonce}' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://accounts.google.com/gsi/ https://accounts.google.com; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://accounts.google.com; "
             "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com; "
             "img-src 'self' data: https://lh3.googleusercontent.com; "

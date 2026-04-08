@@ -427,7 +427,7 @@ This implementation plan breaks down 25 requirements into actionable coding task
 
 ### 16. Tailwind CSS Build Pipeline (Requirement 13)
 
-- [~] 16.1 Create Tailwind configuration
+- [x] 16.1 Create Tailwind configuration
   - Create `tailwind.config.js`
   - Configure content paths for templates and JS
   - Configure theme extensions
@@ -435,14 +435,14 @@ This implementation plan breaks down 25 requirements into actionable coding task
   - **Affected files**: `tailwind.config.js`
   - **Complexity**: Small
 
-- [~] 16.2 Create CSS input file
+- [x] 16.2 Create CSS input file
   - Create `static/css/input.css` with Tailwind directives
   - Configure custom fonts if needed
   - _Requirements: 13.1_
   - **Affected files**: `static/css/input.css`
   - **Complexity**: Small
 
-- [~] 16.3 Add build scripts to package.json
+- [x] 16.3 Add build scripts to package.json
   - Add `build:css` script for production build
   - Add `watch:css` script for development
   - Configure minification and purging
@@ -450,21 +450,21 @@ This implementation plan breaks down 25 requirements into actionable coding task
   - **Affected files**: `package.json`
   - **Complexity**: Small
 
-- [~] 16.4 Update templates to use built CSS
+- [x] 16.4 Update templates to use built CSS
   - Replace CDN link with local CSS file
   - Test all pages render correctly
   - _Requirements: 13.1_
   - **Affected files**: `templates/base.html`
   - **Complexity**: Small
 
-- [~] 16.5 Verify CSS bundle size
+- [x] 16.5 Verify CSS bundle size
   - Run production build
   - Verify gzipped size < 50KB
   - _Requirements: 13.2_
 
 ### 17. JavaScript Extraction (Requirement 14)
 
-- [~] 17.1 Extract inline JavaScript from login.html
+- [x] 17.1 Extract inline JavaScript from login.html
   - Create `static/js/login.js`
   - Move inline scripts to external file
   - Add defer attribute to script tag
@@ -472,14 +472,14 @@ This implementation plan breaks down 25 requirements into actionable coding task
   - **Affected files**: `static/js/login.js`, `templates/login.html`
   - **Complexity**: Small
 
-- [~] 17.2 Add minification for production JS
+- [x] 17.2 Add minification for production JS
   - Configure JS minification in build process
   - Add to package.json scripts
   - _Requirements: 14.2_
   - **Affected files**: `package.json`
   - **Complexity**: Small
 
-- [~] 17.3 Implement nonce-based CSP for inline handlers
+- [x] 17.3 Implement nonce-based CSP for inline handlers
   - Generate nonce per request
   - Add nonce to allowed inline handlers
   - Update CSP header configuration
@@ -487,14 +487,14 @@ This implementation plan breaks down 25 requirements into actionable coding task
   - **Affected files**: `app.py`, `templates/base.html`
   - **Complexity**: Medium
 
-- [~] 17.4 Write tests for JavaScript extraction
+- [x] 17.4 Write tests for JavaScript extraction
   - Verify login page functionality
   - Verify form submission works
   - _Requirements: 14.4_
 
 ### 18. Form Loading States (Requirement 15)
 
-- [~] 18.1 Create loading state utility module
+- [x] 18.1 Create loading state utility module
   - Create `static/js/loading-states.js`
   - Implement button disable/enable functions
   - Implement loading spinner display
@@ -502,7 +502,7 @@ This implementation plan breaks down 25 requirements into actionable coding task
   - **Affected files**: `static/js/loading-states.js`
   - **Complexity**: Small
 
-- [~] 18.2 Add loading states to login form
+- [x] 18.2 Add loading states to login form
   - Disable submit button on click
   - Show loading indicator
   - Re-enable on error
@@ -510,14 +510,14 @@ This implementation plan breaks down 25 requirements into actionable coding task
   - **Affected files**: `static/js/login.js`
   - **Complexity**: Small
 
-- [~] 18.3 Add loading states to payment forms
+- [x] 18.3 Add loading states to payment forms
   - Apply to all forms making HTTP requests
   - Handle success/error states
   - _Requirements: 15.5_
   - **Affected files**: `static/js/dashboard.js`, relevant templates
   - **Complexity**: Medium
 
-- [~] 18.4 Write tests for loading states
+- [x] 18.4 Write tests for loading states
   - Test button disabled during submission
   - Test button re-enabled on error
   - Test double submission prevention
@@ -525,7 +525,7 @@ This implementation plan breaks down 25 requirements into actionable coding task
 
 ### 19. Accessibility Compliance (Requirement 16)
 
-- [~] 19.1 Add aria-labels to interactive elements
+- [x] 19.1 Add aria-labels to interactive elements
   - Audit all templates for elements without visible text
   - Add aria-label attributes to buttons, links, icons
   - Document accessibility improvements
@@ -533,21 +533,21 @@ This implementation plan breaks down 25 requirements into actionable coding task
   - **Affected files**: `templates/base.html`, `templates/dashboard_base.html`, `templates/login.html`, `templates/dashboard.html`, and all other templates
   - **Complexity**: Large
 
-- [~] 19.2 Ensure all form inputs have labels
+- [x] 19.2 Ensure all form inputs have labels
   - Audit all forms for label associations
   - Add labels or aria-labelledby where missing
   - _Requirements: 16.2_
   - **Affected files**: `templates/*.html`
   - **Complexity**: Medium
 
-- [~] 19.3 Add visible focus indicators
+- [x] 19.3 Add visible focus indicators
   - Add CSS focus styles for all interactive elements
   - Ensure keyboard navigation works
   - _Requirements: 16.3, 16.4_
   - **Affected files**: `static/css/input.css` or `static/css/style.css`
   - **Complexity**: Small
 
-- [~] 19.4 Use semantic HTML elements
+- [x] 19.4 Use semantic HTML elements
   - Replace divs with appropriate semantic elements (nav, main, aside, section, article)
   - Ensure proper heading hierarchy (h1-h6)
   - Add ARIA landmark regions
@@ -555,20 +555,20 @@ This implementation plan breaks down 25 requirements into actionable coding task
   - **Affected files**: All template files (codebase-wide refactor)
   - **Complexity**: Large
 
-- [~] 19.5 Verify color contrast ratios
+- [x] 19.5 Verify color contrast ratios
   - Audit color contrast against WCAG 2.1 AA
   - Adjust colors where needed
   - _Requirements: 16.6_
   - **Affected files**: `static/css/input.css` or `static/css/style.css`
   - **Complexity**: Small
 
-- [~] 19.6 Write accessibility tests
+- [x] 19.6 Write accessibility tests
   - Test keyboard navigation
   - Test screen reader compatibility
   - Test color contrast
   - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6_
 
-- [ ] 20. Checkpoint - Frontend phase complete
+- [x] 20. Checkpoint - Frontend phase complete
   - Verify CSS bundle size < 50KB
   - Verify all forms have loading states
   - Run accessibility audit
