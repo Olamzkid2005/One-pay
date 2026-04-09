@@ -5,6 +5,7 @@ This module contains end-to-end integration tests for the complete payment
 flow including virtual account creation, status polling, and webhooks.
 """
 
+import os
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 import json
@@ -719,7 +720,7 @@ class TestCompleteFlowMockMode:
                                             assert response.status_code == 201
                                             data = json.loads(response.data)
                                             assert data['success'] is True
-                                            tx_ref = data['transaction']['reference']
+                                            tx_ref = data['tx_ref']
                                             assert tx_ref.startswith('ONEPAY-')
 
                                             # Step 2-5: Poll status 4 times (3 pending, 1 confirmed)
@@ -737,7 +738,12 @@ class TestCompleteFlowMockMode:
                                                 mock_public_db_instance.query().filter().first.return_value = mock_tx
                                                 mock_public_db_instance.query().filter().with_for_update().first.return_value = mock_tx
 
-                                                if poll_count == 3:
+                                                if poll_count < 3:
+                                                    mock_public_korapay.confirm_transfer.return_value = {
+                                                        "responseCode": "Z0",  # Pending
+                                                        "transactionReference": tx_ref
+                                                    }
+                                                else:
                                                     mock_public_korapay.confirm_transfer.return_value = {
                                                         "responseCode": "00",  # Confirmed
                                                         "transactionReference": tx_ref
@@ -758,8 +764,9 @@ class TestCompleteFlowMockMode:
                             # Verify KoraPay was called for account creation
                             assert mock_korapay.create_virtual_account.call_count == 1
 
-                            # Verify confirm_transfer was called 4 times (once per poll)
-                            assert mock_public_korapay.confirm_transfer.call_count == 4
+                            # Verify confirm_transfer was called 3 times (polls 0, 1, 2)
+                            # On poll 3, transaction is already confirmed so fast path returns early
+                            assert mock_public_korapay.confirm_transfer.call_count == 3
 
 
 class TestBackwardCompatibility:
@@ -868,7 +875,7 @@ class TestBackwardCompatibility:
                         # Verify response structure
                         assert 'success' in data
                         assert 'status' in data
-                        assert 'transaction_reference' in data
+                        assert 'tx_ref' in data
 
 
 class TestConfigurationValidation:
@@ -878,34 +885,42 @@ class TestConfigurationValidation:
     Tests Requirements: 5.9, 5.10, 5.11, 5.13, 5.14, 5.15, 5.16, 5.17, 5.18, 31.16-31.30
     """
 
-    def test_config_validation_detects_empty_secret_key(self):
+    def test_config_validation_detects_empty_secret_key(self, monkeypatch):
         """Test that config validation detects empty secret key."""
-        import os
-        os.environ['KORAPAY_SECRET_KEY'] = ''
-
-        from config import Config
+        import importlib
+        import config
+        
+        monkeypatch.setenv('KORAPAY_SECRET_KEY', '')
+        importlib.reload(config)
+        
         # Validation happens at startup, so we check the value
-        assert Config.KORAPAY_SECRET_KEY == ''
+        assert config.BaseConfig.KORAPAY_SECRET_KEY == ''
 
-    def test_config_validation_detects_short_secret_key(self):
+    def test_config_validation_detects_short_secret_key(self, monkeypatch):
         """Test that config validation detects short secret key."""
-        import os
-        os.environ['KORAPAY_SECRET_KEY'] = 'short'
+        import importlib
+        import config
+        
+        monkeypatch.setenv('KORAPAY_SECRET_KEY', 'short')
+        importlib.reload(config)
 
-        from config import Config
         # Should be rejected if < 40 chars
-        is_valid = len(Config.KORAPAY_SECRET_KEY) >= 40 if Config.KORAPAY_SECRET_KEY else False
+        is_valid = len(config.BaseConfig.KORAPAY_SECRET_KEY) >= 40 if config.BaseConfig.KORAPAY_SECRET_KEY else False
         assert is_valid is False
 
-    def test_config_validation_detects_test_key_in_production(self):
+    def test_config_validation_detects_test_key_in_production(self, monkeypatch):
         """Test that config validation detects sk_test_ in production env."""
-        import os
-        os.environ['KORAPAY_SECRET_KEY'] = 'sk_test_abcdefghijklmnopqrstuvwxyz12345678'
-        os.environ['APP_ENV'] = 'production'
+        monkeypatch.setenv('KORAPAY_SECRET_KEY', 'sk_test_abcdefghijklmnopqrstuvwxyz12345678')
+        monkeypatch.setenv('APP_ENV', 'production')
 
-        from config import Config
-        is_live_key = Config.KORAPAY_SECRET_KEY.startswith('sk_live_')
-        is_production = Config.APP_ENV == 'production'
+        # Reload config to pick up changes
+        import importlib
+        import config
+        importlib.reload(config)
+        
+        # Get Config from the reloaded module
+        is_live_key = config.Config.KORAPAY_SECRET_KEY.startswith('sk_live_')
+        is_production = os.getenv('APP_ENV') == 'production'
         # In production, should only accept sk_live_ keys
         if is_production:
             assert is_live_key, "Production should use sk_live_ keys"
@@ -928,6 +943,6 @@ class TestConfigurationValidation:
 
         from config import Config
         is_sandbox = Config.KORAPAY_USE_SANDBOX is True
-        is_production = Config.APP_ENV == 'production'
+        is_production = os.getenv('APP_ENV') == 'production'
         if is_production:
             assert not is_sandbox, "Production should not use sandbox mode"

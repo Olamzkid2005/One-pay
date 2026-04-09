@@ -320,5 +320,5 @@
   window.LINK_EXPIRY_MINUTES = parseInt(config.dataset.expiryMinutes);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script src="{{ hashed_url('js/dashboard.js') }}"></script>
 {% endblock %}

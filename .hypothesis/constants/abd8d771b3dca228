@@ -1,4 +1,0 @@
-# file: /Users/mac/Documents/One-pay/database.py
-# hypothesis_version: 6.141.1
-
-[3600, 'Database initialised', 'check_same_thread', 'connect', 'connect_args', 'max_overflow', 'pool_pre_ping', 'pool_recycle', 'pool_size', 'pool_timeout', 'sqlite']

@@ -134,24 +134,18 @@ def register_page():
 
     if not is_valid_csrf_token(request.form.get("csrf_token")):
         flash("Session expired — please refresh and try again.", "error")
-        return render_template(
-            "register.html", username=username, email=raw_email, csrf_token=get_csrf_token()
-        )
+        return render_template("register.html", username=username, email=raw_email, csrf_token=get_csrf_token())
 
     if not valid_username(username):
         flash(
             "Username must be 3–30 characters: letters, digits, underscores only.",
             "error",
         )
-        return render_template(
-            "register.html", username=username, email=raw_email, csrf_token=get_csrf_token()
-        )
+        return render_template("register.html", username=username, email=raw_email, csrf_token=get_csrf_token())
 
     if not email:
         flash("Please enter a valid email address.", "error")
-        return render_template(
-            "register.html", username=username, email=raw_email, csrf_token=get_csrf_token()
-        )
+        return render_template("register.html", username=username, email=raw_email, csrf_token=get_csrf_token())
 
     # Validate password strength (VULN-006 fix)
     from services.password_validator import validate_password_strength
@@ -159,15 +153,11 @@ def register_page():
     is_valid, error_msg = validate_password_strength(password)
     if not is_valid:
         flash(error_msg, "error")
-        return render_template(
-            "register.html", username=username, email=email, csrf_token=get_csrf_token()
-        )
+        return render_template("register.html", username=username, email=email, csrf_token=get_csrf_token())
 
     if password != password2:
         flash("Passwords do not match.", "error")
-        return render_template(
-            "register.html", username=username, email=email, csrf_token=get_csrf_token()
-        )
+        return render_template("register.html", username=username, email=email, csrf_token=get_csrf_token())
 
     with get_db() as db:
         # Global rate limit to prevent distributed attacks
@@ -176,9 +166,7 @@ def register_page():
             return render_template("register.html", csrf_token=get_csrf_token())
 
         # Rate limit registration to prevent spam and account enumeration
-        if not check_rate_limit(
-            db, f"register:{client_ip()}", limit=3, window_secs=3600
-        ):
+        if not check_rate_limit(db, f"register:{client_ip()}", limit=3, window_secs=3600):
             flash(
                 "Too many registration attempts — please wait before trying again.",
                 "error",
@@ -212,8 +200,8 @@ def register_page():
             db.flush()
             db.refresh(user)
         except Exception as e:
-            logger.error("Registration DB error: %s", e, exc_info=True)
-            flash("Something went wrong — please try again.", "error")
+            logger.error("Registration failed | username=%s error=%s", username, e, exc_info=True)
+            flash("Unable to create account. Please try again later.", "error")
             return render_template(
                 "register.html",
                 username=username,
@@ -253,14 +241,10 @@ def login_page():
 
     if not is_valid_csrf_token(request.form.get("csrf_token")):
         flash("Session expired — please refresh and try again.", "error")
-        return render_template(
-            "login.html", username=username, csrf_token=get_csrf_token()
-        )
+        return render_template("login.html", username=username, csrf_token=get_csrf_token())
 
     with get_db() as db:
-        if not check_rate_limit(
-            db, f"login:{client_ip()}", limit=5, window_secs=60, critical=True
-        ):
+        if not check_rate_limit(db, f"login:{client_ip()}", limit=5, window_secs=60, critical=True):
             flash("Too many login attempts — please wait a minute.", "error")
             return render_template("login.html", csrf_token=get_csrf_token())
 
@@ -268,9 +252,7 @@ def login_page():
 
         if not user or not user.is_active:
             flash("Incorrect username or password.", "error")
-            return render_template(
-                "login.html", username=username, csrf_token=get_csrf_token()
-            )
+            return render_template("login.html", username=username, csrf_token=get_csrf_token())
 
         if user.is_locked():
             flash(
@@ -280,9 +262,7 @@ def login_page():
             return render_template("login.html", csrf_token=get_csrf_token())
 
         if not user.check_password(password):
-            user.record_failed_login(
-                Config.LOGIN_MAX_ATTEMPTS, Config.LOCKOUT_DURATION_SECS
-            )
+            user.record_failed_login(Config.LOGIN_MAX_ATTEMPTS, Config.LOCKOUT_DURATION_SECS)
             log_event(
                 db,
                 "merchant.login_failed",
@@ -291,17 +271,27 @@ def login_page():
                 detail={"username": username},
             )
             flash("Incorrect username or password.", "error")
-            return render_template(
-                "login.html", username=username, csrf_token=get_csrf_token()
-            )
+            return render_template("login.html", username=username, csrf_token=get_csrf_token())
 
         user.record_successful_login()
 
-        # 2FA CHECK - Disabled for now to avoid repeated prompts
-        # User can re-enable 2FA in settings if they want it
+        # 2FA CHECK - Require verification before granting full access
         if getattr(user, "two_factor_enabled", False):
-            # Skip 2FA for now - just log user in directly
-            pass
+            from services.email import send_2fa_code
+
+            otp_code = str(secrets.randbelow(1000000)).zfill(6)
+            user.email_otp = otp_code
+            user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+            send_2fa_code(user.email, otp_code)
+            session["pre_2fa_user_id"] = user.id
+            log_event(
+                db,
+                "2fa.code_sent",
+                user_id=user.id,
+                ip_address=client_ip(),
+                detail={"username": username},
+            )
+            return redirect(url_for("auth.verify_2fa"))
 
         # Regenerate session completely to prevent session fixation attacks
         _regenerate_session_secure(user.id, user.username)
@@ -376,33 +366,23 @@ def forgot_password():
         # VULN-004 FIX: Username limit with constant-time response
         username_limited = False
         if username:
-            username_limited = not check_rate_limit(
-                db, f"reset:user:{username}", limit=1, window_secs=3600
-            )
+            username_limited = not check_rate_limit(db, f"reset:user:{username}", limit=1, window_secs=3600)
 
         # Query user (always, even if rate limited)
-        user = (
-            db.query(User).filter(User.username == username).first()
-            if username
-            else None
-        )
+        user = db.query(User).filter(User.username == username).first() if username else None
 
         # Send email only if user exists AND not rate limited
         if user and user.is_active and not username_limited:
             token = generate_reset_token()
             user.reset_token = token
-            user.reset_token_expires_at = datetime.now(timezone.utc) + timedelta(
-                minutes=30
-            )
+            user.reset_token_expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
             reset_url = url_for("auth.reset_password", token=token, _external=True)
 
             # Send email if user has email, otherwise log to console
             if user.email:
                 send_password_reset(user.email, reset_url)
             else:
-                logger.info(
-                    "Password reset link for %s (no email): %s", username, reset_url
-                )
+                logger.info("Password reset link for %s (no email): %s", username, reset_url)
 
         # VULN-004 FIX: Constant-time response to prevent timing-based enumeration
         elapsed = time.perf_counter() - start_time
@@ -430,9 +410,7 @@ def reset_password(token: str):
 
     # Add rate limiting on token validation to prevent brute-force
     with get_db() as db:
-        if not check_rate_limit(
-            db, f"reset_validate:{client_ip()}", limit=10, window_secs=300
-        ):
+        if not check_rate_limit(db, f"reset_validate:{client_ip()}", limit=10, window_secs=300):
             flash("Too many attempts — please wait before trying again.", "error")
             return redirect(url_for("auth.login_page"))
 
@@ -446,15 +424,11 @@ def reset_password(token: str):
                 expires = expires.replace(tzinfo=timezone.utc)
             if datetime.now(timezone.utc) > expires:
                 return _invalid()
-        return render_template(
-            "reset_password.html", token=token, csrf_token=get_csrf_token()
-        )
+        return render_template("reset_password.html", token=token, csrf_token=get_csrf_token())
 
     if not is_valid_csrf_token(request.form.get("csrf_token")):
         flash("Session expired — please refresh and try again.", "error")
-        return render_template(
-            "reset_password.html", token=token, csrf_token=get_csrf_token()
-        )
+        return render_template("reset_password.html", token=token, csrf_token=get_csrf_token())
 
     password = request.form.get("password") or ""
     password2 = request.form.get("password2") or ""
@@ -465,15 +439,11 @@ def reset_password(token: str):
     is_valid, error_msg = validate_password_strength(password)
     if not is_valid:
         flash(error_msg, "error")
-        return render_template(
-            "reset_password.html", token=token, csrf_token=get_csrf_token()
-        )
+        return render_template("reset_password.html", token=token, csrf_token=get_csrf_token())
 
     if password != password2:
         flash("Passwords do not match.", "error")
-        return render_template(
-            "reset_password.html", token=token, csrf_token=get_csrf_token()
-        )
+        return render_template("reset_password.html", token=token, csrf_token=get_csrf_token())
 
     with get_db() as db:
         user = db.query(User).filter(User.reset_token == token).first()
@@ -488,9 +458,7 @@ def reset_password(token: str):
         # Check if new password is same as current password
         if user.check_password(password):
             flash("New password cannot be the same as your current password.", "error")
-            return render_template(
-                "reset_password.html", token=token, csrf_token=get_csrf_token()
-            )
+            return render_template("reset_password.html", token=token, csrf_token=get_csrf_token())
 
         user.set_password(password)
         user.reset_token = None
@@ -518,9 +486,7 @@ def update_settings():
     from core.api_auth import is_api_key_authenticated
 
     if not is_api_key_authenticated():
-        csrf_header = request.headers.get("X-CSRFToken") or request.headers.get(
-            "X-CSRF-Token"
-        )
+        csrf_header = request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token")
         if not is_valid_csrf_token(csrf_header):
             raise AuthorizationError("CSRF validation failed")
 
@@ -553,9 +519,7 @@ def update_settings():
 
         logger.info("Webhook URL updated for merchant: %s", user.username)
 
-    return jsonify(
-        {"success": True, "message": "Settings updated", "webhook_url": webhook_url}
-    )
+    return jsonify({"success": True, "message": "Settings updated", "webhook_url": webhook_url})
 
 
 # ── Google OAuth ───────────────────────────────────────────────────────────────
@@ -599,9 +563,7 @@ def google_callback():
 
     with get_db() as db:
         # Apply rate limiting (5 requests per IP per 60 seconds)
-        if not check_rate_limit(
-            db, f"google_oauth:{client_ip()}", limit=5, window_secs=60, critical=True
-        ):
+        if not check_rate_limit(db, f"google_oauth:{client_ip()}", limit=5, window_secs=60, critical=True):
             log_event(
                 db,
                 "oauth.rate_limit_exceeded",
@@ -609,10 +571,9 @@ def google_callback():
                 detail={"provider": "google"},
             )
             from core.exceptions import OnePayError
+
             raise OnePayError(
-                "Too many authentication attempts. Please wait and try again.",
-                "RATE_LIMIT_EXCEEDED",
-                429
+                "Too many authentication attempts. Please wait and try again.", "RATE_LIMIT_EXCEEDED", 429
             )
 
         try:
@@ -621,11 +582,8 @@ def google_callback():
             if not client_id:
                 logger.error("Google OAuth not configured (missing GOOGLE_CLIENT_ID)")
                 from core.exceptions import OnePayError
-                raise OnePayError(
-                    "Google authentication is not available.",
-                    "SERVICE_UNAVAILABLE",
-                    503
-                )
+
+                raise OnePayError("Google authentication is not available.", "SERVICE_UNAVAILABLE", 503)
 
             validator = GoogleTokenValidator(client_id)
             token_payload = validator.validate_token(credential)
@@ -644,10 +602,22 @@ def google_callback():
             if user:
                 # User exists with this Google ID - log them in
                 # Session already regenerated above, just set user data
-                # 2FA disabled for now - just log user in directly
                 if getattr(user, "two_factor_enabled", False):
-                    # Skip 2FA for now - just log user in directly
-                    pass
+                    from services.email import send_2fa_code
+
+                    otp_code = str(secrets.randbelow(1000000)).zfill(6)
+                    user.email_otp = otp_code
+                    user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+                    send_2fa_code(user.email, otp_code)
+                    session["pre_2fa_user_id"] = user.id
+                    log_event(
+                        db,
+                        "2fa.code_sent",
+                        user_id=user.id,
+                        ip_address=client_ip(),
+                        detail={"provider": "google"},
+                    )
+                    return jsonify({"success": True, "redirect_url": url_for("auth.verify_2fa")})
 
                 session["user_id"] = user.id
                 session["username"] = user.username
@@ -659,9 +629,7 @@ def google_callback():
                     detail={"provider": "google", "email": profile["email"]},
                 )
                 logger.info("Google OAuth login: %s", user.username)
-                return jsonify(
-                    {"success": True, "redirect_url": url_for("payments.dashboard")}
-                )
+                return jsonify({"success": True, "redirect_url": url_for("payments.dashboard")})
 
             # User doesn't exist by google_id - check by email
             user = User.find_by_email(db, profile["email"])
@@ -677,10 +645,9 @@ def google_callback():
                         detail={"provider": "google", "email": profile["email"]},
                     )
                     from core.exceptions import OnePayError
+
                     raise OnePayError(
-                        "This email is already linked to a different Google account.",
-                        "ACCOUNT_CONFLICT",
-                        409
+                        "This email is already linked to a different Google account.", "ACCOUNT_CONFLICT", 409
                     )
 
                 # Link Google account to existing user
@@ -692,10 +659,22 @@ def google_callback():
                 db.flush()
 
                 # Session already regenerated above, just set user data
-                # 2FA disabled for now - just log user in directly
                 if getattr(user, "two_factor_enabled", False):
-                    # Skip 2FA for now - just log user in directly
-                    pass
+                    from services.email import send_2fa_code
+
+                    otp_code = str(secrets.randbelow(1000000)).zfill(6)
+                    user.email_otp = otp_code
+                    user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+                    send_2fa_code(user.email, otp_code)
+                    session["pre_2fa_user_id"] = user.id
+                    log_event(
+                        db,
+                        "2fa.code_sent",
+                        user_id=user.id,
+                        ip_address=client_ip(),
+                        detail={"provider": "google"},
+                    )
+                    return jsonify({"success": True, "redirect_url": url_for("auth.verify_2fa")})
 
                 session["user_id"] = user.id
                 session["username"] = user.username
@@ -711,9 +690,7 @@ def google_callback():
                     f"Welcome back, {user.username}! Your Google account has been linked.",
                     "success",
                 )
-                return jsonify(
-                    {"success": True, "redirect_url": url_for("payments.dashboard")}
-                )
+                return jsonify({"success": True, "redirect_url": url_for("payments.dashboard")})
 
             # No existing user - create new account
             user = User.create_from_google(db, profile)
@@ -721,10 +698,22 @@ def google_callback():
             db.refresh(user)
 
             # Session already regenerated above, just set user data
-            # 2FA disabled for now - just log user in directly
             if getattr(user, "two_factor_enabled", False):
-                # Skip 2FA for now - just log user in directly
-                pass
+                from services.email import send_2fa_code
+
+                otp_code = str(secrets.randbelow(1000000)).zfill(6)
+                user.email_otp = otp_code
+                user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+                send_2fa_code(user.email, otp_code)
+                session["pre_2fa_user_id"] = user.id
+                log_event(
+                    db,
+                    "2fa.code_sent",
+                    user_id=user.id,
+                    ip_address=client_ip(),
+                    detail={"provider": "google"},
+                )
+                return jsonify({"success": True, "redirect_url": url_for("auth.verify_2fa")})
 
             session["user_id"] = user.id
             session["username"] = user.username
@@ -740,40 +729,36 @@ def google_callback():
                 },
             )
             logger.info("New user created via Google OAuth: %s", user.username)
-            flash(
-                f"Welcome, {user.username}! Your account has been created.", "success"
-            )
-            return jsonify(
-                {"success": True, "redirect_url": url_for("payments.dashboard")}
-            )
+            flash(f"Welcome, {user.username}! Your account has been created.", "success")
+            return jsonify({"success": True, "redirect_url": url_for("payments.dashboard")})
 
         except ValueError as e:
             # Token validation or profile extraction failed
             error_msg = str(e)
+            logger.warning("Google OAuth validation failed | ip=%s error=%s", client_ip(), error_msg)
             log_event(
                 db,
                 "oauth.authentication_failed",
                 ip_address=client_ip(),
                 detail={"provider": "google", "error": error_msg},
             )
-            logger.warning(
-                "Google OAuth authentication failed: %s | ip=%s", error_msg, client_ip()
-            )
+            logger.warning("Google OAuth authentication failed: %s | ip=%s", error_msg, client_ip())
 
             # Return user-friendly error message
             if "not verified" in error_msg.lower():
-                raise AuthenticationError(
-                    "Please verify your email address with Google before signing in."
-                )
+                raise AuthenticationError("Please verify your email address with Google before signing in.")
             else:
                 raise AuthenticationError("Authentication failed. Please try again.")
+
+        except OnePayError:
+            raise  # Re-raise OnePayError to let the global handler deal with it
 
         except Exception as e:
             # Unexpected error
             logger.error(
-                "Google OAuth unexpected error: %s | ip=%s",
-                str(e),
+                "Google OAuth error | ip=%s error=%s",
                 client_ip(),
+                e,
                 exc_info=True,
             )
             log_event(
@@ -783,11 +768,8 @@ def google_callback():
                 detail={"provider": "google", "error": "Internal error"},
             )
             from core.exceptions import OnePayError
-            raise OnePayError(
-                "An error occurred. Please try again later.",
-                "INTERNAL_ERROR",
-                500
-            )
+
+            raise OnePayError("An error occurred. Please try again later.", "INTERNAL_ERROR", 500)
 
 
 # ── 2FA Verification ──────────────────────────────────────────────────────────
@@ -820,9 +802,7 @@ def verify_2fa():
         ip_limiter_key = f"2fa:{client_ip()}"
         user_limiter_key = f"2fa_user:{pre_2fa_user_id}"
 
-        if not check_rate_limit(
-            db, ip_limiter_key, limit=5, window_secs=60, critical=True
-        ) or not check_rate_limit(
+        if not check_rate_limit(db, ip_limiter_key, limit=5, window_secs=60, critical=True) or not check_rate_limit(
             db, user_limiter_key, limit=5, window_secs=60, critical=True
         ):
             flash("Too many attempts — please wait a minute.", "error")
@@ -833,6 +813,13 @@ def verify_2fa():
             session.clear()
             return redirect(url_for("auth.login_page"))
 
+        if user.is_2fa_locked():
+            flash(
+                "Account temporarily locked due to too many failed 2FA attempts. Try again later.",
+                "error",
+            )
+            return render_template("verify_2fa.html", csrf_token=get_csrf_token())
+
         if not user.email_otp or not user.email_otp_expires_at:
             flash("Invalid or expired code.", "error")
             return render_template("verify_2fa.html", csrf_token=get_csrf_token())
@@ -842,11 +829,20 @@ def verify_2fa():
             expires = expires.replace(tzinfo=timezone.utc)
 
         if datetime.now(timezone.utc) > expires or user.email_otp != code:
+            user.record_failed_2fa()
+            log_event(
+                db,
+                "2fa.failed",
+                user_id=user.id,
+                ip_address=client_ip(),
+                detail={"attempts": user.failed_2fa_attempts},
+            )
             flash("Invalid or expired code.", "error")
             return render_template("verify_2fa.html", csrf_token=get_csrf_token())
 
         user.email_otp = None
         user.email_otp_expires_at = None
+        user.record_successful_2fa()
 
         _regenerate_session_secure(user.id, user.username)
         log_event(db, "2fa.success", user_id=user.id, ip_address=client_ip())
@@ -875,9 +871,7 @@ def github_callback():
         return redirect(url_for("auth.login_page"))
 
     with get_db() as db:
-        if not check_rate_limit(
-            db, f"github_oauth:{client_ip()}", limit=5, window_secs=60, critical=True
-        ):
+        if not check_rate_limit(db, f"github_oauth:{client_ip()}", limit=5, window_secs=60, critical=True):
             flash("Too many authentication attempts. Please wait.", "error")
             return redirect(url_for("auth.login_page"))
 
@@ -892,9 +886,7 @@ def github_callback():
                 if getattr(user, "two_factor_enabled", False):
                     otp_code = str(secrets.randbelow(1000000)).zfill(6)
                     user.email_otp = otp_code
-                    user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(
-                        minutes=10
-                    )
+                    user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
                     from services.email import send_2fa_code
 
                     send_2fa_code(user.email, otp_code)
@@ -913,10 +905,15 @@ def github_callback():
 
             user = User.find_by_email(db, profile["email"])
             if user:
-                # 2FA disabled for now - just log user in directly
                 if getattr(user, "two_factor_enabled", False):
-                    # Skip 2FA for now - just log user in directly
-                    pass
+                    otp_code = str(secrets.randbelow(1000000)).zfill(6)
+                    user.email_otp = otp_code
+                    user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+                    from services.email import send_2fa_code
+
+                    send_2fa_code(user.email, otp_code)
+                    session["pre_2fa_user_id"] = user.id
+                    return redirect(url_for("auth.verify_2fa"))
 
                 user.link_github_account(
                     profile["github_id"],
@@ -938,10 +935,15 @@ def github_callback():
                 return redirect(url_for("payments.dashboard"))
 
             user = User.create_from_github(db, profile)
-            # 2FA disabled for now - just log user in directly
             if getattr(user, "two_factor_enabled", False):
-                # Skip 2FA for now - just log user in directly
-                pass
+                otp_code = str(secrets.randbelow(1000000)).zfill(6)
+                user.email_otp = otp_code
+                user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+                from services.email import send_2fa_code
+
+                send_2fa_code(user.email, otp_code)
+                session["pre_2fa_user_id"] = user.id
+                return redirect(url_for("auth.verify_2fa"))
 
             _regenerate_session_secure(user.id, user.username)
             log_event(
@@ -958,6 +960,49 @@ def github_callback():
             return redirect(url_for("payments.dashboard"))
 
         except Exception as e:
-            logger.error("GitHub OAuth error: %s", e, exc_info=True)
-            flash("An error occurred during authentication.", "error")
+            logger.error("GitHub OAuth error | ip=%s error=%s", client_ip(), e, exc_info=True)
+            flash("Authentication failed. Please try again.", "error")
             return redirect(url_for("auth.login_page"))
+
+
+# ── 2FA Settings ───────────────────────────────────────────────────────────────
+
+
+@auth_bp.route("/account/2fa/disable", methods=["POST"])
+def disable_2fa():
+    """
+    Disable two-factor authentication for the current user.
+
+    Sets two_factor_enabled to False (Requirement 4.4).
+    """
+    if not current_user_id():
+        raise AuthenticationError()
+
+    if request.content_type != "application/json":
+        raise ValidationError("Content-Type must be application/json")
+
+    from core.api_auth import is_api_key_authenticated
+
+    if not is_api_key_authenticated():
+        csrf_header = request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token")
+        if not is_valid_csrf_token(csrf_header):
+            raise AuthorizationError("CSRF validation failed")
+
+    with get_db() as db:
+        user = db.query(User).filter(User.id == current_user_id()).first()
+        if not user:
+            raise ValidationError("User not found")
+
+        user.two_factor_enabled = False
+
+        log_event(
+            db,
+            "2fa.disabled",
+            user_id=current_user_id(),
+            ip_address=client_ip(),
+            detail={"username": user.username},
+        )
+
+        logger.info("2FA disabled for user: %s", user.username)
+
+    return jsonify({"success": True, "message": "Two-factor authentication has been disabled"})

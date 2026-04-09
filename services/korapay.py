@@ -12,6 +12,7 @@ import requests
 import threading
 import time
 from collections import deque
+from datetime import datetime, timezone
 from requests.adapters import HTTPAdapter
 from config import Config
 
@@ -300,18 +301,31 @@ class KoraPayService:
         Generate authentication headers for KoraPay API requests.
 
         Returns:
-            Dict with Authorization, Content-Type, Accept, User-Agent, X-Request-ID headers
+            Dict with Authorization, Content-Type, Accept, User-Agent, X-Request-ID,
+            and X-Correlation-ID headers
         """
         import uuid
         from config import Config as FreshConfig
 
-        return {
+        headers = {
             "Authorization": f"Bearer {FreshConfig.KORAPAY_SECRET_KEY}",
             "Content-Type": "application/json",
             "Accept": "application/json",
             "User-Agent": "OnePay-KoraPay/1.0",
             "X-Request-ID": str(uuid.uuid4()),
         }
+
+        # Forward correlation ID if available (Requirement 22.4)
+        try:
+            from flask import g
+            correlation_id = g.get("correlation_id")
+            if correlation_id:
+                headers["X-Correlation-ID"] = correlation_id
+        except RuntimeError:
+            # Outside Flask request context — skip
+            pass
+
+        return headers
 
     def _make_request(self, method: str, endpoint: str, **kwargs) -> dict:
         """
@@ -833,7 +847,7 @@ class KoraPayService:
         expiry_str = bank_account["expiry_date_in_utc"]
         try:
             # Parse ISO format: "2024-01-01T12:30:00Z"
-            expiry_dt = datetime.strptime(expiry_str, "%Y-%m-%dT%H:%M:%SZ")
+            expiry_dt = datetime.strptime(expiry_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
             now = datetime.now(timezone.utc)
             validity_seconds = (expiry_dt - now).total_seconds()
             validity_mins = max(0, int(validity_seconds / 60))

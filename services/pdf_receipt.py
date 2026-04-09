@@ -66,7 +66,7 @@ def generate_receipt_pdf(transaction) -> bytes:
         
         # Check for errors
         if pisa_status.err:
-            raise Exception(f"PDF generation error: {pisa_status.err} errors occurred")
+            raise Exception("Unable to generate PDF. Please try again.")
         
         # Get PDF bytes
         pdf_bytes = pdf_buffer.getvalue()

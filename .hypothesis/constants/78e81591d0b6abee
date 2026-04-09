@@ -1,4 +1,0 @@
-# file: /Users/mac/Documents/One-pay/models/api_key.py
-# hypothesis_version: 6.141.1
-
-[100, 255, 'CASCADE', 'api_keys', 'created_at', 'expires_at', 'id', 'idx_api_keys_user_id', 'is_active', 'key_hash', 'key_prefix', 'last_used_at', 'name', 'user_id', 'users.id']

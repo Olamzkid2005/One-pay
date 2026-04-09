@@ -421,7 +421,7 @@ def payment_summary():
             # Create dict for fast lookup
             daily_dict = {row.day: float(row.total or 0) for row in daily_stats}
         except Exception as e:
-            logging.error(f"Failed to aggregate chart data: {e}")
+            logging.error("Chart data aggregation failed | user_id=%s error=%s", user_id, e)
             daily_dict = {}
 
         # Backfill last 30 days including dates with 0 revenue
@@ -481,7 +481,8 @@ def payment_summary():
 def create_payment_link():
     # VULN-007 FIX: Validate Content-Type for JSON API
     if request.content_type != "application/json":
-        raise ValidationError("Content-Type must be application/json")
+        from core.exceptions import OnePayError
+        raise OnePayError("Content-Type must be application/json", "UNSUPPORTED_MEDIA_TYPE", 415)
     if not current_user_id():
         return unauthenticated()
 
@@ -666,7 +667,7 @@ def create_payment_link():
             logger.debug("QR codes generated natively for transaction %s", tx_ref)
 
         except Exception as e:
-            logger.warning("QR code generation failed for %s: %s", tx_ref, e)
+            logger.warning("QR code generation failed | tx_ref=%s", tx_ref)
             # Continue without QR codes - they're optional
 
         # ── Invoice Creation (Requirement 10.1, 10.2) ──────────────────────────
@@ -1150,7 +1151,7 @@ def download_receipt(tx_ref):
                 e,
             )
             from core.exceptions import OnePayError
-            raise OnePayError("Failed to generate receipt", "PDF_GENERATION_ERROR", 500)
+            raise OnePayError("Unable to generate receipt. Please try again later.", "RECEIPT_ERROR", 500)
 
 
 @payments_bp.route("/payments/receipt/<tx_ref>/preview", methods=["GET"])
@@ -1189,7 +1190,7 @@ def preview_receipt_html(tx_ref):
                 e,
             )
             from core.exceptions import OnePayError
-            raise OnePayError("Failed to generate preview", "PREVIEW_ERROR", 500)
+            raise OnePayError("Unable to generate preview. Please try again later.", "PREVIEW_ERROR", 500)
 
 
 @payments_bp.route("/payments/refund/<tx_ref>", methods=["POST"])
@@ -1261,7 +1262,7 @@ def initiate_refund(tx_ref):
             refund_amount_val = refund_data.get("amount")
             if refund_amount_val is None:
                 from core.exceptions import OnePayError
-                raise OnePayError("Refund amount not returned by payment provider", "REFUND_ERROR", 500)
+                raise OnePayError("Unable to process refund. Please contact support.", "REFUND_ERROR", 500)
             refund = Refund(
                 transaction_id=transaction.id,
                 refund_reference=refund_data["reference"],
@@ -1312,7 +1313,7 @@ def initiate_refund(tx_ref):
                 tx_ref,
                 str(e),
             )
-            raise ProviderError("Failed to initiate refund", provider="KoraPay", original_error=str(e))
+            raise ProviderError("Unable to process refund. Please try again later.", provider="KoraPay", original_error=str(e))
         except Exception as e:
             logger.error(
                 "Unexpected error during refund | user=%s tx_ref=%s error=%s",

@@ -138,23 +138,34 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Set up environment variables:
+4. Install Node.js dependencies and build frontend assets:
+```bash
+npm install
+npm run build
+```
+
+This will:
+- Build Tailwind CSS from source
+- Generate content-hashed filenames for cache busting
+- Minify JavaScript files
+
+5. Set up environment variables:
 ```bash
 cp .env.example .env
 # Edit .env with your configuration
 ```
 
-5. Generate secret keys:
+6. Generate secret keys:
 ```bash
 python generate_secrets.py
 ```
 
-6. Initialize the database:
+7. Initialize the database:
 ```bash
 alembic upgrade head
 ```
 
-7. Run the application:
+8. Run the application:
 ```bash
 python app.py
 ```
@@ -485,6 +496,68 @@ See [docs/ROLLBACK.md](docs/ROLLBACK.md) for detailed procedures.
 ### Development
 - [CHANGELOG.md](CHANGELOG.md) - Version history and changes
 - [API Documentation](docs/README.md) - API reference
+
+### Frontend Development
+
+OnePay uses Tailwind CSS with a build pipeline for optimized production assets.
+
+#### Development Workflow
+
+```bash
+# Watch mode for CSS changes (auto-rebuild on file changes)
+npm run watch:css
+
+# Build production assets (minified CSS + hashed filenames)
+npm run build
+
+# Build individual components
+npm run build:css      # Build Tailwind CSS
+npm run hash:assets    # Generate content-hashed filenames
+npm run build:js       # Minify JavaScript
+```
+
+#### Cache Busting
+
+Static assets (CSS and JS) use content-based hashing for cache busting:
+- Original files: `output.css`, `login.js`
+- Hashed files: `output.a09f3865.css`, `login.3c8f8089.js`
+- Templates use `{{ hashed_url('css/output.css') }}` to reference hashed versions
+- Manifest file: `static/manifest.json` maps original → hashed filenames
+
+When you modify CSS or JS files:
+1. Run `npm run build` to regenerate hashed files
+2. The hash changes automatically when content changes
+3. Browsers fetch the new version (cache invalidation)
+
+## 🔍 Type Checking
+
+OnePay uses [mypy](https://mypy.readthedocs.io/) for optional static type checking with a gradual typing approach — existing code is not strictly typed, but new modules in `core/` and `services/validators.py` enforce typed definitions.
+
+### Run mypy
+
+```bash
+# Install mypy if not already installed
+pip install mypy
+
+# Run type checking
+mypy .
+
+# Check a specific module
+mypy core/decorators.py
+mypy core/exceptions.py
+```
+
+### Configuration
+
+Type checking is configured in `mypy.ini`. Key settings:
+
+- Existing code (`blueprints/`, `models/`, `services/`, `alembic/`) has errors ignored for gradual adoption
+- New modules (`core.decorators`, `core.exceptions`, `services.validators`, `services.url_validator`) require fully typed function definitions
+- `check_untyped_defs = True` means mypy still checks the bodies of untyped functions
+
+### Pre-commit Integration
+
+An optional mypy pre-commit hook is included in `.pre-commit-config.yaml` (commented out by default). To enable it, uncomment the `mypy` hook section in that file. Note that mypy may require type stubs for some third-party packages (`pip install types-<package>`).
 
 ## 🤝 Contributing
 

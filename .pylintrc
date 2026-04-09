@@ -1,0 +1,45 @@
+[MASTER]
+jobs=1
+unsafe-load-any-extension=no
+
+[MESSAGES CONTROL]
+# Disable warnings that conflict with ruff/black formatting
+disable=
+    C0103,
+    C0114,
+    C0115,
+    C0116,
+    C0301,
+    C0303,
+    C0304,
+    C0305,
+    W0611,
+    W0612,
+    W0613,
+    W0614,
+    W0622,
+    R0903,
+    R0913,
+    R0914,
+    E1101,
+    E0611,
+
+[FORMAT]
+max-line-length=120
+expected-line-ending-format=LF
+
+[DESIGN]
+max-args=10
+max-locals=20
+max-returns=6
+max-branches=12
+
+[SIMILARITIES]
+min-similarity-lines=6
+
+[TYPECHECK]
+ignored-modules=alembic,flask,sqlalchemy
+ignored-classes=SQLAlchemy,scoped_session,Query
+
+[VARIABLES]
+dummy-variables-rgx=_+$|(_[a-zA-Z0-9_]*[a-zA-Z0-9]+$)|dummy|^ignored_|^unused_

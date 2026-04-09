@@ -98,7 +98,7 @@ class TestUrlValidatorIntegration:
         # Validation fails - no HTTP request should be made
         assert is_valid is False
         assert resolved_ip is None
-        assert "Private IP address not allowed" in error
+        assert "The URL resolves to a restricted address" in error
         
         # Application should NOT proceed with HTTP request
         # This prevents SSRF attack
@@ -162,7 +162,7 @@ class TestUrlValidatorIntegration:
         # Attack is blocked with specific error message
         assert is_valid is False
         assert resolved_ip is None
-        assert "AWS metadata endpoint" in error
+        assert "The URL resolves to a restricted address" in error
         
         # No HTTP request should be made - credentials are safe
     
@@ -192,7 +192,7 @@ class TestUrlValidatorIntegration:
             
             assert is_valid is False
             assert ip is None
-            assert "Private IP address not allowed" in error
+            assert "The URL resolves to a restricted address" in error
     
     def test_error_handling_for_dns_failures(self):
         """

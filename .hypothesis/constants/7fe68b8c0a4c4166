@@ -1,4 +1,0 @@
-# file: /Users/mac/Documents/One-pay/services/github_oauth.py
-# hypothesis_version: 6.141.1
-
-[200, 'Accept', 'Authorization', 'access_token', 'application/json', 'avatar_url', 'client_id', 'client_secret', 'code', 'email', 'error', 'error_description', 'full_name', 'github_id', 'id', 'login', 'name', 'primary', 'profile_picture_url', 'redirect_uri', 'scope', 'user:email', 'verified']

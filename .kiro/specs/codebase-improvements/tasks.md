@@ -580,7 +580,7 @@ This implementation plan breaks down 25 requirements into actionable coding task
 
 ### 21. Local Setup Script (Requirement 17)
 
-- [~] 21.1 Create setup script
+- [x] 21.1 Create setup script
   - Create `scripts/setup.sh`
   - Add Python version check
   - Add virtual environment creation
@@ -589,20 +589,20 @@ This implementation plan breaks down 25 requirements into actionable coding task
   - **Affected files**: `scripts/setup.sh`
   - **Complexity**: Small
 
-- [~] 21.2 Add environment file handling
+- [x] 21.2 Add environment file handling
   - Copy `.env.example` to `.env` if not exists
   - _Requirements: 17.4_
   - **Affected files**: `scripts/setup.sh`
   - **Complexity**: Small
 
-- [~] 21.3 Add database migration to setup
+- [x] 21.3 Add database migration to setup
   - Start PostgreSQL via Docker
   - Run Alembic migrations
   - _Requirements: 17.5_
   - **Affected files**: `scripts/setup.sh`
   - **Complexity**: Small
 
-- [~] 21.4 Add next steps output
+- [x] 21.4 Add next steps output
   - Print setup completion message
   - Print instructions for running the app
   - Offer pre-commit hook installation
@@ -612,7 +612,7 @@ This implementation plan breaks down 25 requirements into actionable coding task
 
 ### 22. Pre-Commit Hooks (Requirement 18)
 
-- [~] 22.1 Create pre-commit configuration
+- [x] 22.1 Create pre-commit configuration
   - Create `.pre-commit-config.yaml`
   - Configure ruff for linting
   - Configure ruff for formatting
@@ -622,20 +622,20 @@ This implementation plan breaks down 25 requirements into actionable coding task
   - **Affected files**: `.pre-commit-config.yaml`
   - **Complexity**: Small
 
-- [~] 22.2 Add pre-commit installation to setup script
+- [x] 22.2 Add pre-commit installation to setup script
   - Offer to install pre-commit hooks during setup
   - _Requirements: 18.5_
   - **Affected files**: `scripts/setup.sh`
   - **Complexity**: Small
 
-- [~] 22.3 Test pre-commit hooks
+- [x] 22.3 Test pre-commit hooks
   - Verify ruff runs on commit
   - Verify formatting is applied
   - _Requirements: 18.2, 18.3, 18.4_
 
 ### 23. Type Checking Configuration (Requirement 19)
 
-- [~] 23.1 Create mypy configuration
+- [x] 23.1 Create mypy configuration
   - Create `mypy.ini`
   - Enable strict mode for new code
   - Allow gradual typing for existing code
@@ -643,13 +643,13 @@ This implementation plan breaks down 25 requirements into actionable coding task
   - **Affected files**: `mypy.ini`
   - **Complexity**: Small
 
-- [~] 23.2 Document mypy usage
+- [x] 23.2 Document mypy usage
   - Add mypy instructions to README
   - _Requirements: 19.4_
   - **Affected files**: `README.md`
   - **Complexity**: Small
 
-- [~] 23.3 Add mypy to pre-commit hooks
+- [x] 23.3 Add mypy to pre-commit hooks
   - Add optional mypy hook to pre-commit config
   - _Requirements: 19.5_
   - **Affected files**: `.pre-commit-config.yaml`
@@ -657,42 +657,42 @@ This implementation plan breaks down 25 requirements into actionable coding task
 
 ### 24. Test Fixture Isolation (Requirement 20)
 
-- [~] 24.1 Create isolated database fixture
+- [x] 24.1 Create isolated database fixture
   - Add fixture to `tests/conftest.py`
   - Use transaction rollback for isolation
   - _Requirements: 20.1, 20.2_
   - **Affected files**: `tests/conftest.py`
   - **Complexity**: Small
 
-- [~] 24.2 Add cache reset fixture
+- [x] 24.2 Add cache reset fixture
   - Create fixture to reset global cache
   - Apply to tests that use cache
   - _Requirements: 20.3_
   - **Affected files**: `tests/conftest.py`
   - **Complexity**: Small
 
-- [~] 24.3 Add rate limiter reset fixture
+- [x] 24.3 Add rate limiter reset fixture
   - Create fixture to reset rate limiter state
   - Apply to tests that use rate limiting
   - _Requirements: 20.4_
   - **Affected files**: `tests/conftest.py`
   - **Complexity**: Small
 
-- [~] 24.4 Create factory fixtures
+- [x] 24.4 Create factory fixtures
   - Add user factory fixture
   - Add transaction factory fixture
   - _Requirements: 20.5_
   - **Affected files**: `tests/conftest.py`
   - **Complexity**: Medium
 
-- [~] 24.5 Write tests for fixture isolation
+- [x] 24.5 Write tests for fixture isolation
   - Verify tests don't affect each other
   - Verify cache is reset between tests
   - _Requirements: 20.1, 20.2, 20.3, 20.4, 20.5_
 
 ### 25. Linter Configuration (Requirement 24)
 
-- [~] 25.1 Create pylintrc configuration
+- [x] 25.1 Create pylintrc configuration
   - Create `.pylintrc`
   - Disable warnings conflicting with black
   - Specify project naming conventions
@@ -700,7 +700,7 @@ This implementation plan breaks down 25 requirements into actionable coding task
   - **Affected files**: `.pylintrc`
   - **Complexity**: Small
 
-- [~] 25.2 Create pyproject.toml with ruff configuration
+- [x] 25.2 Create pyproject.toml with ruff configuration
   - Create or update `pyproject.toml`
   - Configure ruff rules
   - Ensure compatibility with pre-commit
@@ -708,7 +708,7 @@ This implementation plan breaks down 25 requirements into actionable coding task
   - **Affected files**: `pyproject.toml`
   - **Complexity**: Small
 
-- [ ] 26. Checkpoint - Developer experience phase complete
+- [x] 26. Checkpoint - Developer experience phase complete
   - Run setup script on fresh environment
   - Verify pre-commit hooks work
   - Run mypy and verify configuration
@@ -720,33 +720,33 @@ This implementation plan breaks down 25 requirements into actionable coding task
 
 ### 27. Two-Factor Authentication Fix (Requirement 4)
 
-- [~] 27.1 Fix 2FA verification flow
+- [x] 27.1 Fix 2FA verification flow
   - Ensure `two_factor_enabled` check works in login
   - Require 2FA verification before full access
   - _Requirements: 4.1_
   - **Affected files**: `core/auth.py`, `blueprints/auth.py`
   - **Complexity**: Small
 
-- [~] 27.2 Add failed attempt counter for 2FA
+- [x] 27.2 Add failed attempt counter for 2FA
   - Increment counter on incorrect code
   - Lock account after 5 failed attempts in 15 minutes
   - _Requirements: 4.2, 4.3_
   - **Affected files**: `blueprints/auth.py`, `models/user.py`
   - **Complexity**: Small
 
-- [~] 27.3 Fix 2FA disable flow
+- [x] 27.3 Fix 2FA disable flow
   - Set `two_factor_enabled` to False on disable
   - _Requirements: 4.4_
   - **Affected files**: `blueprints/auth.py` or `blueprints/settings.py`
   - **Complexity**: Small
 
-- [~] 27.4 Add session validation for 2FA page
+- [x] 27.4 Add session validation for 2FA page
   - Redirect to login if `pre_2fa_user_id` not in session
   - _Requirements: 4.5_
   - **Affected files**: `blueprints/auth.py`
   - **Complexity**: Small
 
-- [~] 27.5 Write unit tests for 2FA flow
+- [x] 27.5 Write unit tests for 2FA flow
   - Test 2FA required for enabled users
   - Test failed attempt counter
   - Test account lockout
@@ -755,33 +755,33 @@ This implementation plan breaks down 25 requirements into actionable coding task
 
 ### 28. Correlation IDs for Logging (Requirement 22)
 
-- [~] 28.1 Add correlation ID generation
+- [x] 28.1 Add correlation ID generation
   - Generate or extract from `X-Request-ID` header
   - Store in Flask's `g` object
   - _Requirements: 22.1, 22.5_
   - **Affected files**: `app.py`
   - **Complexity**: Small
 
-- [~] 28.2 Add correlation ID to log messages
+- [x] 28.2 Add correlation ID to log messages
   - Update logging filter to include correlation ID
   - Apply to all log messages in request context
   - _Requirements: 22.2_
   - **Affected files**: `core/logging_filters.py`
   - **Complexity**: Small
 
-- [~] 28.3 Add correlation ID to response headers
+- [x] 28.3 Add correlation ID to response headers
   - Add `X-Correlation-ID` header to all responses
   - _Requirements: 22.3_
   - **Affected files**: `app.py`
   - **Complexity**: Small
 
-- [~] 28.4 Forward correlation ID to external requests
+- [x] 28.4 Forward correlation ID to external requests
   - Include correlation ID in outgoing HTTP requests
   - _Requirements: 22.4_
   - **Affected files**: `services/korapay.py`, `services/webhook.py`
   - **Complexity**: Small
 
-- [~] 28.5 Write tests for correlation ID tracking
+- [x] 28.5 Write tests for correlation ID tracking
   - Test ID generation
   - Test ID extraction from header
   - Test ID in response header
@@ -790,28 +790,28 @@ This implementation plan breaks down 25 requirements into actionable coding task
 
 ### 29. Cache-Control Headers (Requirement 23)
 
-- [~] 29.1 Add cache headers to static assets
+- [x] 29.1 Add cache headers to static assets
   - Add `Cache-Control: public, max-age=31536000` to versioned assets
   - Add `Cache-Control: public, max-age=3600` to non-versioned assets
   - _Requirements: 23.1, 23.2_
   - **Affected files**: `app.py`
   - **Complexity**: Small
 
-- [~] 29.2 Add ETag headers to static assets
+- [x] 29.2 Add ETag headers to static assets
   - Generate ETag from file content hash
   - Support conditional requests
   - _Requirements: 23.3_
   - **Affected files**: `app.py`
   - **Complexity**: Small
 
-- [~] 29.3 Implement content-based filenames for cache busting
+- [x] 29.3 Implement content-based filenames for cache busting
   - Add build step to generate hashed filenames
   - Update template references
   - _Requirements: 23.4_
   - **Affected files**: Build scripts, `templates/base.html`
   - **Complexity**: Medium
 
-- [~] 29.4 Write tests for cache headers
+- [x] 29.4 Write tests for cache headers
   - Test Cache-Control header presence
   - Test ETag header presence
   - Test conditional request handling
@@ -819,41 +819,41 @@ This implementation plan breaks down 25 requirements into actionable coding task
 
 ### 30. Error Handling Standardization (Requirement 25)
 
-- [~] 30.1 Define error response format
+- [x] 30.1 Define error response format
   - Document standard JSON format: `{success, message, error_code}`
   - Create error code reference
   - _Requirements: 25.1, 25.5_
   - **Affected files**: `docs/API.md` or new doc
   - **Complexity**: Small
 
-- [~] 30.2 Ensure HTTP status codes match error type
+- [x] 30.2 Ensure HTTP status codes match error type
   - Audit all error responses
   - Update status codes where needed
   - _Requirements: 25.2_
   - **Affected files**: `blueprints/*.py`, `core/exceptions.py`
   - **Complexity**: Small
 
-- [~] 30.3 Add correlation ID to error logs
+- [x] 30.3 Add correlation ID to error logs
   - Ensure all errors logged with correlation ID
   - _Requirements: 25.3_
   - **Affected files**: `app.py`, `core/exceptions.py`
   - **Dependencies**: Task 28.1 (correlation ID generation)
   - **Complexity**: Small
 
-- [~] 30.4 Remove internal details from error messages
+- [x] 30.4 Remove internal details from error messages
   - Audit error messages for internal info
   - Replace with user-friendly messages
   - _Requirements: 25.4_
   - **Affected files**: `blueprints/*.py`, `services/*.py`
   - **Complexity**: Small
 
-- [~] 30.5 Write tests for error handling
+- [x] 30.5 Write tests for error handling
   - Test error response format
   - Test status codes
   - Test correlation ID in errors
   - _Requirements: 25.1, 25.2, 25.3, 25.4_
 
-- [ ] 31. Checkpoint - Observability phase complete
+- [x] 31. Checkpoint - Observability phase complete
   - Verify 2FA flow works correctly
   - Verify correlation IDs appear in logs
   - Verify cache headers on static assets

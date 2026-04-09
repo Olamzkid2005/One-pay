@@ -17,15 +17,15 @@ from contextlib import contextmanager
 
 @pytest.fixture
 def app():
-    """Create test Flask app."""
-    app = Flask(__name__)
-    app.config['SECRET_KEY'] = 'test-secret'
-    app.config['TESTING'] = True
+    """Create test Flask app with error handlers."""
+    from app import create_app
+    import os
     
-    # Register webhooks blueprint
-    from blueprints.webhooks import webhooks_bp
-    app.register_blueprint(webhooks_bp, url_prefix="/api/v1")
+    # Set test environment
+    os.environ['APP_ENV'] = 'testing'
+    os.environ['INBOUND_WEBHOOK_SECRET'] = 'test-secret-32-characters-long!'
     
+    app = create_app()
     return app
 
 
@@ -68,7 +68,7 @@ class TestWebhookSignatureFailureHandling:
             # Verify error response format
             data = response.get_json()
             assert data['success'] is False
-            assert data['error_code'] == 'UNAUTHORIZED'
+            assert data['error_code'] == 'AUTHENTICATION_ERROR'
             assert 'signature' in data['message'].lower()
     
     def test_missing_signature_returns_401(self, client):
@@ -97,7 +97,7 @@ class TestWebhookSignatureFailureHandling:
             # Verify error response format
             data = response.get_json()
             assert data['success'] is False
-            assert data['error_code'] == 'UNAUTHORIZED'
+            assert data['error_code'] == 'AUTHENTICATION_ERROR'
     
     def test_signature_failure_logs_client_ip(self, client):
         """

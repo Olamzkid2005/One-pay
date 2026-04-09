@@ -105,10 +105,7 @@ def validate_url_for_ssrf(url: str) -> Tuple[bool, Optional[str], Optional[str]]
                     "DNS rebinding race condition suspected | url=%s hostname=%s ttl=%d min_ttl=%d",
                     url, hostname, ttl, MIN_SAFE_TTL
                 )
-                return False, None, (
-                    f"DNS TTL too low ({ttl}s < {MIN_SAFE_TTL}s). "
-                    "This may indicate a DNS rebinding attack. Request rejected for security."
-                )
+                return False, None, "The URL could not be validated"
             
             # Get first IP address from response
             ip = str(answers[0])
@@ -123,7 +120,7 @@ def validate_url_for_ssrf(url: str) -> Tuple[bool, Optional[str], Optional[str]]
                 "DNS resolution failed (no record) | url=%s hostname=%s error=%s",
                 url, hostname, str(e)
             )
-            return False, None, f"DNS resolution failed: {str(e)}"
+            return False, None, "The URL hostname could not be resolved"
         except dns.exception.Timeout as e:
             logger.warning(
                 "DNS resolution timeout | url=%s hostname=%s error=%s",
@@ -148,7 +145,7 @@ def validate_url_for_ssrf(url: str) -> Tuple[bool, Optional[str], Optional[str]]
                     "DNS resolution failed | url=%s hostname=%s error=%s",
                     url, hostname, str(socket_error)
                 )
-                return False, None, f"DNS resolution failed: {str(socket_error)}"
+                return False, None, "The URL hostname could not be resolved"
         
         # Additional check for AWS metadata endpoint (common SSRF target)
         # Check this BEFORE general private IP checks for specific error message
@@ -157,7 +154,7 @@ def validate_url_for_ssrf(url: str) -> Tuple[bool, Optional[str], Optional[str]]
                 "SSRF attempt blocked (AWS metadata) | url=%s hostname=%s ip=%s",
                 url, hostname, ip
             )
-            return False, None, "Access to AWS metadata endpoint is not allowed"
+            return False, None, "The URL resolves to a restricted address"
         
         # Requirement 3.2: Check if IP is private/internal
         try:
@@ -167,7 +164,7 @@ def validate_url_for_ssrf(url: str) -> Tuple[bool, Optional[str], Optional[str]]
                 "Invalid IP address | url=%s hostname=%s ip=%s error=%s",
                 url, hostname, ip, str(e)
             )
-            return False, None, f"Invalid IP address: {str(e)}"
+            return False, None, "The URL could not be validated"
         
         # Check against all private network ranges
         for network in PRIVATE_NETWORKS:
@@ -176,7 +173,7 @@ def validate_url_for_ssrf(url: str) -> Tuple[bool, Optional[str], Optional[str]]
                     "SSRF attempt blocked | url=%s hostname=%s ip=%s network=%s",
                     url, hostname, ip, network
                 )
-                return False, None, f"Private IP address not allowed: {ip} (network: {network})"
+                return False, None, "The URL resolves to a restricted address"
         
         # Requirement 3.3: Return resolved IP for Host header binding
         logger.info(
@@ -190,7 +187,7 @@ def validate_url_for_ssrf(url: str) -> Tuple[bool, Optional[str], Optional[str]]
             "URL validation error | url=%s error=%s",
             url, str(e)
         )
-        return False, None, f"Validation error: {str(e)}"
+        return False, None, "The URL could not be validated"
 
 
 def is_private_ip(ip_str: str) -> bool:

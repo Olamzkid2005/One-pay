@@ -116,6 +116,7 @@ class TestGoogleOAuthCallback:
                 mock_existing_user.google_id = None
                 mock_existing_user.id = 1
                 mock_existing_user.username = 'existinguser'
+                mock_existing_user.two_factor_enabled = False
                 
                 mock_db.query().filter().first.side_effect = [
                     None,  # No user with google_id
@@ -155,6 +156,7 @@ class TestGoogleOAuthCallback:
                 mock_user = Mock()
                 mock_user.id = 1
                 mock_user.username = 'testuser'
+                mock_user.two_factor_enabled = False
                 mock_db.query().filter().first.return_value = mock_user
                 
                 with patch('blueprints.auth.check_rate_limit', return_value=True):
@@ -339,6 +341,7 @@ class TestGoogleOAuthCallback:
                 mock_user = Mock()
                 mock_user.id = 1
                 mock_user.username = 'testuser'
+                mock_user.two_factor_enabled = False
                 mock_db.query().filter().first.return_value = mock_user
                 
                 with patch('blueprints.auth.check_rate_limit', return_value=True):

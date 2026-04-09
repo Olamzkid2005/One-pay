@@ -145,7 +145,7 @@ def create_invoice():
                     e,
                 )
                 from core.exceptions import OnePayError
-                raise OnePayError("Failed to create invoice", "INTERNAL_ERROR", 500)
+                raise OnePayError("Unable to create invoice. Please try again later.", "INVOICE_CREATION_FAILED", 500)
 
             # Optionally send email if auto_send_email enabled
             auto_send_email = data.get("auto_send_email", False)
@@ -367,7 +367,7 @@ def list_invoices():
                 "Invoice list failed | user_id=%d error=%s", current_user_id(), e
             )
             from core.exceptions import OnePayError
-            raise OnePayError("Failed to retrieve invoices", "INTERNAL_ERROR", 500)
+            raise OnePayError("Unable to retrieve invoices. Please try again later.", "INVOICE_LIST_FAILED", 500)
 
 
 # ── Get invoice details ────────────────────────────────────────────────────────
@@ -505,7 +505,7 @@ def download_invoice(invoice_number):
                 invoice.transaction_id,
             )
             from core.exceptions import OnePayError
-            raise OnePayError("Transaction not found", "INTERNAL_ERROR", 500)
+            raise OnePayError("Unable to process invoice. Please contact support.", "INVOICE_ERROR", 500)
 
         # Generate PDF using InvoiceService
         try:
@@ -558,7 +558,7 @@ def download_invoice(invoice_number):
                 e,
             )
             from core.exceptions import OnePayError
-            raise OnePayError("PDF generation timed out", "PDF_GENERATION_TIMEOUT", 500)
+            raise OnePayError("Unable to generate invoice PDF. Please try again later.", "PDF_TIMEOUT", 500)
         except Exception as e:
             logger.error(
                 "PDF generation failed | invoice=%s user_id=%d error=%s",
@@ -567,7 +567,7 @@ def download_invoice(invoice_number):
                 e,
             )
             from core.exceptions import OnePayError
-            raise OnePayError("Failed to generate PDF", "PDF_GENERATION_ERROR", 500)
+            raise OnePayError("Unable to generate invoice PDF. Please try again later.", "PDF_ERROR", 500)
 
 
 # ── Send invoice via email ─────────────────────────────────────────────────────
@@ -641,7 +641,7 @@ def send_invoice(invoice_number):
                 invoice.transaction_id,
             )
             from core.exceptions import OnePayError
-            raise OnePayError("Transaction not found", "INTERNAL_ERROR", 500)
+            raise OnePayError("Unable to process invoice. Please contact support.", "INVOICE_ERROR", 500)
 
         # Generate PDF
         try:
@@ -712,7 +712,7 @@ def send_invoice(invoice_number):
                     current_user_id(),
                 )
                 from core.exceptions import OnePayError
-                raise OnePayError("Failed to send invoice email", "EMAIL_DELIVERY_FAILED", 500)
+                raise OnePayError("Unable to send invoice email. Please try again later.", "EMAIL_ERROR", 500)
 
         except TimeoutError as e:
             logger.error(
@@ -722,7 +722,7 @@ def send_invoice(invoice_number):
                 e,
             )
             from core.exceptions import OnePayError
-            raise OnePayError("PDF generation timed out", "PDF_GENERATION_TIMEOUT", 500)
+            raise OnePayError("Unable to generate invoice PDF. Please try again later.", "PDF_TIMEOUT", 500)
         except Exception as e:
             logger.error(
                 "Invoice email failed | invoice=%s user_id=%d error=%s",
@@ -731,7 +731,7 @@ def send_invoice(invoice_number):
                 e,
             )
             from core.exceptions import OnePayError
-            raise OnePayError("Failed to send invoice", "INTERNAL_ERROR", 500)
+            raise OnePayError("Unable to send invoice. Please try again later.", "INVOICE_SEND_ERROR", 500)
 
 
 # ── Get invoice settings ───────────────────────────────────────────────────────
@@ -853,7 +853,7 @@ def update_invoice_settings():
                         logo_url,
                         error_msg,
                     )
-                    raise ValidationError(f"Invalid logo URL: {error_msg}")
+                    raise ValidationError("The provided logo URL is not valid or accessible")
 
                 # Validate URL is accessible and returns an image
                 # Use resolved IP with Host header to prevent DNS rebinding (Requirement 3.3)
@@ -981,4 +981,4 @@ def update_invoice_settings():
                 e,
             )
             from core.exceptions import OnePayError
-            raise OnePayError("Failed to update invoice settings", "INTERNAL_ERROR", 500)
+            raise OnePayError("Unable to update settings. Please try again later.", "SETTINGS_ERROR", 500)

@@ -28,6 +28,7 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
+from typing import Optional
 
 import requests
 
@@ -35,6 +36,15 @@ from config import Config
 from services.cache import cache_delete
 
 logger = logging.getLogger(__name__)
+
+
+def _get_correlation_id() -> Optional[str]:
+    """Return the current request's correlation ID, or None outside request context."""
+    try:
+        from flask import g
+        return g.get("correlation_id")
+    except RuntimeError:
+        return None
 
 
 def verify_inbound_webhook_signature(payload: bytes, signature: str) -> bool:
@@ -404,6 +414,9 @@ def deliver_webhook_from_dict(wh_data: dict) -> bool:
         "X-OnePay-Signature": _sign_payload(payload_bytes),
         "User-Agent": "OnePay-Webhook/1.0",
     }
+    correlation_id = _get_correlation_id()
+    if correlation_id:
+        headers["X-Correlation-ID"] = correlation_id
     return _send_with_retries(url, payload_bytes, headers, wh_data.get("tx_ref", "?"))
 
 
@@ -486,6 +499,9 @@ def deliver_webhook(db, transaction) -> bool:
         "X-OnePay-Signature": _sign_payload(payload_bytes),
         "User-Agent": "OnePay-Webhook/1.0",
     }
+    correlation_id = _get_correlation_id()
+    if correlation_id:
+        headers["X-Correlation-ID"] = correlation_id
 
     try:
         success = _send_with_retries(url, payload_bytes, headers, transaction.tx_ref)

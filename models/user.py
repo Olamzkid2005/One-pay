@@ -37,6 +37,8 @@ class User(Base):
     two_factor_enabled     = Column(Boolean, default=True)
     email_otp              = Column(String(10), nullable=True)
     email_otp_expires_at   = Column(DateTime(timezone=True), nullable=True)
+    failed_2fa_attempts    = Column(Integer, default=0)
+    twofa_locked_until     = Column(DateTime(timezone=True), nullable=True)
 
     # OAuth provider data
     google_id           = Column(String(255), unique=True, index=True, nullable=True)
@@ -78,6 +80,26 @@ class User(Base):
         """Reset lockout state on successful login."""
         self.failed_login_attempts = 0
         self.locked_until = None
+
+    def is_2fa_locked(self) -> bool:
+        """Return True if the account is temporarily locked due to failed 2FA attempts."""
+        if not self.twofa_locked_until:
+            return False
+        locked_until = self.twofa_locked_until
+        if locked_until.tzinfo is None:
+            locked_until = locked_until.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) < locked_until
+
+    def record_failed_2fa(self, max_attempts: int = 5, window_secs: int = 900):
+        """Increment failed 2FA attempts and lock account if threshold reached."""
+        self.failed_2fa_attempts = (self.failed_2fa_attempts or 0) + 1
+        if self.failed_2fa_attempts >= max_attempts:
+            self.twofa_locked_until = datetime.now(timezone.utc) + timedelta(seconds=window_secs)
+
+    def record_successful_2fa(self):
+        """Reset 2FA lockout state on successful verification."""
+        self.failed_2fa_attempts = 0
+        self.twofa_locked_until = None
 
     def __repr__(self):
         return f"<User(username={self.username})>"

@@ -1,4 +1,0 @@
-# file: /Users/mac/Documents/One-pay/services/security.py
-# hypothesis_version: 6.141.1
-
-[500, '%Y%m%d%H%M%S', '/', '//', '0.01', '127.0.0.1', '169.254.169.254', '::1', '=', 'Webhook URL', 'https', 'localhost', 'utf-8']

@@ -76,10 +76,10 @@ class InvoiceService:
                 )
                 if attempt == max_retries - 1:
                     raise RuntimeError(
-                        f"Failed to generate invoice number after {max_retries} attempts"
+                        "Unable to generate invoice number. Please try again."
                     ) from e
 
-        raise RuntimeError("Failed to generate invoice number")
+        raise RuntimeError("Unable to generate invoice number. Please try again.")
 
     def create_invoice(
         self,
@@ -159,7 +159,7 @@ class InvoiceService:
                     )
                     if attempt == max_retries - 1:
                         raise RuntimeError(
-                            "Failed to create invoice after multiple retries due to number collision"
+                            "Unable to create invoice. Please try again."
                         ) from e
                     continue
                 else:
@@ -176,7 +176,7 @@ class InvoiceService:
             )
             return invoice
 
-        raise RuntimeError("Failed to create invoice")
+        raise RuntimeError("Unable to create invoice. Please try again.")
 
     def get_invoice_by_number(
         self, db: Session, invoice_number: str, user_id: int
@@ -468,7 +468,7 @@ class InvoiceService:
             # Check for errors
             if pisa_status.err:
                 raise Exception(
-                    f"PDF generation error: {pisa_status.err} errors occurred"
+                    "Unable to generate PDF. Please try again."
                 )
 
             # Get PDF bytes

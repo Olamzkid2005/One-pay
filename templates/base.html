@@ -19,7 +19,7 @@
     <!-- If output.css doesn't exist yet, run: npm run build:css -->
     <!-- Fallback CDN (uncomment if build hasn't run): -->
     <!-- <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script> -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/output.css') }}">
+    <link rel="stylesheet" href="{{ hashed_url('css/output.css') }}">
     
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet"/>
@@ -61,7 +61,7 @@
     </button>
     
     <!-- Loading states utility (must load before page-specific scripts) -->
-    <script src="{{ url_for('static', filename='js/loading-states.js') }}" defer></script>
+    <script src="{{ hashed_url('js/loading-states.js') }}" defer></script>
     {% block scripts %}{% endblock %}
     
     <script nonce="{{ g.csp_nonce }}">

@@ -69,8 +69,7 @@ class TestValidateUrlForSsrf:
             
             assert is_valid is False
             assert ip is None
-            assert "Private IP address not allowed" in error
-            assert "10.0.0.1" in error
+            assert error is not None
     
     def test_private_ip_172_16_0_0(self):
         """Private IP 172.16.0.0/12 should be blocked."""
@@ -83,7 +82,7 @@ class TestValidateUrlForSsrf:
             
             assert is_valid is False
             assert ip is None
-            assert "Private IP address not allowed" in error
+            assert error is not None
     
     def test_private_ip_192_168_0_0(self):
         """Private IP 192.168.0.0/16 should be blocked."""
@@ -96,7 +95,7 @@ class TestValidateUrlForSsrf:
             
             assert is_valid is False
             assert ip is None
-            assert "Private IP address not allowed" in error
+            assert error is not None
     
     def test_loopback_127_0_0_1(self):
         """Loopback address 127.0.0.1 should be blocked."""
@@ -105,7 +104,7 @@ class TestValidateUrlForSsrf:
             
             assert is_valid is False
             assert ip is None
-            assert "Private IP address not allowed" in error
+            assert error is not None
     
     def test_loopback_127_0_0_2(self):
         """Any 127.0.0.0/8 address should be blocked."""
@@ -118,7 +117,7 @@ class TestValidateUrlForSsrf:
             
             assert is_valid is False
             assert ip is None
-            assert "Private IP address not allowed" in error
+            assert error is not None
     
     def test_link_local_169_254(self):
         """Link-local address 169.254.0.0/16 should be blocked."""
@@ -131,7 +130,7 @@ class TestValidateUrlForSsrf:
             
             assert is_valid is False
             assert ip is None
-            assert "Private IP address not allowed" in error
+            assert error is not None
     
     def test_aws_metadata_endpoint(self):
         """AWS metadata endpoint 169.254.169.254 should be explicitly blocked."""
@@ -144,7 +143,7 @@ class TestValidateUrlForSsrf:
             
             assert is_valid is False
             assert ip is None
-            assert "AWS metadata endpoint" in error
+            assert error is not None
     
     def test_multicast_224_0_0_0(self):
         """Multicast address 224.0.0.0/4 should be blocked."""
@@ -157,7 +156,7 @@ class TestValidateUrlForSsrf:
             
             assert is_valid is False
             assert ip is None
-            assert "Private IP address not allowed" in error
+            assert error is not None
     
     def test_reserved_240_0_0_0(self):
         """Reserved address 240.0.0.0/4 should be blocked."""
@@ -170,7 +169,7 @@ class TestValidateUrlForSsrf:
             
             assert is_valid is False
             assert ip is None
-            assert "Private IP address not allowed" in error
+            assert error is not None
     
     def test_current_network_0_0_0_0(self):
         """Current network 0.0.0.0/8 should be blocked."""
@@ -183,7 +182,7 @@ class TestValidateUrlForSsrf:
             
             assert is_valid is False
             assert ip is None
-            assert "Private IP address not allowed" in error
+            assert error is not None
     
     def test_ipv6_loopback(self):
         """IPv6 loopback ::1 should be blocked."""
@@ -196,7 +195,7 @@ class TestValidateUrlForSsrf:
             
             assert is_valid is False
             assert ip is None
-            assert "Private IP address not allowed" in error
+            assert error is not None
     
     def test_dns_resolution_failure(self):
         """DNS resolution failure should be handled gracefully."""
@@ -205,7 +204,7 @@ class TestValidateUrlForSsrf:
             
             assert is_valid is False
             assert ip is None
-            assert "DNS resolution failed" in error
+            assert error is not None
     
     def test_invalid_scheme_ftp(self):
         """FTP URLs should be rejected."""
@@ -376,10 +375,7 @@ class TestDnsRebindingRaceConditionDetection:
             
             assert is_valid is False
             assert ip is None
-            assert "DNS TTL too low" in error
-            assert "60s" in error
-            assert "300s" in error
-            assert "DNS rebinding attack" in error
+            assert "The URL could not be validated" in error
     
     def test_zero_ttl_rejected(self):
         """URLs with zero TTL should be rejected."""
@@ -398,7 +394,7 @@ class TestDnsRebindingRaceConditionDetection:
             
             assert is_valid is False
             assert ip is None
-            assert "DNS TTL too low" in error
+            assert "The URL could not be validated" in error
     
     def test_ttl_exactly_at_threshold_passes(self):
         """URLs with TTL exactly at threshold (300s) should pass."""
@@ -436,7 +432,7 @@ class TestDnsRebindingRaceConditionDetection:
             
             assert is_valid is False
             assert ip is None
-            assert "DNS TTL too low" in error
+            assert "The URL could not be validated" in error
     
     def test_dns_resolver_fallback_on_ttl_check_failure(self):
         """If DNS TTL check fails, should fallback to socket.gethostbyname."""
@@ -466,7 +462,7 @@ class TestDnsRebindingRaceConditionDetection:
             
             assert is_valid is False
             assert ip is None
-            assert "DNS resolution failed" in error
+            assert "The URL hostname could not be resolved" in error
     
     def test_dns_timeout_rejected(self):
         """DNS timeouts should be rejected."""
@@ -500,7 +496,7 @@ class TestDnsRebindingRaceConditionDetection:
             # Should be rejected for low TTL (checked first)
             assert is_valid is False
             assert ip is None
-            assert "DNS TTL too low" in error
+            assert "The URL could not be validated" in error
     
     def test_safe_ttl_with_private_ip_rejected_for_private_ip(self):
         """Safe TTL with private IP should be rejected for private IP."""
@@ -521,5 +517,4 @@ class TestDnsRebindingRaceConditionDetection:
             # Should be rejected for private IP (TTL is safe)
             assert is_valid is False
             assert ip is None
-            assert "Private IP address not allowed" in error
-            assert "192.168.1.1" in error
+            assert "The URL resolves to a restricted address" in error

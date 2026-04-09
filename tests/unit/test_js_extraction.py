@@ -69,7 +69,9 @@ class TestLoginHtmlReferences:
         Requirement 14.1: The extracted file must be referenced in the template.
         """
         content = self._read_login_html()
-        assert "login.js" in content, "login.html must reference login.js"
+        # Check for hashed_url helper or direct reference
+        assert ("login.js" in content or "hashed_url('js/login.js')" in content), \
+            "login.html must reference login.js"
 
     def test_login_html_uses_defer_attribute(self):
         """
@@ -111,6 +113,10 @@ class TestLoginPageRenders:
         flask_app.config["WTF_CSRF_ENABLED"] = False
         with flask_app.test_client() as c:
             yield c
+        
+        # Cleanup: Signal background threads to stop
+        if hasattr(flask_app, '_shutdown_event'):
+            flask_app._shutdown_event.set()
 
     def test_login_page_returns_200(self, client):
         """
@@ -128,7 +134,10 @@ class TestLoginPageRenders:
         Requirement 14.4: The rendered page must load the external JS file.
         """
         response = client.get("/api/v1/login")
-        assert b"login.js" in response.data
+        # Check for login.js with or without hash (e.g., login.3c8f8089.js)
+        import re
+        assert re.search(rb'login\.[a-f0-9]{8}\.js|login\.js', response.data), \
+            "Rendered page must reference login.js (with or without hash)"
 
     def test_login_page_contains_csp_nonce(self, client):
         """

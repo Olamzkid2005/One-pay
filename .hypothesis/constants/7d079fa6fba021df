@@ -1,4 +1,0 @@
-# file: /Users/mac/Documents/One-pay/blueprints/webhooks.py
-# hypothesis_version: 6.141.1
-
-[400, 401, 404, 'BAD_REQUEST', 'Invalid signature', 'Invalid status', 'NOT_FOUND', 'POST', 'UNAUTHORIZED', 'VALIDATION_ERROR', 'X-Webhook-Signature', 'sha256=', 'status', 'success', 'tx_ref', 'utf-8', 'webhooks']

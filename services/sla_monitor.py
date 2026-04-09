@@ -142,48 +142,50 @@ class SLAMonitor:
         """
         violations = []
 
+        # Get metrics without holding lock (methods acquire their own locks)
+        va_p95 = self.get_p95_response_time("create_virtual_account")
+        ts_p95 = self.get_p95_response_time("confirm_transfer")
+        success_rate = self.get_success_rate()
+
+        # Check virtual account creation SLA
+        if va_p95 > self.config.virtual_account_creation_p95_ms:
+            violations.append(SLAViolation(
+                violation_type=SLAVioLationType.RESPONSE_TIME,
+                endpoint="create_virtual_account",
+                measured_value=va_p95,
+                threshold=self.config.virtual_account_creation_p95_ms,
+                timestamp=datetime.now(timezone.utc)
+            ))
+
+        # Check transfer status SLA
+        if ts_p95 > self.config.transfer_status_p95_ms:
+            violations.append(SLAViolation(
+                violation_type=SLAVioLationType.RESPONSE_TIME,
+                endpoint="confirm_transfer",
+                measured_value=ts_p95,
+                threshold=self.config.transfer_status_p95_ms,
+                timestamp=datetime.now(timezone.utc)
+            ))
+
+        # Check success rate SLA
+        if success_rate < self.config.min_success_rate_percent:
+            violations.append(SLAViolation(
+                violation_type=SLAVioLationType.SUCCESS_RATE,
+                endpoint="all",
+                measured_value=success_rate,
+                threshold=self.config.min_success_rate_percent,
+                timestamp=datetime.now(timezone.utc)
+            ))
+
+        # Update violation tracking (needs lock for shared state)
         with self._lock:
-            # Check virtual account creation SLA
-            va_p95 = self.get_p95_response_time("create_virtual_account")
-            if va_p95 > self.config.virtual_account_creation_p95_ms:
-                violations.append(SLAViolation(
-                    violation_type=SLAVioLationType.RESPONSE_TIME,
-                    endpoint="create_virtual_account",
-                    measured_value=va_p95,
-                    threshold=self.config.virtual_account_creation_p95_ms,
-                    timestamp=datetime.now(timezone.utc)
-                ))
-
-            # Check transfer status SLA
-            ts_p95 = self.get_p95_response_time("confirm_transfer")
-            if ts_p95 > self.config.transfer_status_p95_ms:
-                violations.append(SLAViolation(
-                    violation_type=SLAVioLationType.RESPONSE_TIME,
-                    endpoint="confirm_transfer",
-                    measured_value=ts_p95,
-                    threshold=self.config.transfer_status_p95_ms,
-                    timestamp=datetime.now(timezone.utc)
-                ))
-
-            # Check success rate SLA
-            success_rate = self.get_success_rate()
-            if success_rate < self.config.min_success_rate_percent:
-                violations.append(SLAViolation(
-                    violation_type=SLAVioLationType.SUCCESS_RATE,
-                    endpoint="all",
-                    measured_value=success_rate,
-                    threshold=self.config.min_success_rate_percent,
-                    timestamp=datetime.now(timezone.utc)
-                ))
-
-        # Update violation tracking
-        if violations:
-            self._consecutive_violations += 1
-            self._violations.extend(violations)
-            logger.warning(f"SLA violations detected: {len(violations)}, consecutive: {self._consecutive_violations}")
-        else:
-            self._consecutive_violations = 0
-            logger.debug("No SLA violations detected")
+            if violations:
+                self._consecutive_violations += 1
+                self._violations.extend(violations)
+                logger.warning(f"SLA violations detected: {len(violations)}, consecutive: {self._consecutive_violations}")
+            else:
+                self._consecutive_violations = 0
+                logger.debug("No SLA violations detected")
 
         return violations
 
@@ -216,14 +218,19 @@ class SLAMonitor:
         Returns:
             Dict with current metrics
         """
+        # Get metrics without holding lock (methods acquire their own locks)
+        success_rate = self.get_success_rate()
+        va_p95 = self.get_p95_response_time("create_virtual_account")
+        ts_p95 = self.get_p95_response_time("confirm_transfer")
+        
         with self._lock:
             return {
-                "success_rate": round(self.get_success_rate(), 2),
+                "success_rate": round(success_rate, 2),
                 "total_requests": self._success_count + self._failure_count,
                 "successful_requests": self._success_count,
                 "failed_requests": self._failure_count,
-                "create_virtual_account_p95_ms": round(self.get_p95_response_time("create_virtual_account"), 2),
-                "confirm_transfer_p95_ms": round(self.get_p95_response_time("confirm_transfer"), 2),
+                "create_virtual_account_p95_ms": round(va_p95, 2),
+                "confirm_transfer_p95_ms": round(ts_p95, 2),
                 "consecutive_violations": self._consecutive_violations,
                 "should_alert": self.should_alert()
             }

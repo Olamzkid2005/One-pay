@@ -110,9 +110,17 @@ def test_validate_api_key_valid(db_session, monkeypatch):
     assert user_id == 1
 
 
-def test_validate_api_key_invalid():
+def test_validate_api_key_invalid(db_session, monkeypatch):
     """Test that invalid API keys are rejected"""
     from core.api_auth import validate_api_key
+    from contextlib import contextmanager
+    
+    # Mock get_db to return our test session
+    @contextmanager
+    def mock_get_db():
+        yield db_session
+    
+    monkeypatch.setattr('core.api_auth.get_db', mock_get_db)
     
     # Invalid format
     is_valid, user_id = validate_api_key("invalid_key")

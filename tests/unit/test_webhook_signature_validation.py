@@ -125,7 +125,7 @@ class TestWebhookSignatureVerification:
         signature = f"sha256={computed_sig}"
         
         # Act
-        with patch('config.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
+        with patch('services.webhook.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
             result = verify_inbound_webhook_signature(payload, signature)
         
         # Assert
@@ -147,7 +147,7 @@ class TestWebhookSignatureVerification:
         invalid_signature = "sha256=" + ("0" * 64)  # Wrong signature
         
         # Act
-        with patch('config.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
+        with patch('services.webhook.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
             result = verify_inbound_webhook_signature(payload, invalid_signature)
         
         # Assert
@@ -164,7 +164,7 @@ class TestWebhookSignatureVerification:
         payload = b'{"tx_ref":"ONEPAY-TEST-123","status":"verified"}'
         
         # Act & Assert
-        with patch('config.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
+        with patch('services.webhook.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
             # None signature
             assert verify_inbound_webhook_signature(payload, None) is False
             
@@ -189,7 +189,7 @@ class TestWebhookSignatureVerification:
         ).hexdigest()
         
         # Act
-        with patch('config.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
+        with patch('services.webhook.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
             result = verify_inbound_webhook_signature(payload, computed_sig)
         
         # Assert
@@ -206,7 +206,7 @@ class TestWebhookSignatureVerification:
         signature = "sha256=" + ("0" * 64)
         
         # Act
-        with patch('config.Config.INBOUND_WEBHOOK_SECRET', ""):
+        with patch('services.webhook.Config.INBOUND_WEBHOOK_SECRET', ""):
             result = verify_inbound_webhook_signature(payload, signature)
         
         # Assert
@@ -232,7 +232,7 @@ class TestWebhookSignatureVerification:
         signature1 = f"sha256={computed_sig}"
         
         # Act & Assert
-        with patch('config.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
+        with patch('services.webhook.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
             # Signature1 should work for payload1
             assert verify_inbound_webhook_signature(payload1, signature1) is True
             
@@ -260,7 +260,7 @@ class TestWebhookSignatureVerification:
         valid_signature = f"sha256={computed_sig}"
         
         # Act & Assert - verify function works correctly with timing-safe comparison
-        with patch('config.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
+        with patch('services.webhook.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
             # Valid signature
             assert verify_inbound_webhook_signature(payload, valid_signature) is True
             
@@ -302,7 +302,7 @@ class TestWebhookSignatureEdgeCases:
         signature = f"sha256={computed_sig}"
         
         # Act
-        with patch('config.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
+        with patch('services.webhook.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
             result = verify_inbound_webhook_signature(payload, signature)
         
         # Assert
@@ -325,7 +325,7 @@ class TestWebhookSignatureEdgeCases:
         signature = f"sha256={computed_sig}"
         
         # Act
-        with patch('config.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
+        with patch('services.webhook.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
             result = verify_inbound_webhook_signature(payload, signature)
         
         # Assert
@@ -347,7 +347,7 @@ class TestWebhookSignatureEdgeCases:
         ).hexdigest()
         
         # Act & Assert
-        with patch('config.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
+        with patch('services.webhook.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
             # Wrong prefix should fail
             assert verify_inbound_webhook_signature(payload, f"sha512={computed_sig}") is False
             assert verify_inbound_webhook_signature(payload, f"md5={computed_sig}") is False
@@ -372,7 +372,7 @@ class TestWebhookSignatureEdgeCases:
         signature = f"sha256={computed_sig}"
         
         # Act
-        with patch('config.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
+        with patch('services.webhook.Config.INBOUND_WEBHOOK_SECRET', webhook_secret):
             result = verify_inbound_webhook_signature(payload, signature)
         
         # Assert

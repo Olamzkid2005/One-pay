@@ -1,4 +1,0 @@
-# file: /Users/mac/Documents/One-pay/core/responses.py
-# hypothesis_version: 6.141.1
-
-[401, 429, 'RATE_LIMITED', 'UNAUTHENTICATED', 'error_code', 'message', 'success']

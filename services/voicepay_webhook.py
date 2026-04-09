@@ -152,6 +152,16 @@ def send_voicepay_webhook(
         "User-Agent": "OnePay-Webhook/1.0"
     }
     
+    # Forward correlation ID if available (Requirement 22.4)
+    try:
+        from flask import g
+        correlation_id = g.get("correlation_id")
+        if correlation_id:
+            headers["X-Correlation-ID"] = correlation_id
+    except RuntimeError:
+        # Outside Flask request context — skip
+        pass
+    
     # Retry logic with exponential backoff
     last_error = None
     for attempt in range(1, max_retries + 1):

@@ -140,6 +140,28 @@ class BaseConfig:
     GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI", "")
 
     @classmethod
+    def reload(cls):
+        """
+        Reload configuration from environment variables.
+        
+        This is useful in tests when environment variables are changed
+        via monkeypatch after the config class has been imported.
+        """
+        # Reload all config values from environment
+        cls.SECRET_KEY = os.getenv("SECRET_KEY", "change-this-in-production")
+        cls.HMAC_SECRET = os.getenv("HMAC_SECRET", "change-this-hmac-secret")
+        cls.HMAC_SECRET_OLD = os.getenv("HMAC_SECRET_OLD", "")
+        cls.KORAPAY_SECRET_KEY = os.getenv("KORAPAY_SECRET_KEY", "")
+        cls.KORAPAY_WEBHOOK_SECRET = os.getenv("KORAPAY_WEBHOOK_SECRET", "")
+        cls.INBOUND_WEBHOOK_SECRET = os.getenv("INBOUND_WEBHOOK_SECRET", "")
+        cls.WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
+        cls.VOICEPAY_WEBHOOK_SECRET = os.getenv("VOICEPAY_WEBHOOK_SECRET", "")
+        cls.VOICEPAY_WEBHOOK_SECRET_SANDBOX = os.getenv("VOICEPAY_WEBHOOK_SECRET_SANDBOX", "")
+        cls.VOICEPAY_API_KEY = os.getenv("VOICEPAY_API_KEY", "")
+        cls.GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+        cls.GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
+
+    @classmethod
     def validate(cls):
         """Enforce strong secrets in production. Called explicitly from app factory."""
         import logging as _logging
@@ -147,6 +169,11 @@ class BaseConfig:
         import os as _os
 
         _logger = _logging.getLogger(__name__)
+
+        # Skip validation in testing environment
+        app_env = _os.getenv("APP_ENV", "development").lower()
+        if app_env == "testing" or cls.TESTING:
+            return
 
         errors = []
         warnings = []
@@ -170,9 +197,6 @@ class BaseConfig:
             errors.append("SECRET_KEY and HMAC_SECRET must be different")
         if cls.WEBHOOK_SECRET and cls.WEBHOOK_SECRET == cls.HMAC_SECRET:
             errors.append("WEBHOOK_SECRET and HMAC_SECRET must be different")
-
-        # Check DEBUG mode in production
-        app_env = _os.getenv("APP_ENV", "development").lower()
 
         # Check inbound webhook secret (required in all environments)
         if not cls.INBOUND_WEBHOOK_SECRET:

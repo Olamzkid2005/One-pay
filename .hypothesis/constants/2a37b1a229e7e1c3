@@ -1,4 +1,0 @@
-# file: /Users/mac/Documents/One-pay/services/voicepay_webhook.py
-# hypothesis_version: 6.141.1
-
-[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 100, 200, 300, 500, 1000, 5000, 10000, 50000, 100000, 'Content-Type', 'NGN', 'OnePay-Webhook/1.0', 'User-Agent', 'X-OnePay-Signature', 'amount', 'application/json', 'currency', 'customer_email', 'description', 'error', 'event', 'failure', 'payment.verified', 'response', 'status', 'status_code', 'success', 'tx_ref', 'utf-8', 'value', 'verified_at']

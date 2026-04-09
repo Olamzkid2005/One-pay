@@ -56,7 +56,7 @@ def create_api_key():
         result = api_key.to_dict()
         result['api_key'] = key
         
-        return jsonify({"success": True, "api_key": result})
+        return jsonify({"success": True, "api_key": result}), 201
 
 
 @api_keys_bp.route("/api-keys/<int:key_id>", methods=["DELETE"])

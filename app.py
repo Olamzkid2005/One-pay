@@ -6,7 +6,9 @@ All routes live in blueprints:
   blueprints/public.py   — verify page, preview API, polling, health
 """
 
+import hashlib
 import logging
+import os
 import warnings
 import uuid
 import secrets
@@ -55,19 +57,21 @@ def _configure_logging():
     Use JSON structured logging in production, plain text in debug.
     JSON logs are easier to ingest in log aggregators (CloudWatch, Datadog, etc.)
     """
-    from core.logging_filters import SensitiveDataFilter
+    from core.logging_filters import SensitiveDataFilter, CorrelationIdFilter
 
     request_id_filter = RequestIdFilter()
+    correlation_id_filter = CorrelationIdFilter()
     sensitive_filter = SensitiveDataFilter()
 
     if Config.DEBUG:
         handler = logging.StreamHandler()
         handler.setFormatter(
             logging.Formatter(
-                "%(asctime)s  %(levelname)-8s  [%(request_id)s]  %(name)s — %(message)s"
+                "%(asctime)s  %(levelname)-8s  [%(request_id)s]  [%(correlation_id)s]  %(name)s — %(message)s"
             )
         )
         handler.addFilter(request_id_filter)
+        handler.addFilter(correlation_id_filter)
         handler.addFilter(sensitive_filter)
         root = logging.getLogger()
         root.handlers = [handler]
@@ -78,10 +82,11 @@ def _configure_logging():
 
             handler = logging.StreamHandler()
             formatter = jsonlogger.JsonFormatter(
-                "%(asctime)s %(levelname)s %(request_id)s %(name)s %(message)s"
+                "%(asctime)s %(levelname)s %(request_id)s %(correlation_id)s %(name)s %(message)s"
             )
             handler.setFormatter(formatter)
             handler.addFilter(request_id_filter)
+            handler.addFilter(correlation_id_filter)
             handler.addFilter(sensitive_filter)
             root = logging.getLogger()
             root.handlers = [handler]
@@ -90,10 +95,11 @@ def _configure_logging():
             handler = logging.StreamHandler()
             handler.setFormatter(
                 logging.Formatter(
-                    "%(asctime)s  %(levelname)-8s  [%(request_id)s]  %(name)s — %(message)s"
+                    "%(asctime)s  %(levelname)-8s  [%(request_id)s]  [%(correlation_id)s]  %(name)s — %(message)s"
                 )
             )
             handler.addFilter(request_id_filter)
+            handler.addFilter(correlation_id_filter)
             handler.addFilter(sensitive_filter)
             root = logging.getLogger()
             root.handlers = [handler]
@@ -141,6 +147,13 @@ def create_app() -> Flask:
             )
             assert Config.ENFORCE_HTTPS, "HTTPS must be enforced in production"
 
+    # ── Correlation ID tracing (Requirement 22) ────────────────────────────────
+    @app.before_request
+    def inject_correlation_id():
+        """Generate or extract correlation ID for request tracing."""
+        correlation_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        g.correlation_id = correlation_id
+
     # ── Request ID tracing ─────────────────────────────────────────────────────
     @app.before_request
     def inject_request_id():
@@ -180,6 +193,47 @@ def create_app() -> Flask:
     @app.after_request
     def add_request_id_header(response):
         response.headers["X-Request-ID"] = g.get("request_id", "")
+        response.headers["X-Correlation-ID"] = g.get("correlation_id", "")
+        return response
+
+    # ── Cache-Control headers for static assets (Requirement 23) ──────────────
+    @app.after_request
+    def add_cache_headers(response):
+        """
+        Add Cache-Control and ETag headers to static assets.
+
+        Versioned assets (8-char content hash before extension) get a
+        1-year max-age.  All other static assets get a 1-hour max-age.
+
+        Format: name.HASH.ext (e.g., output.a09f3865.css)
+
+        ETag is generated from the MD5 hash of the response body and supports
+        conditional requests via If-None-Match (returns 304 Not Modified).
+        """
+        if request.path.startswith("/static/"):
+            filename = request.path[len("/static/"):]
+            # Check for versioned format: name.HASH.ext
+            parts = filename.rsplit(".", 2)
+            if len(parts) == 3 and len(parts[1]) == 8 and parts[1].isalnum():
+                # Versioned asset — cache for 1 year
+                response.headers["Cache-Control"] = "public, max-age=31536000"
+            else:
+                # Non-versioned asset — cache for 1 hour
+                response.headers["Cache-Control"] = "public, max-age=3600"
+
+            # Generate ETag from content hash (quoted per HTTP spec)
+            # Buffer the response to allow reading its data (static files use streaming)
+            if response.direct_passthrough:
+                response.direct_passthrough = False
+            etag = '"' + hashlib.md5(response.get_data()).hexdigest() + '"'
+            response.headers["ETag"] = etag
+
+            # Handle conditional request: return 304 if ETag matches
+            if_none_match = request.headers.get("If-None-Match")
+            if if_none_match and if_none_match == etag:
+                response = response.__class__(status=304)
+                response.headers["ETag"] = etag
+
         return response
 
     # ── Invalidate pre-restart sessions ───────────────────────────────────────
@@ -383,6 +437,35 @@ def create_app() -> Flask:
 
         return response
 
+    # ── Asset manifest context processor (Requirement 23.4) ───────────────────
+    _asset_manifest: dict = {}
+
+    def _load_asset_manifest() -> dict:
+        """Load static/manifest.json once and cache it in memory."""
+        if not _asset_manifest:
+            manifest_path = os.path.join(app.root_path, "static", "manifest.json")
+            try:
+                with open(manifest_path) as f:
+                    import json
+                    _asset_manifest.update(json.load(f))
+            except (FileNotFoundError, ValueError):
+                pass  # Fall back to unhashed filenames
+        return _asset_manifest
+
+    @app.context_processor
+    def inject_hashed_assets():
+        """Expose a `hashed_url` helper to all templates."""
+        manifest = _load_asset_manifest()
+
+        def hashed_url(filename: str) -> str:
+            """Return url_for path using hashed filename if available."""
+            from flask import url_for as _url_for
+            # filename is relative to static/, e.g. "css/output.css" or "js/login.js"
+            hashed_path = manifest.get(filename, filename)
+            return _url_for("static", filename=hashed_path)
+
+        return {"hashed_url": hashed_url}
+
     # ── Blueprints ─────────────────────────────────────────────────────────────
     # Public routes (no versioning)
     app.register_blueprint(public_bp)
@@ -414,6 +497,12 @@ def create_app() -> Flask:
     @app.errorhandler(404)
     def not_found_error(error):
         """Handle 404 errors with a friendly message."""
+        logger.warning(
+            "Not found | path=%s method=%s correlation_id=%s",
+            request.path,
+            request.method,
+            g.get("correlation_id"),
+        )
         if request.path.startswith("/api/"):
             return jsonify(
                 {
@@ -429,7 +518,12 @@ def create_app() -> Flask:
         """Handle requests that exceed MAX_CONTENT_LENGTH."""
         from core.ip import client_ip
 
-        logger.warning("Request too large | ip=%s path=%s", client_ip(), request.path)
+        logger.warning(
+            "Request too large | ip=%s path=%s correlation_id=%s",
+            client_ip(),
+            request.path,
+            g.get("correlation_id"),
+        )
         return jsonify(
             {
                 "success": False,
@@ -444,9 +538,18 @@ def create_app() -> Flask:
         """Handle 500 errors without exposing stack traces."""
         # Only log full trace in debug mode
         if Config.DEBUG:
-            logger.error("Internal server error: %s", error, exc_info=True)
+            logger.error(
+                "Internal server error | correlation_id=%s error=%s",
+                g.get("correlation_id"),
+                error,
+                exc_info=True,
+            )
         else:
-            logger.error("Internal server error: %s", str(error)[:200])
+            logger.error(
+                "Internal server error | correlation_id=%s error=%s",
+                g.get("correlation_id"),
+                str(error)[:200],
+            )
 
         # Rollback any pending database transactions
         try:
@@ -471,6 +574,12 @@ def create_app() -> Flask:
     @app.errorhandler(403)
     def forbidden_error(error):
         """Handle 403 errors."""
+        logger.warning(
+            "Forbidden | path=%s method=%s correlation_id=%s",
+            request.path,
+            request.method,
+            g.get("correlation_id"),
+        )
         if request.path.startswith("/api/"):
             return jsonify(
                 {
@@ -491,7 +600,8 @@ def create_app() -> Flask:
 
         # Log full error server-side with context
         logger.error(
-            "Unexpected error: %s",
+            "Unexpected error | correlation_id=%s error=%s",
+            g.get("correlation_id"),
             str(error),
             exc_info=True,
             extra={
@@ -619,6 +729,9 @@ def create_app() -> Flask:
 
     # Shutdown event for background threads
     _shutdown_event = threading.Event()
+    
+    # Store shutdown event on app for testing
+    app._shutdown_event = _shutdown_event
 
     def _webhook_retry_loop():
         """Background thread that retries failed webhook deliveries."""
@@ -629,7 +742,7 @@ def create_app() -> Flask:
                 with get_db() as db:
                     retry_failed_webhooks(db)
             except Exception as e:
-                logger.error("Webhook retry loop error: %s")
+                logger.error("Webhook retry loop error: %s", e)
             if not _shutdown_event.is_set():
                 _shutdown_event.wait(60)
 
@@ -647,7 +760,7 @@ def create_app() -> Flask:
                             "Security monitoring detected %d alerts", len(alerts)
                         )
             except Exception as e:
-                logger.error("Security monitoring error: %s")
+                logger.error("Security monitoring error: %s", e)
             if not _shutdown_event.is_set():
                 _shutdown_event.wait(300)  # Every 5 minutes
 

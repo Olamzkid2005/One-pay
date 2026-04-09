@@ -151,7 +151,10 @@ class TestSLAMonitor:
 
     def test_consecutive_violations_increment(self):
         """Test consecutive violations counter increments on violations."""
-        config = SLAConfig(consecutive_violations_for_alert=3)
+        config = SLAConfig(
+            consecutive_violations_for_alert=3,
+            virtual_account_creation_p95_ms=100.0  # Set threshold below test values
+        )
         monitor = SLAMonitor(config)
 
         # Trigger violations 3 times
@@ -164,7 +167,10 @@ class TestSLAMonitor:
 
     def test_consecutive_violations_reset_on_no_violation(self):
         """Test consecutive violations reset when no violation."""
-        config = SLAConfig(consecutive_violations_for_alert=3)
+        config = SLAConfig(
+            consecutive_violations_for_alert=3,
+            virtual_account_creation_p95_ms=100.0  # Set threshold below test values
+        )
         monitor = SLAMonitor(config)
 
         # Trigger violation then no violation
@@ -180,7 +186,10 @@ class TestSLAMonitor:
 
     def test_should_alert_when_consecutive_met(self):
         """Test alert triggered when consecutive violations met."""
-        config = SLAConfig(consecutive_violations_for_alert=3)
+        config = SLAConfig(
+            consecutive_violations_for_alert=3,
+            virtual_account_creation_p95_ms=100.0  # Set threshold below test values
+        )
         monitor = SLAMonitor(config)
 
         # Trigger violations 3 times
@@ -193,7 +202,10 @@ class TestSLAMonitor:
 
     def test_should_alert_when_consecutive_not_met(self):
         """Test alert not triggered when consecutive violations not met."""
-        config = SLAConfig(consecutive_violations_for_alert=5)
+        config = SLAConfig(
+            consecutive_violations_for_alert=5,
+            virtual_account_creation_p95_ms=100.0  # Set threshold below test values
+        )
         monitor = SLAMonitor(config)
 
         # Trigger violations only 3 times
@@ -206,15 +218,18 @@ class TestSLAMonitor:
 
     def test_get_violations_since(self):
         """Test filtering violations by time."""
-        monitor = get_sla_monitor()
+        config = SLAConfig(virtual_account_creation_p95_ms=100.0)  # Set threshold below test values
+        monitor = SLAMonitor(config)
 
+        # Get timestamp before adding violations
+        since = datetime.now(timezone.utc)
+        
         # Add some violations
         for _ in range(100):
             monitor.record_request("create_virtual_account", 500.0, success=True)
         monitor.check_sla_violations()
 
-        # Get violations in last minute
-        since = datetime.now(timezone.utc)
+        # Get violations since the earlier timestamp
         violations = monitor.get_violations_since(since)
 
         assert len(violations) >= 1

@@ -6,6 +6,19 @@ import re
 import logging
 
 
+class CorrelationIdFilter(logging.Filter):
+    """Inject correlation_id from Flask g into every log record."""
+
+    def filter(self, record):
+        try:
+            from flask import g
+
+            record.correlation_id = g.get("correlation_id", "-")
+        except RuntimeError:
+            record.correlation_id = "-"
+        return True
+
+
 class SensitiveDataFilter(logging.Filter):
     """
     Redact sensitive data from log messages.

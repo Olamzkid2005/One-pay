@@ -12,11 +12,18 @@ def test_api_key_config_defaults():
     assert BaseConfig.API_KEY_GENERATION_RATE_LIMIT == 5
 
 
-def test_inbound_webhook_config_defaults():
+def test_inbound_webhook_config_defaults(monkeypatch):
     """Test inbound webhook configuration defaults"""
-    from config import BaseConfig
+    # Clear the env var to test the default
+    monkeypatch.delenv("INBOUND_WEBHOOK_SECRET", raising=False)
     
-    assert BaseConfig.INBOUND_WEBHOOK_SECRET == ""
+    # Reload config to pick up the change
+    import importlib
+    import config
+    importlib.reload(config)
+    
+    # Get BaseConfig from the reloaded module
+    assert config.BaseConfig.INBOUND_WEBHOOK_SECRET == ""
 
 
 def test_api_rate_limit_config_defaults():
