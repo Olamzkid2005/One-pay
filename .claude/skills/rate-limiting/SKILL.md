@@ -1,3 +1,7 @@
+---
+inclusion: auto
+---
+
 # Rate Limiting Skill
 
 Understand and debug rate limiting in OnePay.

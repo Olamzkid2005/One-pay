@@ -7,8 +7,9 @@ to external services (KoraPay API and webhook endpoints).
 **Validates: Requirements 22.4**
 """
 
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
 from flask import Flask, g
 
 
@@ -104,7 +105,7 @@ class TestKoraPayCorrelationIdForwarding:
             g.correlation_id = "test-correlation-456"
 
             service = KoraPayService()
-            
+
             # Make a request (will use mocked session)
             try:
                 service.create_virtual_account(
@@ -270,8 +271,9 @@ class TestWebhookCorrelationIdForwarding:
 
         **Validates: Requirements 22.4**
         """
-        from services.webhook import deliver_webhook
         from unittest.mock import MagicMock
+
+        from services.webhook import deliver_webhook
 
         app = Flask(__name__)
         with app.app_context():

@@ -1,3 +1,7 @@
+---
+inclusion: auto
+---
+
 # OAuth Integration Skill
 
 Test and debug Google and GitHub OAuth authentication.

@@ -5,8 +5,9 @@ Validates Requirement 4.5: WHERE the 2FA verification page is accessed without
 a pre_2fa_user_id in session, THE System SHALL redirect to the login page.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from flask import Flask
 
 

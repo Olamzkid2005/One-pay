@@ -3,14 +3,16 @@ OnePay — Audit log model
 Tracks security-relevant events for compliance and debugging.
 """
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Text, DateTime, Index
+
+from sqlalchemy import Column, DateTime, Index, Integer, String, Text
+
 from models.base import Base
 
 
 class AuditLog(Base):
     """
     Audit log for security-relevant events.
-    
+
     Events tracked:
     - merchant.login, merchant.login_failed, merchant.registered
     - link.created, link.reissued
@@ -32,7 +34,7 @@ class AuditLog(Base):
         Index("ix_audit_logs_user_created", "user_id", "created_at"),
     )
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return {
             "id":         self.id,
             "event":      self.event,

@@ -4,9 +4,11 @@ Provides a simple interface for logging security-relevant events.
 """
 import json
 import logging
-from typing import Optional, Any, Dict
 from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
+
 from sqlalchemy.orm import Session
+
 from models.audit_log import AuditLog
 
 logger = logging.getLogger(__name__)
@@ -18,11 +20,11 @@ def log_event(
     user_id: Optional[int] = None,
     tx_ref: Optional[str] = None,
     ip_address: Optional[str] = None,
-    detail: Optional[Dict[str, Any]] = None,
+    detail: Optional[dict[str, Any]] = None,
 ) -> None:
     """
     Log a security-relevant event to the audit log.
-    
+
     Args:
         db: Database session
         event: Event name (e.g., "merchant.login", "link.created")
@@ -33,8 +35,8 @@ def log_event(
     """
     try:
         detail_json = json.dumps(detail) if detail else None
-        
-        # Use a SAVEPOINT so an audit logging failure doesn't drop the entire surrounding transaction checkout 
+
+        # Use a SAVEPOINT so an audit logging failure doesn't drop the entire surrounding transaction checkout
         with db.begin_nested():
             audit = AuditLog(
                 event=event,
@@ -45,7 +47,7 @@ def log_event(
             )
             db.add(audit)
             db.flush()
-        
+
         logger.debug("Audit event logged: %s (user=%s, tx=%s)", event, user_id, tx_ref)
     except Exception as e:
         logger.error("Failed to log audit event %s: %s", event, e, exc_info=True)
@@ -55,11 +57,11 @@ def log_event(
 def cleanup_old_audit_logs(db: Session, retention_days: int = 90) -> int:
     """
     Delete audit logs older than retention_days.
-    
+
     Args:
         db: Database session
         retention_days: Number of days to retain logs (default 90)
-    
+
     Returns:
         Number of records deleted
     """

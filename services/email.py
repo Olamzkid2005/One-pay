@@ -7,10 +7,10 @@ import logging
 import smtplib
 import time
 from datetime import datetime, timezone
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
 from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from typing import Optional
 
 from config import Config
@@ -254,7 +254,7 @@ Powered by OnePay
         </div>
         <div class="content">
             <h2>Invoice {invoice.invoice_number}</h2>
-            
+
             <div class="invoice-summary">
                 <div class="invoice-row">
                     <span>Description:</span>
@@ -269,14 +269,14 @@ Powered by OnePay
                     <span>{invoice.status.value if hasattr(invoice.status, "value") else str(invoice.status)}</span>
                 </div>
             </div>
-            
+
             <p>Please find the complete invoice attached as a PDF.</p>
-            
+
             <p>You can pay online by clicking the button below:</p>
             <a href="{payment_url}" class="button">Pay Invoice</a>
-            
+
             {qr_code_html}
-            
+
             <p style="color: #57606a; font-size: 14px; margin-top: 30px;">
                 <strong>Payment Terms:</strong> {invoice.payment_terms or "Payment due upon receipt"}
             </p>
@@ -488,7 +488,7 @@ Thank you for using OnePay!
         </div>
         <div class="content">
             <h2>Transfer Details</h2>
-            
+
             <div class="details-table">
                 <div class="detail-row">
                     <span class="detail-label">Transaction Reference:</span>

@@ -1,8 +1,9 @@
 """API Key management endpoints"""
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, jsonify, request
+
 from core.auth import current_user_id
-from core.responses import unauthenticated
 from core.exceptions import ValidationError
+from core.responses import unauthenticated
 from database import get_db
 from models.api_key import APIKey
 
@@ -15,7 +16,7 @@ def list_api_keys():
     user_id = current_user_id()
     if not user_id:
         return unauthenticated()
-    
+
     with get_db() as db:
         keys = db.query(APIKey).filter(APIKey.user_id == user_id).all()
         return jsonify({
@@ -30,19 +31,17 @@ def create_api_key():
     user_id = current_user_id()
     if not user_id:
         return unauthenticated()
-    
+
     data = request.get_json(silent=True) or {}
     name = data.get('name', '')
-    
+
     with get_db() as db:
         from core.api_auth import generate_api_key, hash_api_key
-        
-        # Generate key
+
         key = generate_api_key()
         key_hash = hash_api_key(key)
         key_prefix = key[:20]
-        
-        # Create record
+
         api_key = APIKey(
             user_id=user_id,
             key_hash=key_hash,
@@ -51,31 +50,30 @@ def create_api_key():
         )
         db.add(api_key)
         db.flush()
-        
-        # Return full key (only time it's shown)
+
         result = api_key.to_dict()
         result['api_key'] = key
-        
+
         return jsonify({"success": True, "api_key": result}), 201
 
 
 @api_keys_bp.route("/api-keys/<int:key_id>", methods=["DELETE"])
-def revoke_api_key(key_id):
+def revoke_api_key(key_id: int):
     """Revoke (deactivate) an API key"""
     user_id = current_user_id()
     if not user_id:
         return unauthenticated()
-    
+
     with get_db() as db:
         api_key = db.query(APIKey).filter(
             APIKey.id == key_id,
             APIKey.user_id == user_id
         ).first()
-        
+
         if not api_key:
             raise ValidationError("API key not found")
-        
+
         api_key.is_active = False
         db.flush()
-        
+
         return jsonify({"success": True, "message": "API key revoked"})

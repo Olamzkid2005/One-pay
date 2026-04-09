@@ -1,7 +1,9 @@
 import logging
-import requests
-from typing import Dict, Optional
+from typing import Optional
 from urllib.parse import urlencode
+
+import requests
+
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -40,7 +42,7 @@ class GitHubOAuthService:
         return data["access_token"]
 
     @staticmethod
-    def get_user_profile(access_token: str) -> Dict:
+    def get_user_profile(access_token: str) -> dict:
         headers = {
             "Authorization": f"token {access_token}",
             "Accept": "application/vnd.github.v3+json",

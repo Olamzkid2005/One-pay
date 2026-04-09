@@ -7,12 +7,13 @@ This module tests the CircuitBreaker class functionality.
 Requirements: 26.1, 26.2, 26.3
 """
 
-import pytest
+import sys
 import time
+from pathlib import Path
 from unittest.mock import patch
 
-import sys
-from pathlib import Path
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 
@@ -66,7 +67,7 @@ class TestCircuitBreakerBasics:
 
     def test_circuit_breaker_blocks_calls_when_open(self):
         """Test circuit breaker blocks calls when OPEN."""
-        from services.korapay import CircuitBreaker, KoraPayError, CircuitBreakerState
+        from services.korapay import CircuitBreaker, CircuitBreakerState, KoraPayError
 
         cb = CircuitBreaker(failure_threshold=1)
 
@@ -150,6 +151,7 @@ class TestCircuitBreakerThreadSafety:
     def test_circuit_breaker_thread_safe(self):
         """Test circuit breaker handles concurrent access."""
         import threading
+
         from services.korapay import CircuitBreaker, CircuitBreakerState
 
         cb = CircuitBreaker(failure_threshold=100)

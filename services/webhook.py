@@ -50,101 +50,101 @@ def _get_correlation_id() -> Optional[str]:
 def verify_inbound_webhook_signature(payload: bytes, signature: str) -> bool:
     """
     Verify HMAC-SHA256 signature for inbound webhooks.
-    
+
     Uses constant-time comparison to prevent timing attacks.
     Extracts signature from request headers and compares against
     computed HMAC using INBOUND_WEBHOOK_SECRET.
-    
+
     Args:
         payload: Raw request body as bytes
         signature: Signature header value (format: "sha256=<hex>")
-    
+
     Returns:
         bool: True if signature is valid, False otherwise
-    
+
     **Validates: Requirements 1.2**
     """
     if not signature or not signature.startswith("sha256="):
         logger.warning("Invalid signature format | signature=%s", signature[:20] if signature else "None")
         return False
-    
+
     # Extract hex digest from "sha256=<hex>" format
     received_sig = signature[7:]
-    
+
     # Compute HMAC-SHA256 using configured secret
     secret = Config.INBOUND_WEBHOOK_SECRET
     if not secret:
         logger.error("INBOUND_WEBHOOK_SECRET not configured")
         return False
-    
+
     computed_sig = hmac.new(
         secret.encode("utf-8"),
         payload,
         hashlib.sha256
     ).hexdigest()
-    
+
     # Use constant-time comparison to prevent timing attacks
     is_valid = hmac.compare_digest(received_sig, computed_sig)
-    
+
     if not is_valid:
         logger.warning(
             "Signature verification failed | received=%s computed=%s",
             received_sig[:8],
             computed_sig[:8]
         )
-    
+
     return is_valid
 
 
 def check_webhook_idempotency(db, webhook_id: str, source: str) -> bool:
     """
     Check if webhook has already been processed.
-    
+
     Args:
         db: Database session
         webhook_id: Unique webhook identifier
         source: Webhook source (korapay, voicepay, etc.)
-    
+
     Returns:
         bool: True if webhook already processed, False otherwise
-    
+
     **Validates: Requirements 2.1, 2.2**
     """
     from models.webhook_idempotency import WebhookIdempotency
-    
+
     existing = (
         db.query(WebhookIdempotency)
         .filter(WebhookIdempotency.id == webhook_id)
         .filter(WebhookIdempotency.source == source)
         .first()
     )
-    
+
     return existing is not None
 
 
 def store_webhook_idempotency(db, webhook_id: str, source: str, tx_ref: str = None):
     """
     Store webhook identifier to prevent duplicate processing.
-    
+
     Args:
         db: Database session
         webhook_id: Unique webhook identifier
         source: Webhook source (korapay, voicepay, etc.)
         tx_ref: Associated transaction reference (optional)
-    
+
     **Validates: Requirements 2.3, 2.4**
     """
     from models.webhook_idempotency import WebhookIdempotency
-    
+
     idempotency_record = WebhookIdempotency(
         id=webhook_id,
         source=source,
         tx_ref=tx_ref
     )
-    
+
     db.add(idempotency_record)
     db.flush()
-    
+
     logger.debug(
         "Webhook idempotency stored | webhook_id=%s source=%s tx_ref=%s",
         webhook_id,
@@ -169,8 +169,8 @@ def _sign_payload(payload_bytes: bytes) -> str:
 def _blacklist_webhook(url: str, reason: str):
     """Add webhook URL to blacklist."""
     try:
-        from models.webhook_blacklist import WebhookBlacklist
         from database import get_db
+        from models.webhook_blacklist import WebhookBlacklist
 
         with get_db() as db:
             existing = (
@@ -189,6 +189,49 @@ def _blacklist_webhook(url: str, reason: str):
         logger.error("Failed to blacklist webhook | url=%s error=%s", url, e)
 
 
+def _resolve_and_validate_ip(url: str, hostname: str, tx_ref: str, attempt: int) -> Optional[str]:
+    """
+    Resolve hostname to IP and validate it's not private/internal.
+    Returns resolved IP string, or None if blocked (and blacklists the URL).
+    """
+    import ipaddress
+    import socket
+
+    ip = socket.gethostbyname(hostname)
+    ip_obj = ipaddress.ip_address(ip)
+
+    if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_multicast:
+        logger.error("DNS rebinding detected | tx_ref=%s url=%s ip=%s attempt=%d", tx_ref, url, ip, attempt)
+        _blacklist_webhook(url, f"DNS rebinding detected: {ip}")
+        return None
+
+    if ip.startswith("169.254."):
+        logger.error("AWS metadata access attempt | tx_ref=%s url=%s ip=%s", tx_ref, url, ip)
+        _blacklist_webhook(url, f"AWS metadata access: {ip}")
+        return None
+
+    logger.debug("Webhook DNS validated | tx_ref=%s hostname=%s ip=%s attempt=%d", tx_ref, hostname, ip, attempt)
+    return ip
+
+
+def _post_to_ip(url: str, ip: str, payload_bytes: bytes, headers: dict) -> object:
+    """POST payload to the resolved IP address with Host header."""
+    from urllib.parse import urlparse, urlunparse
+
+    parsed = urlparse(url)
+    ip_url = urlunparse((
+        parsed.scheme,
+        ip if not parsed.port else f"{ip}:{parsed.port}",
+        parsed.path, parsed.params, parsed.query, parsed.fragment,
+    ))
+    request_headers = headers.copy()
+    request_headers["Host"] = parsed.hostname
+    return requests.post(
+        ip_url, data=payload_bytes, headers=request_headers,
+        timeout=Config.WEBHOOK_TIMEOUT_SECS, allow_redirects=False, stream=True,
+    )
+
+
 def _send_with_retries(
     url: str, payload_bytes: bytes, headers: dict, tx_ref: str
 ) -> bool:
@@ -198,39 +241,26 @@ def _send_with_retries(
 
     Security: Validates URL and DNS on EVERY attempt to prevent DNS rebinding attacks.
     VULN-002 FIX: Forces request to use validated IP address to prevent TOCTOU race.
-    Maintains permanent blacklist of malicious URLs.
     """
-    from services.security import validate_webhook_url
-    from urllib.parse import urlparse, urlunparse
-    from models.webhook_blacklist import WebhookBlacklist
-    from database import get_db
     import socket
-    import ipaddress
+    from urllib.parse import urlparse
 
-    # Check blacklist FIRST
+    from database import get_db
+    from models.webhook_blacklist import WebhookBlacklist
+    from services.security import validate_webhook_url
+
     try:
         with get_db() as db:
-            blacklisted = (
-                db.query(WebhookBlacklist).filter(WebhookBlacklist.url == url).first()
-            )
+            blacklisted = db.query(WebhookBlacklist).filter(WebhookBlacklist.url == url).first()
             if blacklisted:
-                logger.error(
-                    "Webhook URL is blacklisted | tx_ref=%s url=%s reason=%s",
-                    tx_ref,
-                    url,
-                    blacklisted.reason,
-                )
+                logger.error("Webhook URL is blacklisted | tx_ref=%s url=%s reason=%s", tx_ref, url, blacklisted.reason)
                 return False
     except Exception as e:
         logger.error("Blacklist check failed: %s", e)
-        # Continue - don't block legitimate webhooks on DB errors
 
-    # Initial URL validation
     if not validate_webhook_url(url):
         _blacklist_webhook(url, "Failed URL validation")
-        logger.error(
-            "Webhook URL failed security validation | tx_ref=%s url=%s", tx_ref, url
-        )
+        logger.error("Webhook URL failed security validation | tx_ref=%s url=%s", tx_ref, url)
         return False
 
     parsed = urlparse(url)
@@ -243,96 +273,23 @@ def _send_with_retries(
     last_error = None
     for attempt in range(1, Config.WEBHOOK_MAX_RETRIES + 1):
         try:
-            # DNS rebinding protection: resolve and validate DNS on EVERY attempt
-            ip = socket.gethostbyname(hostname)
-            ip_obj = ipaddress.ip_address(ip)
+            ip = _resolve_and_validate_ip(url, hostname, tx_ref, attempt)
+            if ip is None:
+                return False  # Blacklisted by DNS check
 
-            if (
-                ip_obj.is_private
-                or ip_obj.is_loopback
-                or ip_obj.is_link_local
-                or ip_obj.is_multicast
-            ):
-                logger.error(
-                    "DNS rebinding detected | tx_ref=%s url=%s ip=%s attempt=%d",
-                    tx_ref,
-                    url,
-                    ip,
-                    attempt,
-                )
-                # CRITICAL: Blacklist immediately on DNS rebinding
-                _blacklist_webhook(url, f"DNS rebinding detected: {ip}")
-                return False  # ABORT IMMEDIATELY
+            resp = _post_to_ip(url, ip, payload_bytes, headers)
 
-            # Additional check: AWS metadata endpoint
-            if ip.startswith("169.254."):
-                logger.error(
-                    "AWS metadata access attempt | tx_ref=%s url=%s ip=%s",
-                    tx_ref,
-                    url,
-                    ip,
-                )
-                _blacklist_webhook(url, f"AWS metadata access: {ip}")
-                return False
-
-            logger.debug(
-                "Webhook DNS validated | tx_ref=%s hostname=%s ip=%s attempt=%d",
-                tx_ref,
-                hostname,
-                ip,
-                attempt,
-            )
-
-            # CRITICAL FIX (VULN-002): Force request to use validated IP address
-            # This prevents DNS rebinding TOCTOU attacks where DNS changes between
-            # validation and request
-            ip_url = urlunparse(
-                (
-                    parsed.scheme,
-                    ip if not parsed.port else f"{ip}:{parsed.port}",
-                    parsed.path,
-                    parsed.params,
-                    parsed.query,
-                    parsed.fragment,
-                )
-            )
-
-            # Add Host header to preserve virtual hosting
-            request_headers = headers.copy()
-            request_headers["Host"] = hostname
-
-            # Proceed with request to IP address (not hostname)
-            resp = requests.post(
-                ip_url,  # Use IP URL instead of hostname URL - prevents DNS rebinding
-                data=payload_bytes,
-                headers=request_headers,
-                timeout=Config.WEBHOOK_TIMEOUT_SECS,
-                allow_redirects=False,  # Prevent redirect-based SSRF
-                stream=True,  # Stream response to check size
-            )
-
-            # Check for redirect to internal IP
             if 300 <= resp.status_code < 400:
                 location = resp.headers.get("Location", "")
                 if location:
-                    logger.warning(
-                        "Webhook redirect detected | tx_ref=%s url=%s location=%s",
-                        tx_ref,
-                        url,
-                        location,
-                    )
+                    logger.warning("Webhook redirect detected | tx_ref=%s url=%s location=%s", tx_ref, url, location)
                     _blacklist_webhook(url, f"Redirect to {location}")
                     resp.close()
                     return False
 
-            # Check response size before reading
             content_length = resp.headers.get("Content-Length")
-            if content_length and int(content_length) > 1024 * 1024:  # 1MB limit
-                logger.warning(
-                    "Webhook response too large | tx_ref=%s size=%s",
-                    tx_ref,
-                    content_length,
-                )
+            if content_length and int(content_length) > 1024 * 1024:
+                logger.warning("Webhook response too large | tx_ref=%s size=%s", tx_ref, content_length)
                 resp.close()
                 last_error = "Response too large"
                 if attempt < Config.WEBHOOK_MAX_RETRIES:
@@ -340,48 +297,26 @@ def _send_with_retries(
                 continue
 
             if resp.status_code < 300:
-                logger.info(
-                    "Webhook delivered | tx_ref=%s url=%s status=%d attempt=%d",
-                    tx_ref,
-                    url,
-                    resp.status_code,
-                    attempt,
-                )
+                logger.info("Webhook delivered | tx_ref=%s url=%s status=%d attempt=%d", tx_ref, url, resp.status_code, attempt)
                 resp.close()
                 return True
+
             last_error = f"HTTP {resp.status_code}"
-            logger.warning(
-                "Webhook attempt %d failed | tx_ref=%s status=%d",
-                attempt,
-                tx_ref,
-                resp.status_code,
-            )
+            logger.warning("Webhook attempt %d failed | tx_ref=%s status=%d", attempt, tx_ref, resp.status_code)
             resp.close()
         except socket.gaierror as e:
             last_error = f"DNS resolution failed: {e}"
-            logger.warning(
-                "Webhook DNS error attempt %d | tx_ref=%s error=%s", attempt, tx_ref, e
-            )
-            # Don't blacklist on DNS errors - could be temporary
+            logger.warning("Webhook DNS error attempt %d | tx_ref=%s error=%s", attempt, tx_ref, e)
         except requests.exceptions.RequestException as e:
             last_error = str(e)
-            logger.warning(
-                "Webhook attempt %d error | tx_ref=%s error=%s", attempt, tx_ref, e
-            )
+            logger.warning("Webhook attempt %d error | tx_ref=%s error=%s", attempt, tx_ref, e)
 
         if attempt < Config.WEBHOOK_MAX_RETRIES:
-            # Exponential backoff with jitter: 2^attempt + random(0, 1)
-            import random
-
-            delay = (2**attempt) + random.random()
+            import secrets
+            delay = (2**attempt) + (secrets.randbelow(1000) / 1000)
             time.sleep(delay)
 
-    logger.error(
-        "Webhook delivery failed after %d attempts | tx_ref=%s last_error=%s",
-        Config.WEBHOOK_MAX_RETRIES,
-        tx_ref,
-        last_error,
-    )
+    logger.error("Webhook delivery failed after %d attempts | tx_ref=%s last_error=%s", Config.WEBHOOK_MAX_RETRIES, tx_ref, last_error)
     return False
 
 
@@ -437,7 +372,7 @@ def queue_webhook_delivery(wh_data: dict) -> bool:
     """
     # Check if Huey is available and not in immediate mode
     try:
-        from services.task_queue import huey, deliver_webhook_task
+        from services.task_queue import deliver_webhook_task, huey
 
         # In immediate mode (debug), just call directly for testing
         if huey.immediate:
@@ -602,9 +537,9 @@ def sync_invoice_on_transaction_update(db, transaction):
         db: Database session
         transaction: Transaction object with updated status
     """
+    from core.audit import log_event
     from models.invoice import Invoice, InvoiceStatus
     from models.transaction import TransactionStatus
-    from core.audit import log_event
 
     # Query invoice by transaction_id
     invoice = db.query(Invoice).filter(Invoice.transaction_id == transaction.id).first()
@@ -652,237 +587,102 @@ def sync_invoice_on_transaction_update(db, transaction):
         )
 
 
-def send_payment_notification_emails(db, transaction, user):
-    """
-    Send payment notification emails after payment confirmation.
-
-    Orchestrates email sending for both merchant and customer:
-    1. Check if invoice exists, create if not
-    2. Generate invoice PDF
-    3. Send merchant notification email (always)
-    4. Send customer invoice email (if auto_send_email enabled and customer_email exists)
-    5. Update invoice status to paid
-
-    Args:
-        db: Database session
-        transaction: Transaction object (verified payment)
-        user: User object (merchant)
-
-    Side Effects:
-        - Creates invoice if not exists
-        - Sends merchant notification email
-        - Sends customer invoice email (conditionally)
-        - Updates invoice status to paid
-        - Logs all operations
-
-    Error Handling:
-        - All operations wrapped in try-except to prevent blocking payment
-        - Errors logged but not raised
-        - Graceful degradation on PDF generation failure
-    """
-    from models.invoice import Invoice, InvoiceSettings
-    from services.invoice import invoice_service
-    from services.email import send_merchant_notification_email, send_invoice_email
+def _ensure_invoice_exists(db, transaction, user) -> object:
+    """Get or create invoice for transaction. Returns invoice or None."""
     from core.audit import log_event
+    from models.invoice import Invoice
+    from services.invoice import invoice_service
 
+    invoice = db.query(Invoice).filter(Invoice.transaction_id == transaction.id).first()
+    if invoice:
+        return invoice
     try:
-        # Step 1: Check if invoice exists for this transaction
-        invoice = (
-            db.query(Invoice).filter(Invoice.transaction_id == transaction.id).first()
-        )
+        invoice = invoice_service.create_invoice(db=db, transaction=transaction, user=user, settings=None)
+        db.flush()
+        log_event(db, "invoice.auto_created", user_id=user.id, tx_ref=transaction.tx_ref, detail={"invoice_number": invoice.invoice_number})
+        logger.info("Invoice auto-created for payment | invoice_number=%s tx_ref=%s", invoice.invoice_number, transaction.tx_ref)
+        return invoice
+    except Exception as e:
+        logger.error("Failed to create invoice for payment | tx_ref=%s error=%s", transaction.tx_ref, e)
+        db.rollback()
+        return None
 
-        # Step 2: Create invoice if not exists
-        if not invoice:
-            try:
-                invoice = invoice_service.create_invoice(
-                    db=db,
-                    transaction=transaction,
-                    user=user,
-                    settings=None,  # Will be fetched inside create_invoice
-                )
-                db.flush()
 
-                log_event(
-                    db,
-                    "invoice.auto_created",
-                    user_id=user.id,
-                    tx_ref=transaction.tx_ref,
-                    detail={"invoice_number": invoice.invoice_number},
-                )
+def _generate_pdf_for_notification(invoice, transaction) -> Optional[bytes]:
+    """Generate PDF for invoice notification. Returns bytes or None on failure."""
+    from services.invoice import invoice_service
+    if not invoice:
+        return None
+    try:
+        payment_url = getattr(transaction, "qr_code_payment_url", None)
+        pdf_bytes = invoice_service.generate_invoice_pdf(invoice=invoice, transaction=transaction, payment_url=payment_url)
+        logger.info("Invoice PDF generated | invoice_number=%s size=%d bytes", invoice.invoice_number, len(pdf_bytes))
+        return pdf_bytes
+    except Exception as e:
+        logger.error("Failed to generate invoice PDF | invoice_number=%s error=%s", invoice.invoice_number if invoice else "N/A", e)
+        return None
 
-                logger.info(
-                    "Invoice auto-created for payment | invoice_number=%s tx_ref=%s",
-                    invoice.invoice_number,
-                    transaction.tx_ref,
-                )
-            except Exception as e:
-                logger.error(
-                    "Failed to create invoice for payment | tx_ref=%s error=%s",
-                    transaction.tx_ref,
-                    e,
-                )
-                db.rollback()
-                # Continue without invoice - merchant still gets notification
-                invoice = None
 
-        # Step 3: Generate invoice PDF (graceful degradation on failure)
-        pdf_bytes = None
-        if invoice:
-            try:
-                # Generate payment URL for invoice (use transaction's existing payment URL if available)
-                payment_url = None
-                if hasattr(transaction, "qr_code_payment_url") and transaction.qr_code_payment_url:
-                    payment_url = transaction.qr_code_payment_url
+def _send_merchant_email(db, transaction, user, invoice, pdf_bytes) -> None:
+    """Send merchant notification email (best-effort)."""
+    from core.audit import log_event
+    from services.email import send_merchant_notification_email
+    try:
+        sent = send_merchant_notification_email(to_email=user.email, transaction=transaction, invoice=invoice, pdf_bytes=pdf_bytes)
+        if sent:
+            log_event(db, "email.merchant_notification_sent", user_id=user.id, tx_ref=transaction.tx_ref,
+                      detail={"invoice_number": invoice.invoice_number if invoice else None, "merchant_email": user.email})
+            logger.info("Merchant notification email sent | tx_ref=%s merchant_email=%s", transaction.tx_ref, user.email)
+        else:
+            logger.warning("Merchant notification email failed | tx_ref=%s merchant_email=%s", transaction.tx_ref, user.email)
+    except Exception as e:
+        logger.error("Exception sending merchant notification | tx_ref=%s error=%s", transaction.tx_ref, e)
 
-                pdf_bytes = invoice_service.generate_invoice_pdf(
-                    invoice=invoice, transaction=transaction, payment_url=payment_url
-                )
 
-                logger.info(
-                    "Invoice PDF generated | invoice_number=%s size=%d bytes",
-                    invoice.invoice_number,
-                    len(pdf_bytes),
-                )
-            except Exception as e:
-                logger.error(
-                    "Failed to generate invoice PDF | invoice_number=%s error=%s",
-                    invoice.invoice_number if invoice else "N/A",
-                    e,
-                )
-                # Continue without PDF - emails will be sent without attachment
-                pdf_bytes = None
+def _send_customer_email(db, transaction, user, invoice, pdf_bytes) -> None:
+    """Send customer invoice email if auto_send_email is enabled (best-effort)."""
+    from core.audit import log_event
+    from models.invoice import InvoiceSettings
+    from services.email import send_invoice_email
+    if not (invoice and transaction.customer_email):
+        return
+    try:
+        settings = db.query(InvoiceSettings).filter(InvoiceSettings.user_id == user.id).first()
+        if not (settings and settings.auto_send_email):
+            logger.debug("Customer email not sent (auto_send_email disabled) | tx_ref=%s", transaction.tx_ref)
+            return
+        payment_url = getattr(transaction, "payment_url", None)
+        qr_code_data_uri = getattr(transaction, "qr_code_payment_url", None)
+        sent = send_invoice_email(to_email=transaction.customer_email, invoice=invoice, pdf_bytes=pdf_bytes,
+                                  payment_url=payment_url, qr_code_data_uri=qr_code_data_uri, merchant_email=user.email)
+        if sent:
+            log_event(db, "email.customer_invoice_sent", user_id=user.id, tx_ref=transaction.tx_ref,
+                      detail={"invoice_number": invoice.invoice_number, "customer_email": transaction.customer_email})
+            logger.info("Customer invoice email sent | tx_ref=%s customer_email=%s", transaction.tx_ref, transaction.customer_email)
+        else:
+            logger.warning("Customer invoice email failed | tx_ref=%s customer_email=%s", transaction.tx_ref, transaction.customer_email)
+    except Exception as e:
+        logger.error("Exception sending customer invoice | tx_ref=%s error=%s", transaction.tx_ref, e)
 
-        # Step 4: Send merchant notification email (always)
-        try:
-            merchant_email_sent = send_merchant_notification_email(
-                to_email=user.email,
-                transaction=transaction,
-                invoice=invoice,
-                pdf_bytes=pdf_bytes,
-            )
 
-            if merchant_email_sent:
-                log_event(
-                    db,
-                    "email.merchant_notification_sent",
-                    user_id=user.id,
-                    tx_ref=transaction.tx_ref,
-                    detail={
-                        "invoice_number": invoice.invoice_number if invoice else None,
-                        "merchant_email": user.email,
-                    },
-                )
-                logger.info(
-                    "Merchant notification email sent | tx_ref=%s merchant_email=%s",
-                    transaction.tx_ref,
-                    user.email,
-                )
-            else:
-                logger.warning(
-                    "Merchant notification email failed | tx_ref=%s merchant_email=%s",
-                    transaction.tx_ref,
-                    user.email,
-                )
-        except Exception as e:
-            logger.error(
-                "Exception sending merchant notification | tx_ref=%s error=%s",
-                transaction.tx_ref,
-                e,
-            )
-            # Continue - don't block payment confirmation
+def send_payment_notification_emails(db, transaction, user) -> None:
+    """Send payment notification emails after payment confirmation."""
+    try:
+        invoice = _ensure_invoice_exists(db, transaction, user)
+        pdf_bytes = _generate_pdf_for_notification(invoice, transaction)
+        _send_merchant_email(db, transaction, user, invoice, pdf_bytes)
+        _send_customer_email(db, transaction, user, invoice, pdf_bytes)
 
-        # Step 5: Send customer invoice email (if auto_send_email enabled and customer_email exists)
-        if invoice and transaction.customer_email:
-            try:
-                # Check auto_send_email setting
-                settings = (
-                    db.query(InvoiceSettings)
-                    .filter(InvoiceSettings.user_id == user.id)
-                    .first()
-                )
-
-                if settings and settings.auto_send_email:
-                    # Generate payment URL (use transaction's existing payment URL if available)
-                    payment_url = None
-                    if hasattr(transaction, "payment_url") and transaction.payment_url:
-                        payment_url = transaction.payment_url
-
-                    # Generate QR code data URI if available
-                    qr_code_data_uri = None
-                    if transaction.qr_code_payment_url:
-                        qr_code_data_uri = transaction.qr_code_payment_url
-
-                    customer_email_sent = send_invoice_email(
-                        to_email=transaction.customer_email,
-                        invoice=invoice,
-                        pdf_bytes=pdf_bytes,
-                        payment_url=payment_url,
-                        qr_code_data_uri=qr_code_data_uri,
-                        merchant_email=user.email,  # BCC merchant
-                    )
-
-                    if customer_email_sent:
-                        log_event(
-                            db,
-                            "email.customer_invoice_sent",
-                            user_id=user.id,
-                            tx_ref=transaction.tx_ref,
-                            detail={
-                                "invoice_number": invoice.invoice_number,
-                                "customer_email": transaction.customer_email,
-                            },
-                        )
-                        logger.info(
-                            "Customer invoice email sent | tx_ref=%s customer_email=%s",
-                            transaction.tx_ref,
-                            transaction.customer_email,
-                        )
-                    else:
-                        logger.warning(
-                            "Customer invoice email failed | tx_ref=%s customer_email=%s",
-                            transaction.tx_ref,
-                            transaction.customer_email,
-                        )
-                else:
-                    logger.debug(
-                        "Customer email not sent (auto_send_email disabled) | tx_ref=%s",
-                        transaction.tx_ref,
-                    )
-            except Exception as e:
-                logger.error(
-                    "Exception sending customer invoice | tx_ref=%s error=%s",
-                    transaction.tx_ref,
-                    e,
-                )
-                # Continue - don't block payment confirmation
-
-        # Step 6: Update invoice status to paid
         if invoice:
             try:
                 from models.invoice import InvoiceStatus
-
                 invoice.status = InvoiceStatus.PAID
                 if not invoice.paid_at:
                     invoice.paid_at = datetime.now(timezone.utc)
                 db.flush()
-
-                logger.info(
-                    "Invoice status updated to paid | invoice_number=%s",
-                    invoice.invoice_number,
-                )
+                logger.info("Invoice status updated to paid | invoice_number=%s", invoice.invoice_number)
             except Exception as e:
-                logger.error(
-                    "Failed to update invoice status | invoice_number=%s error=%s",
-                    invoice.invoice_number if invoice else "N/A",
-                    e,
-                )
+                logger.error("Failed to update invoice status | invoice_number=%s error=%s", invoice.invoice_number if invoice else "N/A", e)
                 db.rollback()
-                # Continue - don't block payment confirmation
-
     except Exception as e:
-        logger.error(
-            "Unexpected error in send_payment_notification_emails | tx_ref=%s error=%s",
-            transaction.tx_ref,
-            e,
-        )
-        # Don't raise - payment confirmation should not be blocked by email failures
+        logger.error("Unexpected error in send_payment_notification_emails | tx_ref=%s error=%s", transaction.tx_ref, e)

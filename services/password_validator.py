@@ -35,7 +35,7 @@ def is_common_password(password: str) -> bool:
 def validate_password_strength(password: str) -> tuple[bool, str]:
     """
     Validate password strength against security requirements.
-    
+
     Returns:
         (is_valid, error_message)
         - is_valid: True if password meets all requirements
@@ -44,55 +44,55 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
     # Length requirements
     if len(password) < 12:
         return False, "Password must be at least 12 characters"
-    
+
     if len(password) > 1000:
         return False, "Password is too long (max 1000 characters)"
-    
+
     # Character class requirements
     if not re.search(r'[a-z]', password):
         return False, "Password must contain lowercase letters"
-    
+
     if not re.search(r'[A-Z]', password):
         return False, "Password must contain uppercase letters"
-    
+
     if not re.search(r'[0-9]', password):
         return False, "Password must contain numbers"
-    
+
     if not re.search(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/~`]', password):
         return False, "Password must contain special characters"
-    
+
     # Check against common passwords
     if is_common_password(password):
         return False, "This password is too common. Please choose a stronger password."
-    
+
     # Check for sequential characters (123, abc, etc.)
     lower_pass = password.lower()
     for i in range(len(lower_pass) - 2):
         if (ord(lower_pass[i+1]) == ord(lower_pass[i]) + 1 and
             ord(lower_pass[i+2]) == ord(lower_pass[i]) + 2):
             return False, "Password contains sequential characters"
-    
+
     # Check for repeated characters (aaa, 111, etc.)
     for i in range(len(password) - 2):
         if password[i] == password[i+1] == password[i+2]:
             return False, "Password contains too many repeated characters"
-    
+
     return True, ""
 
 
 def load_common_passwords_from_file(filepath: str) -> int:
     """
     Load common passwords from file (optional enhancement).
-    
+
     Args:
         filepath: Path to common passwords file (one password per line)
-    
+
     Returns:
         Number of passwords loaded
     """
     global COMMON_PASSWORDS
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, encoding='utf-8') as f:
             loaded = {
                 line.strip().lower()
                 for line in f

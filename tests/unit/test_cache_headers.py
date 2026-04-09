@@ -9,9 +9,10 @@ Validates:
 - Conditional request (If-None-Match) returns 304 when ETag matches
 """
 import hashlib
-import pytest
-from flask import Flask, request as flask_request
 
+import pytest
+from flask import Flask
+from flask import request as flask_request
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -39,7 +40,7 @@ def app(tmp_path):
 
             if response.direct_passthrough:
                 response.direct_passthrough = False
-            etag = '"' + hashlib.md5(response.get_data()).hexdigest() + '"'
+            etag = '"' + hashlib.sha256(response.get_data()).hexdigest()[:32] + '"'
             response.headers["ETag"] = etag
 
             if_none_match = flask_request.headers.get("If-None-Match")

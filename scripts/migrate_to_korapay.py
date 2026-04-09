@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
-def get_database_type():
+def get_database_type() -> str:
     """Determine database type from DATABASE_URL."""
     db_url = os.environ.get('DATABASE_URL', '')
     if db_url.startswith('sqlite'):
@@ -39,7 +39,7 @@ def get_database_type():
     return 'unknown'
 
 
-def compute_file_hash(filepath):
+def compute_file_hash(filepath: str) -> str:
     """Compute SHA256 hash of a file."""
     sha256_hash = hashlib.sha256()
     with open(filepath, "rb") as f:
@@ -48,12 +48,12 @@ def compute_file_hash(filepath):
     return sha256_hash.hexdigest()
 
 
-def compute_data_hash(data):
+def compute_data_hash(data: dict) -> str:
     """Compute SHA256 hash of string data."""
     return hashlib.sha256(data.encode()).hexdigest()
 
 
-def validate_current_state():
+def validate_current_state() -> None:
     """
     Validate current state before migration.
     Requirements: 33.1-33.12
@@ -139,7 +139,7 @@ def validate_current_state():
     return True
 
 
-def create_backup():
+def create_backup() -> None:
     """
     Create database backup before migration.
     Requirements: 33.13-33.22
@@ -176,7 +176,7 @@ def create_backup():
             try:
                 import subprocess
                 # Extract connection details from DATABASE_URL
-                db_url = os.environ.get('DATABASE_URL', '')
+                os.environ.get('DATABASE_URL', '')
                 # Format: postgresql://user:password@host:port/dbname
                 # pg_dump -U user -h host -d dbname -f backup.sql
 
@@ -228,7 +228,7 @@ def create_backup():
     return True
 
 
-def run_migrations():
+def run_migrations() -> None:
     """
     Run Alembic migrations for KoraPay.
     Requirements: 33.23-33.33
@@ -244,7 +244,7 @@ def run_migrations():
         from alembic.config import CommandLine
         from alembic.config import Config as AlembicConfig
 
-        alembic_cfg = AlembicConfig("alembic.ini")
+        AlembicConfig("alembic.ini")
 
         print("Running: alembic upgrade head")
         # Note: This would run actual migrations in production
@@ -272,7 +272,7 @@ def run_migrations():
     return True
 
 
-def verify_migration():
+def verify_migration() -> None:
     """
     Verify migration was successful.
     Requirements: 33.35-33.48
@@ -285,7 +285,7 @@ def verify_migration():
 
     # Load pre-migration stats
     try:
-        with open("migration_stats_pre.json", 'r') as f:
+        with open("migration_stats_pre.json") as f:
             pre_stats = json.load(f)
         print(f"Pre-migration timestamp: {pre_stats.get('timestamp')}")
     except FileNotFoundError:
@@ -344,7 +344,7 @@ def verify_migration():
     return True
 
 
-def rollback():
+def rollback() -> None:
     """
     Rollback migration and restore Quickteller.
     Requirements: 33.49-33.66
@@ -357,7 +357,7 @@ def rollback():
 
     # Load backup info
     try:
-        with open("migration_backup_info.json", 'r') as f:
+        with open("migration_backup_info.json") as f:
             backup_info = json.load(f)
         backup_file = backup_info['backup_file']
         print(f"Using backup: {backup_file}")
@@ -368,7 +368,7 @@ def rollback():
 
     if not Path(backup_file).exists():
         errors.append(f"Backup file not found: {backup_file}")
-        print(f"\n❌ Cannot rollback. Backup file missing.")
+        print("\n❌ Cannot rollback. Backup file missing.")
         return False
 
     # Verify backup checksum
@@ -403,7 +403,7 @@ def rollback():
     return True
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="KoraPay Migration Script",
         formatter_class=argparse.RawDescriptionHelpFormatter,

@@ -10,11 +10,12 @@ in User.check_password(). New passwords and password resets will use bcrypt.
 
 Users will be automatically migrated to bcrypt when they next log in.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '20260324083520'

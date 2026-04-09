@@ -10,6 +10,7 @@ Verifies that:
 
 import json
 import os
+
 import pytest
 from flask import Flask
 
@@ -62,7 +63,7 @@ class TestCacheBusting:
             # Load manifest
             manifest_path = os.path.join(app.root_path, "static", "manifest.json")
             with open(manifest_path) as f:
-                manifest = json.load(f)
+                json.load(f)
 
             # Get the hashed_url function from context processor
             context_processors = app.template_context_processors[None]
@@ -133,7 +134,7 @@ def app():
     app = create_app()
     app.config["TESTING"] = True
     yield app
-    
+
     # Cleanup: Signal background threads to stop
     if hasattr(app, '_shutdown_event'):
         app._shutdown_event.set()

@@ -107,9 +107,9 @@ class CapacityPlanner:
         """Calculate recommended instance counts for different scales."""
         max_users_per_instance = self.calculate_max_concurrent_users()
 
-        recommended_2x = math.ceil((current_instances * 2 * max_users_per_instance) / max_users_per_instance)
-        recommended_5x = math.ceil((current_instances * 5 * max_users_per_instance) / max_users_per_instance)
-        recommended_10x = math.ceil((current_instances * 10 * max_users_per_instance) / max_users_per_instance)
+        math.ceil((current_instances * 2 * max_users_per_instance) / max_users_per_instance)
+        math.ceil((current_instances * 5 * max_users_per_instance) / max_users_per_instance)
+        math.ceil((current_instances * 10 * max_users_per_instance) / max_users_per_instance)
 
         notes = [
             f"Max concurrent users per instance: {max_users_per_instance}",

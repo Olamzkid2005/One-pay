@@ -5,8 +5,9 @@ Revises: 20260406000000
 Create Date: 2026-04-07 00:00:00.000000
 
 """
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = '20260407000000'
 down_revision = '20260406000000'
@@ -22,13 +23,13 @@ def upgrade():
         sa.Column('processed_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column('tx_ref', sa.String(100), nullable=True),
     )
-    
+
     # Create index on processed_at for cleanup queries
     op.create_index('ix_webhook_idempotency_processed', 'webhook_idempotency', ['processed_at'])
 
 def downgrade():
     # Drop index first
     op.drop_index('ix_webhook_idempotency_processed', table_name='webhook_idempotency')
-    
+
     # Drop table
     op.drop_table('webhook_idempotency')

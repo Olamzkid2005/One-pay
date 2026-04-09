@@ -5,21 +5,23 @@ This module contains end-to-end integration tests for the complete payment
 flow including virtual account creation, status polling, and webhooks.
 """
 
-import os
-import pytest
-from unittest.mock import Mock, patch, MagicMock
 import json
+import os
 from decimal import Decimal
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
+
 from models.transaction import TransactionStatus
 
 
 class TestPaymentLinkCreation:
     """
     Integration tests for payment link creation with KoraPay.
-    
+
     Tests Requirements: 6.1, 6.2, 6.3, 6.4, 6.13, 6.14, 6.15, 6.16, 6.23, 6.24
     """
-    
+
     @pytest.fixture
     def app(self):
         """Create test Flask app."""
@@ -28,13 +30,13 @@ class TestPaymentLinkCreation:
         flask_app.config['SECRET_KEY'] = 'test-secret-key-for-sessions'
         flask_app.config['KORAPAY_SECRET_KEY'] = ''  # Mock mode
         return flask_app
-    
+
     @pytest.fixture
     def client(self, app):
         """Create test client with session support."""
         with app.test_client() as client:
             yield client
-    
+
     def test_create_payment_link_calls_korapay_create_virtual_account(self, client):
         """
         Test that create_payment_link calls korapay.create_virtual_account.
@@ -47,12 +49,12 @@ class TestPaymentLinkCreation:
                         with patch('blueprints.payments.get_db') as mock_get_db:
                             mock_db = MagicMock()
                             mock_get_db.return_value.__enter__.return_value = mock_db
-                            
+
                             mock_user = Mock()
                             mock_user.id = 1
                             mock_user.webhook_url = None
                             mock_db.query().filter().first.return_value = mock_user
-                            
+
                             mock_korapay.is_transfer_configured.return_value = True
                             mock_korapay.create_virtual_account.return_value = {
                                 "accountNumber": "3000000001",
@@ -63,20 +65,20 @@ class TestPaymentLinkCreation:
                                 "responseCode": "Z0",
                                 "validityPeriodMins": 30
                             }
-                            
+
                             with patch('blueprints.payments.check_rate_limit', return_value=True):
                                 with patch('blueprints.payments.qr_service.generate_payment_qr', return_value='data:image/png;base64,test'):
                                     with client.session_transaction() as sess:
                                         sess['user_id'] = 1
                                         sess['username'] = 'testuser'
                                         sess['csrf_token'] = 'test-csrf-token'
-                                    
+
                                     response = client.post('/api/v1/payments/link',
                                         json={'amount': 1500.00, 'description': 'Test payment', 'currency': 'NGN'},
                                         headers={'X-CSRF-Token': 'test-csrf-token'},
                                         content_type='application/json'
                                     )
-                                    
+
                                     assert response.status_code == 201
                                     mock_korapay.create_virtual_account.assert_called_once()
 
@@ -84,10 +86,10 @@ class TestPaymentLinkCreation:
 class TestTransferStatusPolling:
     """
     Integration tests for transfer status polling with KoraPay.
-    
+
     Tests Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.12, 7.16, 7.17, 7.18, 7.23, 7.24, 7.25
     """
-    
+
     @pytest.fixture
     def app(self):
         """Create test Flask app."""
@@ -96,13 +98,13 @@ class TestTransferStatusPolling:
         flask_app.config['SECRET_KEY'] = 'test-secret-key-for-sessions'
         flask_app.config['KORAPAY_SECRET_KEY'] = ''  # Mock mode
         return flask_app
-    
+
     @pytest.fixture
     def client(self, app):
         """Create test client with session support."""
         with app.test_client() as client:
             yield client
-    
+
     def test_transfer_status_calls_korapay_confirm_transfer(self, client):
         """
         Test that transfer_status calls korapay.confirm_transfer.
@@ -113,7 +115,7 @@ class TestTransferStatusPolling:
                 with patch('blueprints.public.session', {'pay_access_ONEPAY-TEST-123': True}):
                     mock_db = MagicMock()
                     mock_get_db.return_value.__enter__.return_value = mock_db
-                    
+
                     mock_tx = Mock()
                     mock_tx.tx_ref = 'ONEPAY-TEST-123'
                     mock_tx.transfer_confirmed = False
@@ -121,19 +123,19 @@ class TestTransferStatusPolling:
                     mock_tx.is_expired.return_value = False
                     mock_db.query().filter().first.return_value = mock_tx
                     mock_db.query().filter().with_for_update().first.return_value = mock_tx
-                    
+
                     mock_korapay.is_transfer_configured.return_value = True
                     mock_korapay.confirm_transfer.return_value = {
                         "responseCode": "Z0",
                         "transactionReference": "ONEPAY-TEST-123"
                     }
-                    
+
                     with patch('blueprints.public.check_rate_limit', return_value=True):
                         response = client.get('/api/payments/transfer-status/ONEPAY-TEST-123')
-                        
+
                         assert response.status_code == 200
                         mock_korapay.confirm_transfer.assert_called_once_with('ONEPAY-TEST-123')
-    
+
     def test_updates_transaction_on_confirmed_response(self, client):
         """
         Test that transaction is updated on "00" (confirmed) response.
@@ -144,7 +146,7 @@ class TestTransferStatusPolling:
                 with patch('blueprints.public.session', {'pay_access_ONEPAY-TEST-123': True}):
                     mock_db = MagicMock()
                     mock_get_db.return_value.__enter__.return_value = mock_db
-                    
+
                     mock_tx = Mock()
                     mock_tx.tx_ref = 'ONEPAY-TEST-123'
                     mock_tx.transfer_confirmed = False
@@ -153,22 +155,22 @@ class TestTransferStatusPolling:
                     mock_tx.webhook_url = None
                     mock_db.query().filter().first.return_value = mock_tx
                     mock_db.query().filter().with_for_update().first.return_value = mock_tx
-                    
+
                     mock_korapay.is_transfer_configured.return_value = True
                     mock_korapay.confirm_transfer.return_value = {
                         "responseCode": "00",
                         "transactionReference": "ONEPAY-TEST-123"
                     }
-                    
+
                     with patch('blueprints.public.check_rate_limit', return_value=True):
                         with patch('services.webhook.sync_invoice_on_transaction_update'):
                             response = client.get('/api/payments/transfer-status/ONEPAY-TEST-123')
-                            
+
                             assert response.status_code == 200
                             data = json.loads(response.data)
                             assert data['status'] == 'confirmed'
                             assert mock_tx.transfer_confirmed is True
-    
+
     def test_returns_pending_on_z0_response(self, client):
         """
         Test that pending status is returned on "Z0" response.
@@ -179,7 +181,7 @@ class TestTransferStatusPolling:
                 with patch('blueprints.public.session', {'pay_access_ONEPAY-TEST-123': True}):
                     mock_db = MagicMock()
                     mock_get_db.return_value.__enter__.return_value = mock_db
-                    
+
                     mock_tx = Mock()
                     mock_tx.tx_ref = 'ONEPAY-TEST-123'
                     mock_tx.transfer_confirmed = False
@@ -187,20 +189,20 @@ class TestTransferStatusPolling:
                     mock_tx.is_expired.return_value = False
                     mock_db.query().filter().first.return_value = mock_tx
                     mock_db.query().filter().with_for_update().first.return_value = mock_tx
-                    
+
                     mock_korapay.is_transfer_configured.return_value = True
                     mock_korapay.confirm_transfer.return_value = {
                         "responseCode": "Z0",
                         "transactionReference": "ONEPAY-TEST-123"
                     }
-                    
+
                     with patch('blueprints.public.check_rate_limit', return_value=True):
                         response = client.get('/api/payments/transfer-status/ONEPAY-TEST-123')
-                        
+
                         assert response.status_code == 200
                         data = json.loads(response.data)
                         assert data['status'] == 'pending'
-    
+
     def test_handles_korapay_error_gracefully(self, client):
         """
         Test that KoraPayError is handled gracefully.
@@ -211,7 +213,7 @@ class TestTransferStatusPolling:
                 with patch('blueprints.public.session', {'pay_access_ONEPAY-TEST-123': True}):
                     mock_db = MagicMock()
                     mock_get_db.return_value.__enter__.return_value = mock_db
-                    
+
                     mock_tx = Mock()
                     mock_tx.tx_ref = 'ONEPAY-TEST-123'
                     mock_tx.transfer_confirmed = False
@@ -219,18 +221,18 @@ class TestTransferStatusPolling:
                     mock_tx.is_expired.return_value = False
                     mock_db.query().filter().first.return_value = mock_tx
                     mock_db.query().filter().with_for_update().first.return_value = mock_tx
-                    
+
                     from services.korapay import KoraPayError
                     mock_korapay.is_transfer_configured.return_value = True
                     mock_korapay.confirm_transfer.side_effect = KoraPayError("Connection timeout", error_code="TIMEOUT")
-                    
+
                     with patch('blueprints.public.check_rate_limit', return_value=True):
                         response = client.get('/api/payments/transfer-status/ONEPAY-TEST-123')
-                        
+
                         assert response.status_code == 200
                         data = json.loads(response.data)
                         assert data['success'] is False
-    
+
     def test_fast_path_already_confirmed_skips_api_call(self, client):
         """
         Test that fast path (already confirmed) skips API call.
@@ -241,22 +243,22 @@ class TestTransferStatusPolling:
                 with patch('blueprints.public.session', {'pay_access_ONEPAY-TEST-123': True}):
                     mock_db = MagicMock()
                     mock_get_db.return_value.__enter__.return_value = mock_db
-                    
+
                     mock_tx = Mock()
                     mock_tx.tx_ref = 'ONEPAY-TEST-123'
                     mock_tx.transfer_confirmed = True
                     mock_db.query().filter().first.return_value = mock_tx
-                    
+
                     mock_korapay.is_transfer_configured.return_value = True
-                    
+
                     with patch('blueprints.public.check_rate_limit', return_value=True):
                         response = client.get('/api/payments/transfer-status/ONEPAY-TEST-123')
-                        
+
                         assert response.status_code == 200
                         data = json.loads(response.data)
                         assert data['status'] == 'confirmed'
                         mock_korapay.confirm_transfer.assert_not_called()
-    
+
     def test_optimistic_locking_prevents_race_conditions(self, client):
         """
         Test that optimistic locking with with_for_update() prevents race conditions.
@@ -267,7 +269,7 @@ class TestTransferStatusPolling:
                 with patch('blueprints.public.session', {'pay_access_ONEPAY-TEST-123': True}):
                     mock_db = MagicMock()
                     mock_get_db.return_value.__enter__.return_value = mock_db
-                    
+
                     mock_tx = Mock()
                     mock_tx.tx_ref = 'ONEPAY-TEST-123'
                     mock_tx.transfer_confirmed = False
@@ -276,20 +278,20 @@ class TestTransferStatusPolling:
                     mock_tx.webhook_url = None
                     mock_db.query().filter().first.return_value = mock_tx
                     mock_db.query().filter().with_for_update().first.return_value = mock_tx
-                    
+
                     mock_korapay.is_transfer_configured.return_value = True
                     mock_korapay.confirm_transfer.return_value = {
                         "responseCode": "00",
                         "transactionReference": "ONEPAY-TEST-123"
                     }
-                    
+
                     with patch('blueprints.public.check_rate_limit', return_value=True):
                         with patch('services.webhook.sync_invoice_on_transaction_update'):
                             response = client.get('/api/payments/transfer-status/ONEPAY-TEST-123')
-                            
+
                             assert response.status_code == 200
                             mock_db.query().filter().with_for_update.assert_called()
-    
+
     def test_double_check_after_lock_acquisition(self, client):
         """
         Test that double-check is performed after lock acquisition.
@@ -300,25 +302,25 @@ class TestTransferStatusPolling:
                 with patch('blueprints.public.session', {'pay_access_ONEPAY-TEST-123': True}):
                     mock_db = MagicMock()
                     mock_get_db.return_value.__enter__.return_value = mock_db
-                    
+
                     mock_tx_unconfirmed = Mock()
                     mock_tx_unconfirmed.tx_ref = 'ONEPAY-TEST-123'
                     mock_tx_unconfirmed.transfer_confirmed = False
                     mock_tx_unconfirmed.is_used = False
                     mock_tx_unconfirmed.is_expired.return_value = False
-                    
+
                     mock_tx_confirmed = Mock()
                     mock_tx_confirmed.tx_ref = 'ONEPAY-TEST-123'
                     mock_tx_confirmed.transfer_confirmed = True
-                    
+
                     mock_db.query().filter().first.return_value = mock_tx_unconfirmed
                     mock_db.query().filter().with_for_update().first.return_value = mock_tx_confirmed
-                    
+
                     mock_korapay.is_transfer_configured.return_value = True
-                    
+
                     with patch('blueprints.public.check_rate_limit', return_value=True):
                         response = client.get('/api/payments/transfer-status/ONEPAY-TEST-123')
-                        
+
                         assert response.status_code == 200
                         data = json.loads(response.data)
                         assert data['status'] == 'confirmed'
@@ -330,15 +332,15 @@ class TestTransferStatusPolling:
 class TestConcurrentConfirmationSafety:
     """
     Property test for concurrent confirmation race condition safety.
-    
+
     Tests Requirements: 7.16, 7.17, 7.23, 7.24, 7.25, 48.15-48.24
     Property 13: Concurrent Confirmation Race Condition Safety
-    
+
     Note: This test validates the code structure for concurrent safety.
     Full concurrent testing with real database locks would require integration tests
     with actual database transactions, which is beyond the scope of unit testing.
     """
-    
+
     @pytest.fixture
     def app(self):
         """Create test Flask app."""
@@ -347,23 +349,23 @@ class TestConcurrentConfirmationSafety:
         flask_app.config['SECRET_KEY'] = 'test-secret-key-for-sessions'
         flask_app.config['KORAPAY_SECRET_KEY'] = ''  # Mock mode
         return flask_app
-    
+
     @pytest.fixture
     def client(self, app):
         """Create test client with session support."""
         with app.test_client() as client:
             yield client
-    
+
     def test_concurrent_confirmation_code_structure(self, client):
         """
         Test that the code structure supports concurrent confirmation safety.
-        
+
         Validates:
         - Code uses with_for_update() for pessimistic locking
         - Double-check pattern is implemented after lock acquisition
         - Transaction state is checked before and after lock
         - Only confirmed transactions trigger webhooks and updates
-        
+
         This test validates the implementation pattern. Full concurrent testing
         would require a real database with actual row-level locking.
         """
@@ -372,7 +374,7 @@ class TestConcurrentConfirmationSafety:
                 with patch('blueprints.public.session', {'pay_access_ONEPAY-TEST-123': True}):
                     mock_db = MagicMock()
                     mock_get_db.return_value.__enter__.return_value = mock_db
-                    
+
                     # Simulate transaction state
                     mock_tx = Mock()
                     mock_tx.tx_ref = 'ONEPAY-TEST-123'
@@ -382,26 +384,26 @@ class TestConcurrentConfirmationSafety:
                     mock_tx.webhook_url = None
                     mock_tx.user_id = 1
                     mock_tx.amount = Decimal('1500.00')
-                    
+
                     mock_db.query().filter().first.return_value = mock_tx
                     mock_db.query().filter().with_for_update().first.return_value = mock_tx
-                    
+
                     mock_korapay.is_transfer_configured.return_value = True
                     mock_korapay.confirm_transfer.return_value = {
                         "responseCode": "00",
                         "transactionReference": "ONEPAY-TEST-123"
                     }
-                    
+
                     with patch('blueprints.public.check_rate_limit', return_value=True):
                         with patch('services.webhook.sync_invoice_on_transaction_update'):
                             response = client.get('/api/payments/transfer-status/ONEPAY-TEST-123')
-                            
+
                             # Verify response
                             assert response.status_code == 200
                             data = json.loads(response.data)
                             assert data['success'] is True
                             assert data['status'] == 'confirmed'
-                            
+
                             # Verify pessimistic locking was used
                             mock_db.query().filter().with_for_update.assert_called()
 
@@ -554,7 +556,7 @@ class TestIdempotency:
                                 sess['csrf_token'] = 'test-csrf-token'
 
                             # First call
-                            response1 = client.post('/api/v1/payments/link',
+                            client.post('/api/v1/payments/link',
                                 json={'amount': 1500.00, 'description': 'Test payment', 'currency': 'NGN'},
                                 headers={'X-CSRF-Token': 'test-csrf-token'},
                                 content_type='application/json'
@@ -600,7 +602,7 @@ class TestIdempotency:
 
                             # First call with idempotency key
                             idempotency_key = 'unique-idempotency-key-123'
-                            response1 = client.post('/api/v1/payments/link',
+                            client.post('/api/v1/payments/link',
                                 json={
                                     'amount': 1500.00,
                                     'description': 'Test payment',
@@ -612,7 +614,7 @@ class TestIdempotency:
                             )
 
                             # Second call with same idempotency key should not create new account
-                            response2 = client.post('/api/v1/payments/link',
+                            client.post('/api/v1/payments/link',
                                 json={
                                     'amount': 1500.00,
                                     'description': 'Test payment',
@@ -888,19 +890,21 @@ class TestConfigurationValidation:
     def test_config_validation_detects_empty_secret_key(self, monkeypatch):
         """Test that config validation detects empty secret key."""
         import importlib
+
         import config
-        
+
         monkeypatch.setenv('KORAPAY_SECRET_KEY', '')
         importlib.reload(config)
-        
+
         # Validation happens at startup, so we check the value
         assert config.BaseConfig.KORAPAY_SECRET_KEY == ''
 
     def test_config_validation_detects_short_secret_key(self, monkeypatch):
         """Test that config validation detects short secret key."""
         import importlib
+
         import config
-        
+
         monkeypatch.setenv('KORAPAY_SECRET_KEY', 'short')
         importlib.reload(config)
 
@@ -915,9 +919,10 @@ class TestConfigurationValidation:
 
         # Reload config to pick up changes
         import importlib
+
         import config
         importlib.reload(config)
-        
+
         # Get Config from the reloaded module
         is_live_key = config.Config.KORAPAY_SECRET_KEY.startswith('sk_live_')
         is_production = os.getenv('APP_ENV') == 'production'

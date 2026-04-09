@@ -11,15 +11,16 @@ Usage:
     python -m pytest tests/unit/test_edge_cases.py -v
 """
 
-import pytest
+import sys
 import threading
 import time
-from decimal import Decimal, InvalidOperation
-from unittest.mock import patch, MagicMock
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
-import sys
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
@@ -199,8 +200,7 @@ class TestNetworkEdgeCases:
 
     def test_timeout_error_raises_korapay_error(self):
         """Test connection timeout raises KoraPayError."""
-        from services.korapay import KoraPayError
-        from services.korapay import KoraPayService
+        from services.korapay import KoraPayError, KoraPayService
 
         service = KoraPayService()
 
@@ -215,8 +215,7 @@ class TestNetworkEdgeCases:
 
     def test_connection_error_raises_korapay_error(self):
         """Test connection error raises KoraPayError."""
-        from services.korapay import KoraPayError
-        from services.korapay import KoraPayService
+        from services.korapay import KoraPayError, KoraPayService
 
         service = KoraPayService()
 
@@ -231,8 +230,7 @@ class TestNetworkEdgeCases:
 
     def test_ssl_error_raises_korapay_error(self):
         """Test SSL errors raise KoraPayError."""
-        from services.korapay import KoraPayError
-        from services.korapay import KoraPayService
+        from services.korapay import KoraPayError, KoraPayService
 
         service = KoraPayService()
 
@@ -247,8 +245,7 @@ class TestNetworkEdgeCases:
 
     def test_invalid_json_raises_korapay_error(self):
         """Test invalid JSON response raises KoraPayError."""
-        from services.korapay import KoraPayError
-        from services.korapay import KoraPayService
+        from services.korapay import KoraPayError, KoraPayService
 
         service = KoraPayService()
 

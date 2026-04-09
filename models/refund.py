@@ -4,16 +4,17 @@ OnePay — Refund database model
 
 import enum
 from datetime import datetime, timezone
+
 from sqlalchemy import (
     Column,
-    String,
-    Numeric,
     DateTime,
-    Integer,
     Enum,
     ForeignKey,
-    Text,
     Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
 )
 from sqlalchemy.orm import relationship
 
@@ -64,3 +65,6 @@ class Refund(Base):
         Index("idx_refunds_status", "status"),
         Index("idx_refunds_created_at", "created_at"),
     )
+
+    def __repr__(self) -> str:
+        return f"<Refund(ref={self.refund_reference!r}, status={self.status})>"

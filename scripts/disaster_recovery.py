@@ -232,9 +232,9 @@ def execute_recovery(scenario: DisasterScenario, step_number: int = None):
         # For now, we just document the steps
         confirmation = input("  Execute this step? (y/n): ")
         if confirmation.lower() == 'y':
-            print(f"  ✅ Step executed (simulated)")
+            print("  ✅ Step executed (simulated)")
         else:
-            print(f"  ⏭️  Step skipped")
+            print("  ⏭️  Step skipped")
 
 
 def main():

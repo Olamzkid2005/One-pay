@@ -1,3 +1,7 @@
+---
+inclusion: auto
+---
+
 # TDD (Test-Driven Development) Skill
 
 Use test-driven development to implement features or fix bugs.

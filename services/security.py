@@ -2,14 +2,14 @@
 OnePay — Security utilities
 HMAC hash generation, link expiry, input validation.
 """
-import hmac
-import hashlib
 import base64
-import secrets
+import hashlib
+import hmac
 import ipaddress
 import re
+import secrets
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -105,7 +105,7 @@ def validate_return_url(value: str) -> Optional[str]:
     - Block javascript:, data:, file:, etc.
     - Block localhost / loopback / private IP literals
     - Block credentials and fragments in URL
-    
+
     VULN-008 FIX: Check length BEFORE parsing, reject if exceeds 500 chars.
     """
     if not value:
@@ -114,7 +114,7 @@ def validate_return_url(value: str) -> Optional[str]:
     url = value.strip()
     if not url:
         return None
-    
+
     # VULN-008 FIX: Reject if exceeds max length (don't truncate)
     if len(url) > 500:
         return None
@@ -164,20 +164,20 @@ def validate_webhook_url(value: str) -> Optional[str]:
     Validate a merchant webhook URL.
     Must be an absolute HTTPS URL pointing to a public host.
     Same rules as validate_return_url but no relative paths allowed.
-    
+
     VULN-008 FIX: Check length BEFORE parsing, reject if exceeds 500 chars.
-    
+
     Raises:
         ValueError: If URL is invalid, uses private IP, or points to internal resources
     """
     if not value:
         return None
     url = value.strip()
-    
+
     # VULN-008 FIX: Reject if exceeds max length (don't truncate)
     if len(url) > 500:
         raise ValueError("Webhook URL exceeds maximum length of 500 characters")
-    
+
     parsed = urlparse(url)
     if parsed.scheme != "https":
         raise ValueError("Webhook URL must use HTTPS protocol")
@@ -185,13 +185,13 @@ def validate_webhook_url(value: str) -> Optional[str]:
         raise ValueError("Webhook URL must have a valid hostname")
     if parsed.username or parsed.password:
         raise ValueError("Webhook URL cannot contain credentials")
-    
+
     hostname = parsed.hostname.lower()
-    
+
     # Check for localhost
     if hostname in ("localhost", "127.0.0.1", "::1"):
         raise ValueError("Webhook URL cannot point to localhost")
-    
+
     # Check for private/internal IP addresses
     try:
         ip = ipaddress.ip_address(hostname)
@@ -203,7 +203,7 @@ def validate_webhook_url(value: str) -> Optional[str]:
             raise ValueError(f"Webhook URL cannot use link-local address: {hostname}")
         if ip.is_multicast:
             raise ValueError(f"Webhook URL cannot use multicast address: {hostname}")
-        
+
         # Check for AWS metadata endpoint
         if str(ip) == "169.254.169.254":
             raise ValueError("Webhook URL cannot point to AWS metadata endpoint")
@@ -213,7 +213,7 @@ def validate_webhook_url(value: str) -> Optional[str]:
             raise
         # Otherwise it's not an IP address (it's a hostname), which is fine
         pass
-    
+
     return url
 
 

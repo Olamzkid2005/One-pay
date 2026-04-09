@@ -4,8 +4,10 @@ Tests for VoicePay configuration validation.
 Tests that VoicePay configuration variables exist and are properly validated
 in production environments.
 """
-import pytest
 import os
+
+import pytest
+
 from config import BaseConfig, ProductionConfig
 
 
@@ -28,7 +30,7 @@ def test_voicepay_webhook_url_format_production(monkeypatch):
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'http://voicepay.ng/webhook')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET', 'a' * 32)
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'true')
-    
+
     # Set required production secrets to pass other validations
     monkeypatch.setenv('SECRET_KEY', 'test-secret-key-32-characters-long')
     monkeypatch.setenv('HMAC_SECRET', 'test-hmac-secret-32-characters-long')
@@ -37,7 +39,7 @@ def test_voicepay_webhook_url_format_production(monkeypatch):
     monkeypatch.setenv('INBOUND_WEBHOOK_SECRET', 'inbound-webhook-secret-32-chars-long')
     monkeypatch.setenv('ENFORCE_HTTPS', 'true')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://localhost/onepay')
-    
+
     with pytest.raises(SystemExit):
         ProductionConfig.validate()
 
@@ -48,7 +50,7 @@ def test_voicepay_webhook_secret_length_production(monkeypatch):
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'https://voicepay.ng/webhook')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET', 'short')  # Too short
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'true')
-    
+
     # Set required production secrets
     monkeypatch.setenv('SECRET_KEY', 'test-secret-key-32-characters-long')
     monkeypatch.setenv('HMAC_SECRET', 'test-hmac-secret-32-characters-long')
@@ -57,7 +59,7 @@ def test_voicepay_webhook_secret_length_production(monkeypatch):
     monkeypatch.setenv('INBOUND_WEBHOOK_SECRET', 'inbound-webhook-secret-32-chars-long')
     monkeypatch.setenv('ENFORCE_HTTPS', 'true')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://localhost/onepay')
-    
+
     with pytest.raises(SystemExit):
         ProductionConfig.validate()
 
@@ -68,7 +70,7 @@ def test_voicepay_config_disabled_no_validation(monkeypatch):
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'false')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', '')  # Empty is OK when disabled
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET', '')  # Empty is OK when disabled
-    
+
     # Set required production secrets
     monkeypatch.setenv('SECRET_KEY', 'test-secret-key-32-characters-long')
     monkeypatch.setenv('HMAC_SECRET', 'test-hmac-secret-32-characters-long')
@@ -78,16 +80,17 @@ def test_voicepay_config_disabled_no_validation(monkeypatch):
     monkeypatch.setenv('INBOUND_WEBHOOK_SECRET', 'inbound-webhook-secret-32-chars-long')
     monkeypatch.setenv('ENFORCE_HTTPS', 'true')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://localhost/onepay')
-    
+
     # Reload config module to pick up new environment variables
     import importlib
+
     import config as config_module
     importlib.reload(config_module)
-    
+
     # Verify VoicePay is disabled
     from config import Config
     assert Config.VOICEPAY_WEBHOOK_ENABLED == False
-    
+
     # Verify that validation doesn't fail due to missing VoicePay config
     # (it may fail for other reasons, but not VoicePay-specific ones)
     # We test this by checking that the config loaded successfully
@@ -100,7 +103,7 @@ def test_voicepay_secrets_must_be_unique(monkeypatch):
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'https://voicepay.ng/webhook')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET', 'test-hmac-secret-32-characters-long')  # Same as HMAC_SECRET
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'true')
-    
+
     # Set required production secrets
     monkeypatch.setenv('SECRET_KEY', 'test-secret-key-32-characters-long')
     monkeypatch.setenv('HMAC_SECRET', 'test-hmac-secret-32-characters-long')
@@ -109,7 +112,7 @@ def test_voicepay_secrets_must_be_unique(monkeypatch):
     monkeypatch.setenv('INBOUND_WEBHOOK_SECRET', 'inbound-webhook-secret-32-chars-long')
     monkeypatch.setenv('ENFORCE_HTTPS', 'true')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://localhost/onepay')
-    
+
     with pytest.raises(SystemExit):
         ProductionConfig.validate()
 
@@ -120,7 +123,7 @@ def test_voicepay_secret_same_as_korapay_secret(monkeypatch):
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'https://voicepay.ng/webhook')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET', 'korapay-webhook-secret-32-chars-long')  # Same as KORAPAY_WEBHOOK_SECRET
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'true')
-    
+
     # Set required production secrets
     monkeypatch.setenv('SECRET_KEY', 'test-secret-key-32-characters-long')
     monkeypatch.setenv('HMAC_SECRET', 'test-hmac-secret-32-characters-long')
@@ -130,7 +133,7 @@ def test_voicepay_secret_same_as_korapay_secret(monkeypatch):
     monkeypatch.setenv('INBOUND_WEBHOOK_SECRET', 'inbound-webhook-secret-32-chars-long')
     monkeypatch.setenv('ENFORCE_HTTPS', 'true')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://localhost/onepay')
-    
+
     with pytest.raises(SystemExit):
         ProductionConfig.validate()
 
@@ -141,7 +144,7 @@ def test_voicepay_placeholder_secret_rejected(monkeypatch):
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'https://voicepay.ng/webhook')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET', 'change-this-secret-32-characters-long')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'true')
-    
+
     # Set required production secrets
     monkeypatch.setenv('SECRET_KEY', 'test-secret-key-32-characters-long')
     monkeypatch.setenv('HMAC_SECRET', 'test-hmac-secret-32-characters-long')
@@ -151,7 +154,7 @@ def test_voicepay_placeholder_secret_rejected(monkeypatch):
     monkeypatch.setenv('INBOUND_WEBHOOK_SECRET', 'inbound-webhook-secret-32-chars-long')
     monkeypatch.setenv('ENFORCE_HTTPS', 'true')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://localhost/onepay')
-    
+
     with pytest.raises(SystemExit):
         ProductionConfig.validate()
 
@@ -162,7 +165,7 @@ def test_voicepay_missing_webhook_url_production(monkeypatch):
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', '')  # Empty
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET', 'voicepay-webhook-secret-32-chars-long')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'true')
-    
+
     # Set required production secrets
     monkeypatch.setenv('SECRET_KEY', 'test-secret-key-32-characters-long')
     monkeypatch.setenv('HMAC_SECRET', 'test-hmac-secret-32-characters-long')
@@ -172,7 +175,7 @@ def test_voicepay_missing_webhook_url_production(monkeypatch):
     monkeypatch.setenv('INBOUND_WEBHOOK_SECRET', 'inbound-webhook-secret-32-chars-long')
     monkeypatch.setenv('ENFORCE_HTTPS', 'true')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://localhost/onepay')
-    
+
     with pytest.raises(SystemExit):
         ProductionConfig.validate()
 
@@ -183,7 +186,7 @@ def test_voicepay_missing_webhook_secret_production(monkeypatch):
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'https://voicepay.ng/webhook')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET', '')  # Empty
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'true')
-    
+
     # Set required production secrets
     monkeypatch.setenv('SECRET_KEY', 'test-secret-key-32-characters-long')
     monkeypatch.setenv('HMAC_SECRET', 'test-hmac-secret-32-characters-long')
@@ -193,7 +196,7 @@ def test_voicepay_missing_webhook_secret_production(monkeypatch):
     monkeypatch.setenv('INBOUND_WEBHOOK_SECRET', 'inbound-webhook-secret-32-chars-long')
     monkeypatch.setenv('ENFORCE_HTTPS', 'true')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://localhost/onepay')
-    
+
     with pytest.raises(SystemExit):
         ProductionConfig.validate()
 
@@ -205,7 +208,7 @@ def test_voicepay_api_key_too_short(monkeypatch):
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET', 'voicepay-webhook-secret-32-chars-long')
     monkeypatch.setenv('VOICEPAY_API_KEY', 'short-key')  # Too short
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'true')
-    
+
     # Set required production secrets
     monkeypatch.setenv('SECRET_KEY', 'test-secret-key-32-characters-long')
     monkeypatch.setenv('HMAC_SECRET', 'test-hmac-secret-32-characters-long')
@@ -215,7 +218,7 @@ def test_voicepay_api_key_too_short(monkeypatch):
     monkeypatch.setenv('INBOUND_WEBHOOK_SECRET', 'inbound-webhook-secret-32-chars-long')
     monkeypatch.setenv('ENFORCE_HTTPS', 'true')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://localhost/onepay')
-    
+
     with pytest.raises(SystemExit):
         ProductionConfig.validate()
 
@@ -227,7 +230,7 @@ def test_voicepay_config_valid_production(monkeypatch):
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET', 'voicepay-webhook-secret-32-chars-long')
     monkeypatch.setenv('VOICEPAY_API_KEY', 'voicepay-api-key-32-characters-long')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'true')
-    
+
     # Set required production secrets
     monkeypatch.setenv('SECRET_KEY', 'test-secret-key-32-characters-long')
     monkeypatch.setenv('HMAC_SECRET', 'test-hmac-secret-32-characters-long')
@@ -237,14 +240,15 @@ def test_voicepay_config_valid_production(monkeypatch):
     monkeypatch.setenv('INBOUND_WEBHOOK_SECRET', 'inbound-webhook-secret-32-chars-long')
     monkeypatch.setenv('ENFORCE_HTTPS', 'true')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://localhost/onepay')
-    
+
     # Reload config
     import importlib
+
     import config as config_module
     importlib.reload(config_module)
-    
+
     from config import Config
-    
+
     # Verify all VoicePay config loaded correctly
     assert Config.VOICEPAY_WEBHOOK_URL == 'https://voicepay.ng/webhook'
     assert Config.VOICEPAY_WEBHOOK_SECRET == 'voicepay-webhook-secret-32-chars-long'
@@ -255,7 +259,7 @@ def test_voicepay_config_valid_production(monkeypatch):
 def test_voicepay_timeout_and_retry_defaults():
     """Test that VoicePay timeout and retry settings have correct defaults"""
     from config import BaseConfig
-    
+
     assert BaseConfig.VOICEPAY_WEBHOOK_TIMEOUT_SECS == 10
     assert BaseConfig.VOICEPAY_WEBHOOK_MAX_RETRIES == 3
 
@@ -264,14 +268,15 @@ def test_voicepay_timeout_and_retry_custom(monkeypatch):
     """Test that VoicePay timeout and retry settings can be customized"""
     monkeypatch.setenv('VOICEPAY_WEBHOOK_TIMEOUT_SECS', '30')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_MAX_RETRIES', '5')
-    
+
     # Reload config
     import importlib
+
     import config as config_module
     importlib.reload(config_module)
-    
+
     from config import Config
-    
+
     assert Config.VOICEPAY_WEBHOOK_TIMEOUT_SECS == 30
     assert Config.VOICEPAY_WEBHOOK_MAX_RETRIES == 5
 
@@ -282,14 +287,15 @@ def test_voicepay_sandbox_config_separate(monkeypatch):
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET', 'prod-secret-32-characters-long')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL_SANDBOX', 'https://sandbox.voicepay.ng/webhook')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET_SANDBOX', 'sandbox-secret-32-characters-long')
-    
+
     # Reload config
     import importlib
+
     import config as config_module
     importlib.reload(config_module)
-    
+
     from config import Config
-    
+
     # Verify both configs exist and are different
     assert Config.VOICEPAY_WEBHOOK_URL == 'https://voicepay.ng/webhook'
     assert Config.VOICEPAY_WEBHOOK_URL_SANDBOX == 'https://sandbox.voicepay.ng/webhook'
@@ -299,12 +305,13 @@ def test_voicepay_sandbox_config_separate(monkeypatch):
 def test_voicepay_enabled_flag_true(monkeypatch):
     """Test that VOICEPAY_WEBHOOK_ENABLED=true is parsed correctly"""
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'true')
-    
+
     # Reload config
     import importlib
+
     import config as config_module
     importlib.reload(config_module)
-    
+
     from config import Config
     assert Config.VOICEPAY_WEBHOOK_ENABLED == True
 
@@ -312,12 +319,13 @@ def test_voicepay_enabled_flag_true(monkeypatch):
 def test_voicepay_enabled_flag_false(monkeypatch):
     """Test that VOICEPAY_WEBHOOK_ENABLED=false is parsed correctly"""
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'false')
-    
+
     # Reload config
     import importlib
+
     import config as config_module
     importlib.reload(config_module)
-    
+
     from config import Config
     assert Config.VOICEPAY_WEBHOOK_ENABLED == False
 
@@ -326,12 +334,13 @@ def test_voicepay_enabled_flag_default(monkeypatch):
     """Test that VOICEPAY_WEBHOOK_ENABLED defaults to true"""
     # Explicitly unset the environment variable to test default
     monkeypatch.delenv('VOICEPAY_WEBHOOK_ENABLED', raising=False)
-    
+
     # Reload config to pick up the change
     import importlib
+
     import config as config_module
     importlib.reload(config_module)
-    
+
     from config import Config
     # Default should be true
     assert Config.VOICEPAY_WEBHOOK_ENABLED == True
@@ -343,7 +352,7 @@ def test_voicepay_http_url_rejected_production(monkeypatch):
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'http://voicepay.ng/webhook')  # HTTP not HTTPS
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET', 'voicepay-webhook-secret-32-chars-long')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'true')
-    
+
     # Set required production secrets
     monkeypatch.setenv('SECRET_KEY', 'test-secret-key-32-characters-long')
     monkeypatch.setenv('HMAC_SECRET', 'test-hmac-secret-32-characters-long')
@@ -353,7 +362,7 @@ def test_voicepay_http_url_rejected_production(monkeypatch):
     monkeypatch.setenv('INBOUND_WEBHOOK_SECRET', 'inbound-webhook-secret-32-chars-long')
     monkeypatch.setenv('ENFORCE_HTTPS', 'true')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://localhost/onepay')
-    
+
     with pytest.raises(SystemExit):
         ProductionConfig.validate()
 
@@ -364,14 +373,15 @@ def test_voicepay_development_allows_http(monkeypatch):
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'http://localhost:3000/webhook')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET', 'dev-secret')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'true')
-    
+
     # Reload config
     import importlib
+
     import config as config_module
     importlib.reload(config_module)
-    
+
     from config import Config
-    
+
     # Should load without error in development
     assert Config.VOICEPAY_WEBHOOK_URL == 'http://localhost:3000/webhook'
 
@@ -381,44 +391,45 @@ def test_voicepay_complete_configuration_integration(monkeypatch):
     """Integration test: Complete VoicePay configuration in production"""
     # Set up complete production environment
     monkeypatch.setenv('APP_ENV', 'production')
-    
+
     # Core secrets
     monkeypatch.setenv('SECRET_KEY', 'test-secret-key-32-characters-long')
     monkeypatch.setenv('HMAC_SECRET', 'test-hmac-secret-32-characters-long')
-    
+
     # KoraPay
     monkeypatch.setenv('KORAPAY_SECRET_KEY', 'sk_live_' + 'a' * 32)
     monkeypatch.setenv('KORAPAY_WEBHOOK_SECRET', 'korapay-webhook-secret-32-chars-long')
     monkeypatch.setenv('KORAPAY_USE_SANDBOX', 'false')
-    
+
     # Webhooks
     monkeypatch.setenv('INBOUND_WEBHOOK_SECRET', 'inbound-webhook-secret-32-chars-long')
-    
+
     # VoicePay - Production
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'https://voicepay.ng/api/webhooks/onepay')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET', 'voicepay-webhook-secret-32-chars-long')
     monkeypatch.setenv('VOICEPAY_API_KEY', 'voicepay-api-key-32-characters-long')
-    
+
     # VoicePay - Sandbox
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL_SANDBOX', 'https://sandbox.voicepay.ng/api/webhooks/onepay')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET_SANDBOX', 'voicepay-sandbox-secret-32-chars-long')
-    
+
     # VoicePay - Settings
     monkeypatch.setenv('VOICEPAY_WEBHOOK_TIMEOUT_SECS', '15')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_MAX_RETRIES', '5')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'true')
-    
+
     # Other required settings
     monkeypatch.setenv('ENFORCE_HTTPS', 'true')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://localhost/onepay')
-    
+
     # Reload config
     import importlib
+
     import config as config_module
     importlib.reload(config_module)
-    
+
     from config import Config
-    
+
     # Verify all VoicePay configuration loaded correctly
     assert Config.VOICEPAY_WEBHOOK_URL == 'https://voicepay.ng/api/webhooks/onepay'
     assert Config.VOICEPAY_WEBHOOK_SECRET == 'voicepay-webhook-secret-32-chars-long'
@@ -428,7 +439,7 @@ def test_voicepay_complete_configuration_integration(monkeypatch):
     assert Config.VOICEPAY_WEBHOOK_TIMEOUT_SECS == 15
     assert Config.VOICEPAY_WEBHOOK_MAX_RETRIES == 5
     assert Config.VOICEPAY_WEBHOOK_ENABLED == True
-    
+
     # Verify all secrets are unique
     secrets = [
         Config.SECRET_KEY,
@@ -439,11 +450,11 @@ def test_voicepay_complete_configuration_integration(monkeypatch):
         Config.VOICEPAY_WEBHOOK_SECRET_SANDBOX
     ]
     assert len(secrets) == len(set(secrets)), "All secrets must be unique"
-    
+
     # Verify all secrets meet minimum length
     for secret in secrets:
         assert len(secret) >= 32, f"Secret too short: {secret[:10]}..."
-    
+
     # Verify HTTPS enforcement
     assert Config.ENFORCE_HTTPS == True
     assert Config.VOICEPAY_WEBHOOK_URL.startswith('https://')
@@ -453,12 +464,12 @@ def test_voicepay_complete_configuration_integration(monkeypatch):
 def test_voicepay_config_summary():
     """Summary test: Print VoicePay configuration structure"""
     from config import BaseConfig
-    
+
     voicepay_attrs = [
         attr for attr in dir(BaseConfig)
         if attr.startswith('VOICEPAY_')
     ]
-    
+
     print("\n" + "=" * 60)
     print("VoicePay Configuration Attributes:")
     print("=" * 60)
@@ -471,7 +482,7 @@ def test_voicepay_config_summary():
             display_value = value
         print(f"  {attr}: {display_value}")
     print("=" * 60)
-    
+
     # Verify we have all expected attributes
     expected_attrs = [
         'VOICEPAY_API_KEY',
@@ -483,8 +494,8 @@ def test_voicepay_config_summary():
         'VOICEPAY_WEBHOOK_URL',
         'VOICEPAY_WEBHOOK_URL_SANDBOX',
     ]
-    
+
     for attr in expected_attrs:
         assert attr in voicepay_attrs, f"Missing expected attribute: {attr}"
-    
+
     assert len(voicepay_attrs) == 8, f"Expected 8 VoicePay attributes, found {len(voicepay_attrs)}"

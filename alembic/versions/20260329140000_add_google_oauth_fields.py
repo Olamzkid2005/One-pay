@@ -5,9 +5,9 @@ Revises: 20260329135018
 Create Date: 2026-03-29 14:00:00
 
 """
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = '20260329140000'
@@ -23,7 +23,7 @@ def upgrade():
     op.add_column('users', sa.Column('profile_picture_url', sa.String(length=500), nullable=True))
     op.add_column('users', sa.Column('full_name', sa.String(length=255), nullable=True))
     op.add_column('users', sa.Column('auth_provider', sa.String(length=20), nullable=False, server_default='traditional'))
-    
+
     # Create unique index on google_id for fast lookups and constraint enforcement
     op.create_index('ix_users_google_id', 'users', ['google_id'], unique=True)
 

@@ -7,6 +7,7 @@ Usage in app factory:
 """
 
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -143,7 +144,7 @@ class BaseConfig:
     def reload(cls):
         """
         Reload configuration from environment variables.
-        
+
         This is useful in tests when environment variables are changed
         via monkeypatch after the config class has been imported.
         """
@@ -162,163 +163,142 @@ class BaseConfig:
         cls.GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
 
     @classmethod
-    def validate(cls):
-        """Enforce strong secrets in production. Called explicitly from app factory."""
-        import logging as _logging
-        import sys as _sys
-        import os as _os
-
-        _logger = _logging.getLogger(__name__)
-
-        # Skip validation in testing environment
-        app_env = _os.getenv("APP_ENV", "development").lower()
-        if app_env == "testing" or cls.TESTING:
-            return
-
-        errors = []
-        warnings = []
-
-        # Check for placeholder secrets
+    def _validate_core_secrets(cls, app_env: str, errors: list) -> None:
+        """Validate core SECRET_KEY and HMAC_SECRET."""
         if "change-this" in cls.SECRET_KEY.lower():
             errors.append("SECRET_KEY contains placeholder value")
         if "change-this" in cls.HMAC_SECRET.lower():
             errors.append("HMAC_SECRET contains placeholder value")
         if cls.WEBHOOK_SECRET and "change-this" in cls.WEBHOOK_SECRET.lower():
             errors.append("WEBHOOK_SECRET contains placeholder value")
-
-        # Check minimum entropy (32 bytes = 64 hex chars)
         if len(cls.SECRET_KEY) < 32:
             errors.append("SECRET_KEY too short (minimum 32 characters)")
         if len(cls.HMAC_SECRET) < 32:
             errors.append("HMAC_SECRET too short (minimum 32 characters)")
-
-        # Check secrets are different
         if cls.SECRET_KEY == cls.HMAC_SECRET:
             errors.append("SECRET_KEY and HMAC_SECRET must be different")
         if cls.WEBHOOK_SECRET and cls.WEBHOOK_SECRET == cls.HMAC_SECRET:
             errors.append("WEBHOOK_SECRET and HMAC_SECRET must be different")
-
-        # Check inbound webhook secret (required in all environments)
         if not cls.INBOUND_WEBHOOK_SECRET:
             errors.append("INBOUND_WEBHOOK_SECRET is required")
 
-        # Check KoraPay configuration in production
-        if app_env == "production":
-            if not cls.KORAPAY_SECRET_KEY:
-                errors.append("KORAPAY_SECRET_KEY is required in production")
-            elif len(cls.KORAPAY_SECRET_KEY) < 32:
-                errors.append("KORAPAY_SECRET_KEY too short (minimum 32 characters)")
-            elif not cls.KORAPAY_SECRET_KEY.startswith("sk_live_"):
-                errors.append(
-                    "KORAPAY_SECRET_KEY must start with sk_live_ in production"
-                )
-            elif cls.KORAPAY_SECRET_KEY.startswith("sk_test_"):
-                errors.append("Cannot use test API key (sk_test_) in production")
-            elif "change-this" in cls.KORAPAY_SECRET_KEY.lower():
-                errors.append("KORAPAY_SECRET_KEY contains placeholder value")
+    @classmethod
+    def _validate_korapay(cls, app_env: str, errors: list) -> None:
+        """Validate KoraPay configuration (production only)."""
+        if app_env != "production":
+            return
+        cls._validate_korapay_secret(errors)
+        cls._validate_korapay_webhook_secret(errors)
+        cls._validate_korapay_uniqueness(errors)
+        if cls.KORAPAY_USE_SANDBOX:
+            errors.append("KORAPAY_USE_SANDBOX must be false in production")
+        if cls.INBOUND_WEBHOOK_SECRET and len(cls.INBOUND_WEBHOOK_SECRET) < 32:
+            errors.append("INBOUND_WEBHOOK_SECRET too short (minimum 32 characters in production)")
 
-            if not cls.KORAPAY_WEBHOOK_SECRET:
-                errors.append("KORAPAY_WEBHOOK_SECRET is required in production")
-            elif len(cls.KORAPAY_WEBHOOK_SECRET) < 32:
-                errors.append(
-                    "KORAPAY_WEBHOOK_SECRET too short (minimum 32 characters)"
-                )
-            elif "change-this" in cls.KORAPAY_WEBHOOK_SECRET.lower():
-                errors.append("KORAPAY_WEBHOOK_SECRET contains placeholder value")
+    @classmethod
+    def _validate_korapay_secret(cls, errors: list) -> None:
+        if not cls.KORAPAY_SECRET_KEY:
+            errors.append("KORAPAY_SECRET_KEY is required in production")
+        elif len(cls.KORAPAY_SECRET_KEY) < 32:
+            errors.append("KORAPAY_SECRET_KEY too short (minimum 32 characters)")
+        elif not cls.KORAPAY_SECRET_KEY.startswith("sk_live_"):
+            errors.append("KORAPAY_SECRET_KEY must start with sk_live_ in production")
+        elif cls.KORAPAY_SECRET_KEY.startswith("sk_test_"):
+            errors.append("Cannot use test API key (sk_test_) in production")
+        elif "change-this" in cls.KORAPAY_SECRET_KEY.lower():
+            errors.append("KORAPAY_SECRET_KEY contains placeholder value")
 
-            # Validate secrets are unique
-            if (
-                cls.KORAPAY_SECRET_KEY
-                and cls.KORAPAY_SECRET_KEY == cls.KORAPAY_WEBHOOK_SECRET
-            ):
-                errors.append(
-                    "KORAPAY_SECRET_KEY and KORAPAY_WEBHOOK_SECRET must be different"
-                )
-            if (
-                cls.KORAPAY_WEBHOOK_SECRET
-                and cls.KORAPAY_WEBHOOK_SECRET == cls.HMAC_SECRET
-            ):
-                errors.append(
-                    "KORAPAY_WEBHOOK_SECRET and HMAC_SECRET must be different"
-                )
+    @classmethod
+    def _validate_korapay_webhook_secret(cls, errors: list) -> None:
+        if not cls.KORAPAY_WEBHOOK_SECRET:
+            errors.append("KORAPAY_WEBHOOK_SECRET is required in production")
+        elif len(cls.KORAPAY_WEBHOOK_SECRET) < 32:
+            errors.append("KORAPAY_WEBHOOK_SECRET too short (minimum 32 characters)")
+        elif "change-this" in cls.KORAPAY_WEBHOOK_SECRET.lower():
+            errors.append("KORAPAY_WEBHOOK_SECRET contains placeholder value")
 
-            if cls.KORAPAY_USE_SANDBOX:
-                errors.append("KORAPAY_USE_SANDBOX must be false in production")
+    @classmethod
+    def _validate_korapay_uniqueness(cls, errors: list) -> None:
+        if cls.KORAPAY_SECRET_KEY and cls.KORAPAY_SECRET_KEY == cls.KORAPAY_WEBHOOK_SECRET:
+            errors.append("KORAPAY_SECRET_KEY and KORAPAY_WEBHOOK_SECRET must be different")
+        if cls.KORAPAY_WEBHOOK_SECRET and cls.KORAPAY_WEBHOOK_SECRET == cls.HMAC_SECRET:
+            errors.append("KORAPAY_WEBHOOK_SECRET and HMAC_SECRET must be different")
 
-            # Check inbound webhook secret length in production
-            if cls.INBOUND_WEBHOOK_SECRET and len(cls.INBOUND_WEBHOOK_SECRET) < 32:
-                errors.append(
-                    "INBOUND_WEBHOOK_SECRET too short (minimum 32 characters in production)"
-                )
-
-        # Check Google OAuth configuration in production
-        if app_env == "production" and cls.GOOGLE_CLIENT_ID:
+    @classmethod
+    def _validate_oauth(cls, app_env: str, errors: list) -> None:
+        """Validate OAuth configuration (production only)."""
+        if app_env != "production":
+            return
+        if cls.GOOGLE_CLIENT_ID:
             if len(cls.GOOGLE_CLIENT_SECRET) < 32:
                 errors.append("GOOGLE_CLIENT_SECRET too short (minimum 32 characters)")
-            if cls.GOOGLE_REDIRECT_URI and not cls.GOOGLE_REDIRECT_URI.startswith(
-                "https://"
-            ):
+            if cls.GOOGLE_REDIRECT_URI and not cls.GOOGLE_REDIRECT_URI.startswith("https://"):
                 errors.append("GOOGLE_REDIRECT_URI must use HTTPS in production")
 
-        # Check VoicePay configuration in production
-        if app_env == "production" and cls.VOICEPAY_WEBHOOK_ENABLED:
-            if not cls.VOICEPAY_WEBHOOK_URL:
-                errors.append(
-                    "VOICEPAY_WEBHOOK_URL is required when VoicePay integration is enabled"
-                )
-            elif not cls.VOICEPAY_WEBHOOK_URL.startswith("https://"):
-                errors.append("VOICEPAY_WEBHOOK_URL must use HTTPS in production")
+    @classmethod
+    def _validate_voicepay(cls, app_env: str, errors: list, warnings: list) -> None:
+        """Validate VoicePay configuration (production only)."""
+        if app_env != "production" or not cls.VOICEPAY_WEBHOOK_ENABLED:
+            return
+        if not cls.VOICEPAY_WEBHOOK_URL:
+            errors.append("VOICEPAY_WEBHOOK_URL is required when VoicePay integration is enabled")
+        elif not cls.VOICEPAY_WEBHOOK_URL.startswith("https://"):
+            errors.append("VOICEPAY_WEBHOOK_URL must use HTTPS in production")
 
-            if not cls.VOICEPAY_WEBHOOK_SECRET:
-                errors.append(
-                    "VOICEPAY_WEBHOOK_SECRET is required when VoicePay integration is enabled"
-                )
-            elif len(cls.VOICEPAY_WEBHOOK_SECRET) < 32:
-                errors.append(
-                    "VOICEPAY_WEBHOOK_SECRET too short (minimum 32 characters)"
-                )
-            elif "change-this" in cls.VOICEPAY_WEBHOOK_SECRET.lower():
-                errors.append("VOICEPAY_WEBHOOK_SECRET contains placeholder value")
+        if not cls.VOICEPAY_WEBHOOK_SECRET:
+            errors.append("VOICEPAY_WEBHOOK_SECRET is required when VoicePay integration is enabled")
+        elif len(cls.VOICEPAY_WEBHOOK_SECRET) < 32:
+            errors.append("VOICEPAY_WEBHOOK_SECRET too short (minimum 32 characters)")
+        elif "change-this" in cls.VOICEPAY_WEBHOOK_SECRET.lower():
+            errors.append("VOICEPAY_WEBHOOK_SECRET contains placeholder value")
 
-            if not cls.VOICEPAY_API_KEY:
-                warnings.append(
-                    "VOICEPAY_API_KEY not set - VoicePay will need to generate this"
-                )
-            elif len(cls.VOICEPAY_API_KEY) < 32:
-                errors.append("VOICEPAY_API_KEY too short (minimum 32 characters)")
+        if not cls.VOICEPAY_API_KEY:
+            warnings.append("VOICEPAY_API_KEY not set - VoicePay will need to generate this")
+        elif len(cls.VOICEPAY_API_KEY) < 32:
+            errors.append("VOICEPAY_API_KEY too short (minimum 32 characters)")
 
-            # Validate secrets are unique
-            if (
-                cls.VOICEPAY_WEBHOOK_SECRET
-                and cls.VOICEPAY_WEBHOOK_SECRET == cls.HMAC_SECRET
-            ):
-                errors.append(
-                    "VOICEPAY_WEBHOOK_SECRET and HMAC_SECRET must be different"
-                )
-            if (
-                cls.VOICEPAY_WEBHOOK_SECRET
-                and cls.VOICEPAY_WEBHOOK_SECRET == cls.KORAPAY_WEBHOOK_SECRET
-            ):
-                errors.append(
-                    "VOICEPAY_WEBHOOK_SECRET and KORAPAY_WEBHOOK_SECRET must be different"
-                )
+        if cls.VOICEPAY_WEBHOOK_SECRET and cls.VOICEPAY_WEBHOOK_SECRET == cls.HMAC_SECRET:
+            errors.append("VOICEPAY_WEBHOOK_SECRET and HMAC_SECRET must be different")
+        if cls.VOICEPAY_WEBHOOK_SECRET and cls.VOICEPAY_WEBHOOK_SECRET == cls.KORAPAY_WEBHOOK_SECRET:
+            errors.append("VOICEPAY_WEBHOOK_SECRET and KORAPAY_WEBHOOK_SECRET must be different")
 
-        if app_env == "production" and cls.DEBUG:
+    @classmethod
+    def _validate_production_env(cls, app_env: str, errors: list) -> None:
+        """Validate production-specific environment settings."""
+        if app_env != "production":
+            return
+        if cls.DEBUG:
             errors.append("DEBUG mode is enabled in production environment")
+        if not cls.ENFORCE_HTTPS:
+            errors.append("ENFORCE_HTTPS must be true in production")
+        if "sqlite" in cls.DATABASE_URL.lower():
+            errors.append("SQLite not allowed in production (use PostgreSQL)")
 
-        # Check HTTPS enforcement in production
-        if app_env == "production":
-            if not cls.ENFORCE_HTTPS:
-                errors.append("ENFORCE_HTTPS must be true in production")
-            if "sqlite" in cls.DATABASE_URL.lower():
-                errors.append("SQLite not allowed in production (use PostgreSQL)")
+    @classmethod
+    def validate(cls):
+        """Enforce strong secrets in production. Called explicitly from app factory."""
+        import logging as _logging
+        import os as _os
+        import sys as _sys
 
-        # Log warnings
+        _logger = _logging.getLogger(__name__)
+
+        app_env = _os.getenv("APP_ENV", "development").lower()
+        if app_env == "testing" or cls.TESTING:
+            return
+
+        errors: list = []
+        warnings: list = []
+
+        cls._validate_core_secrets(app_env, errors)
+        cls._validate_korapay(app_env, errors)
+        cls._validate_oauth(app_env, errors)
+        cls._validate_voicepay(app_env, errors, warnings)
+        cls._validate_production_env(app_env, errors)
+
         for warning in warnings:
             _logger.warning("SECURITY WARNING: %s", warning)
 
-        # Only abort on errors in production/testing; warn in development
-        app_env = _os.getenv("APP_ENV", "development").lower()
         if errors:
             if app_env == "development":
                 _logger.warning(
@@ -353,8 +333,8 @@ class TestingConfig(BaseConfig):
     LOGIN_MAX_ATTEMPTS = 3
     LOCKOUT_DURATION_SECS = 5
     # Use fixed secrets so HMAC is deterministic in tests
-    SECRET_KEY = "test-secret-key"
-    HMAC_SECRET = "test-hmac-secret"
+    SECRET_KEY = "test-secret-key"  # nosec B105
+    HMAC_SECRET = "test-hmac-secret"  # nosec B105
 
 
 class ProductionConfig(BaseConfig):

@@ -1,13 +1,14 @@
 # tests/test_config.py
 """Tests for configuration values"""
 import os
+
 import pytest
 
 
 def test_api_key_config_defaults():
     """Test API key configuration defaults"""
     from config import BaseConfig
-    
+
     assert BaseConfig.API_KEY_MAX_PER_USER == 10
     assert BaseConfig.API_KEY_GENERATION_RATE_LIMIT == 5
 
@@ -16,12 +17,13 @@ def test_inbound_webhook_config_defaults(monkeypatch):
     """Test inbound webhook configuration defaults"""
     # Clear the env var to test the default
     monkeypatch.delenv("INBOUND_WEBHOOK_SECRET", raising=False)
-    
+
     # Reload config to pick up the change
     import importlib
+
     import config
     importlib.reload(config)
-    
+
     # Get BaseConfig from the reloaded module
     assert config.BaseConfig.INBOUND_WEBHOOK_SECRET == ""
 
@@ -29,7 +31,7 @@ def test_inbound_webhook_config_defaults(monkeypatch):
 def test_api_rate_limit_config_defaults():
     """Test API rate limit configuration defaults"""
     from config import BaseConfig
-    
+
     assert BaseConfig.RATE_LIMIT_API_LINK_CREATE == 100
     assert BaseConfig.RATE_LIMIT_API_STATUS_CHECK == 500
 
@@ -44,9 +46,9 @@ def test_production_validates_inbound_webhook_secret(monkeypatch):
     monkeypatch.setenv("KORAPAY_WEBHOOK_SECRET", "e" * 32)
     monkeypatch.setenv("DATABASE_URL", "postgresql://test")
     monkeypatch.setenv("INBOUND_WEBHOOK_SECRET", "")  # Empty
-    
+
     from config import ProductionConfig
-    
+
     with pytest.raises(SystemExit):
         ProductionConfig.validate()
 
@@ -61,8 +63,8 @@ def test_production_validates_inbound_webhook_secret_length(monkeypatch):
     monkeypatch.setenv("KORAPAY_WEBHOOK_SECRET", "e" * 32)
     monkeypatch.setenv("DATABASE_URL", "postgresql://test")
     monkeypatch.setenv("INBOUND_WEBHOOK_SECRET", "short")  # Too short
-    
+
     from config import ProductionConfig
-    
+
     with pytest.raises(SystemExit):
         ProductionConfig.validate()

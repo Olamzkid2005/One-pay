@@ -3,9 +3,9 @@ Pytest configuration for OnePay tests.
 Sets up the Python path to include the project root and provides
 shared fixtures for test isolation.
 """
-import sys
 import os
 import secrets
+import sys
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from unittest.mock import patch
@@ -18,7 +18,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from models.base import Base
-
 
 # ---------------------------------------------------------------------------
 # Set testing environment globally - MUST run before any imports
@@ -52,7 +51,7 @@ def set_test_environment():
 def isolate_tests(monkeypatch):
     """
     Ensure complete isolation between tests.
-    
+
     This fixture runs automatically for every test and:
     - Resets rate limiter cache
     - Clears any global state
@@ -66,14 +65,14 @@ def isolate_tests(monkeypatch):
         rl._memory_cache.clear()
     except Exception:
         pass
-    
+
     # Before test: Clear cache
     try:
         from services.cache import reset_cache
         reset_cache()
     except Exception:
         pass
-    
+
     # Before test: Reset any module-level state
     try:
         # Clear Flask's app context stack
@@ -82,7 +81,7 @@ def isolate_tests(monkeypatch):
             _app_ctx_stack.pop()
     except Exception:
         pass
-    
+
     # Before test: Clear any request context
     try:
         from flask import _request_ctx_stack
@@ -90,22 +89,22 @@ def isolate_tests(monkeypatch):
             _request_ctx_stack.pop()
     except Exception:
         pass
-    
+
     yield
-    
+
     # After test: Clean up again
     try:
         import services.rate_limiter as rl
         rl._memory_cache.clear()
     except Exception:
         pass
-    
+
     try:
         from services.cache import reset_cache
         reset_cache()
     except Exception:
         pass
-    
+
     # After test: Clear Flask contexts
     try:
         from flask import _app_ctx_stack
@@ -113,14 +112,14 @@ def isolate_tests(monkeypatch):
             _app_ctx_stack.pop()
     except Exception:
         pass
-    
+
     try:
         from flask import _request_ctx_stack
         while _request_ctx_stack.top is not None:
             _request_ctx_stack.pop()
     except Exception:
         pass
-    
+
     # After test: Stop any mock patches that weren't cleaned up
     try:
         patch.stopall()
@@ -136,7 +135,7 @@ def isolate_tests(monkeypatch):
 def app():
     """
     Create a Flask app instance with proper cleanup and isolation.
-    
+
     This fixture ensures:
     - Fresh app instance for each test
     - Background threads are stopped after test
@@ -145,31 +144,31 @@ def app():
     """
     # Import here to avoid circular imports
     from app import create_app
-    
+
     # Create fresh app instance
     test_app = create_app()
     test_app.config['TESTING'] = True
     test_app.config['WTF_CSRF_ENABLED'] = False
-    
+
     # Push app context for the test
     ctx = test_app.app_context()
     ctx.push()
-    
+
     yield test_app
-    
+
     # Cleanup: Signal background threads to stop
     if hasattr(test_app, '_shutdown_event'):
         test_app._shutdown_event.set()
         # Give threads a moment to stop
         import time
         time.sleep(0.1)
-    
+
     # Cleanup: Pop app context
     try:
         ctx.pop()
     except Exception:
         pass
-    
+
     # Cleanup: Clear any remaining contexts
     try:
         from flask import _app_ctx_stack
@@ -197,7 +196,7 @@ def db_session():
 
     Creates a fresh in-memory SQLite database, builds all tables,
     yields the session, then tears down — so every test starts clean.
-    
+
     Uses nested transactions for complete isolation.
     """
     from sqlalchemy import event
@@ -214,12 +213,12 @@ def db_session():
         cursor.close()
 
     Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-    session = Session()
-    
+    session_factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    session = session_factory()
+
     # Start a transaction
     session.begin_nested()
-    
+
     try:
         yield session
     finally:
@@ -228,17 +227,17 @@ def db_session():
             session.rollback()
         except Exception:
             pass
-        
+
         try:
             session.close()
         except Exception:
             pass
-        
+
         try:
             Base.metadata.drop_all(engine)
         except Exception:
             pass
-        
+
         try:
             engine.dispose()
         except Exception:
@@ -285,17 +284,17 @@ def reset_rate_limiter():
 def reload_config():
     """
     Reload configuration after monkeypatching environment variables.
-    
+
     Usage::
         def test_something(monkeypatch, reload_config):
             monkeypatch.setenv("INBOUND_WEBHOOK_SECRET", "test_secret")
             reload_config()  # Now Config.INBOUND_WEBHOOK_SECRET has the new value
     """
     from config import Config
-    
+
     def _reload():
         Config.reload()
-    
+
     return _reload
 
 

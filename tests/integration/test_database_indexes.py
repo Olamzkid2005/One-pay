@@ -13,10 +13,10 @@ Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6
 import importlib
 import os
 import sys
+
 import pytest
 import sqlalchemy as sa
-from sqlalchemy import create_engine, text, inspect
-
+from sqlalchemy import create_engine, inspect, text
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -246,10 +246,11 @@ class TestIndexCreationOnSQLite:
     @staticmethod
     def _run_migration_fn(engine, fn):
         """Execute a migration function (upgrade/downgrade) using a real connection."""
-        from alembic.runtime.migration import MigrationContext
-        from alembic.operations import Operations
-        import alembic.op as alembic_op_module
         from unittest.mock import patch
+
+        import alembic.op as alembic_op_module
+        from alembic.operations import Operations
+        from alembic.runtime.migration import MigrationContext
 
         with engine.begin() as conn:
             ctx = MigrationContext.configure(conn)

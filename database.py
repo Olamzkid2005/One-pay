@@ -12,7 +12,8 @@ Usage:
 import contextlib
 import logging
 
-from sqlalchemy import create_engine, event as _sa_event
+from sqlalchemy import create_engine
+from sqlalchemy import event as _sa_event
 from sqlalchemy.orm import sessionmaker
 
 from config import Config
@@ -71,9 +72,6 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
-        # Only commit if the session is still in a valid state
-        # After db.rollback() the session enters a "partial rollback" state
-        # and committing would raise PendingRollbackError
         if db.in_transaction():
             db.commit()
     except Exception:
@@ -86,7 +84,7 @@ def get_db():
 _db_initialised = False
 
 
-def init_db():
+def init_db() -> None:
     """Create all tables. Called once at app startup — safe to call multiple times."""
     global _db_initialised
     if _db_initialised:

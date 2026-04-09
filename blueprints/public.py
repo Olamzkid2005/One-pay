@@ -4,33 +4,33 @@ Handles: verify page, preview API, transfer-status polling, health check
 No login required — these are customer-facing routes.
 """
 
-import logging
 import json
+import logging
 from datetime import datetime, timezone
 
+import sqlalchemy
 from flask import (
     Blueprint,
-    request,
     jsonify,
-    render_template,
-    session,
     make_response,
     redirect,
+    render_template,
+    request,
+    session,
 )
 
 from config import Config
+from core.audit import log_event
+from core.auth import valid_tx_ref
+from core.exceptions import AuthenticationError, AuthorizationError, ProviderError, ValidationError
+from core.ip import client_ip
+from core.responses import error, rate_limited
 from database import engine, get_db
 from models.transaction import Transaction, TransactionStatus
 from models.user import User
+from services.korapay import KoraPayError, korapay
 from services.rate_limiter import check_rate_limit, cleanup_old_rate_limits
 from services.security import verify_hash_token
-from services.korapay import korapay, KoraPayError
-from core.auth import valid_tx_ref
-from core.ip import client_ip
-from core.responses import error, rate_limited
-from core.audit import log_event
-from core.exceptions import ValidationError, AuthenticationError, AuthorizationError, ProviderError
-import sqlalchemy
 
 logger = logging.getLogger(__name__)
 public_bp = Blueprint("public", __name__)
@@ -42,7 +42,7 @@ public_bp = Blueprint("public", __name__)
 @public_bp.route("/")
 def index():
     """Root route - redirect to dashboard if authenticated, otherwise to login."""
-    from flask import session, redirect
+    from flask import redirect, session
 
     if session.get("user_id"):
         return redirect("/api/v1/", code=302)
@@ -152,7 +152,7 @@ def api_payment_summary():
 @public_bp.route("/api/invoices", methods=["GET"])
 def api_invoices_list():
     """Handle /api/invoices API call - redirect to the JSON API endpoint"""
-    from flask import request, redirect
+    from flask import redirect, request
 
     return redirect(
         f"/api/v1/invoices/list{('?' + request.query_string.decode()) if request.query_string else ''}",
@@ -388,8 +388,6 @@ def verified_page(tx_ref):
     if not valid_tx_ref(tx_ref):
         return redirect("/pay/invalid", code=301)
 
-    from flask import redirect
-
     with get_db() as db:
         t = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
 
@@ -550,8 +548,8 @@ def transfer_status(tx_ref):
 
                 # Sync invoice status and send notification emails
                 from services.webhook import (
-                    sync_invoice_on_transaction_update,
                     send_payment_notification_emails,
+                    sync_invoice_on_transaction_update,
                 )
 
                 sync_invoice_on_transaction_update(db, t_locked)
@@ -586,6 +584,34 @@ def transfer_status(tx_ref):
 
 
 # ── KoraPay Webhook ────────────────────────────────────────────────────────────
+
+
+def _forward_to_voicepay(t, reference: str) -> None:
+    """Forward confirmed payment to VoicePay if applicable (best-effort)."""
+    from config import Config
+    if not (Config.VOICEPAY_WEBHOOK_ENABLED and reference.startswith("VP-BILL-")):
+        return
+    try:
+        from services.voicepay_webhook import build_voicepay_payload, send_voicepay_webhook
+        if Config.KORAPAY_USE_SANDBOX and Config.VOICEPAY_WEBHOOK_URL_SANDBOX:
+            webhook_url = Config.VOICEPAY_WEBHOOK_URL_SANDBOX
+            webhook_secret = Config.VOICEPAY_WEBHOOK_SECRET_SANDBOX
+        else:
+            webhook_url = Config.VOICEPAY_WEBHOOK_URL
+            webhook_secret = Config.VOICEPAY_WEBHOOK_SECRET
+        result = send_voicepay_webhook(
+            payload=build_voicepay_payload(t),
+            webhook_url=webhook_url,
+            secret=webhook_secret,
+            timeout=Config.VOICEPAY_WEBHOOK_TIMEOUT_SECS,
+            max_retries=Config.VOICEPAY_WEBHOOK_MAX_RETRIES,
+        )
+        if result.get("success"):
+            logger.info("VoicePay webhook delivered | ref=%s status_code=%d", reference, result.get("status_code"))
+        else:
+            logger.warning("VoicePay webhook delivery failed | ref=%s error=%s", reference, result.get("error"))
+    except Exception as e:
+        logger.error("VoicePay webhook forwarding error | ref=%s error=%s", reference, e, exc_info=True)
 
 
 @public_bp.route("/api/webhooks/korapay", methods=["POST"])
@@ -686,56 +712,7 @@ def korapay_webhook():
             db.flush()
 
             # Forward to VoicePay if this is a VoicePay transaction
-            from config import Config
-
-            if Config.VOICEPAY_WEBHOOK_ENABLED and reference.startswith("VP-BILL-"):
-                try:
-                    from services.voicepay_webhook import (
-                        build_voicepay_payload,
-                        send_voicepay_webhook,
-                    )
-
-                    # Determine webhook URL (sandbox vs production)
-                    if (
-                        Config.KORAPAY_USE_SANDBOX
-                        and Config.VOICEPAY_WEBHOOK_URL_SANDBOX
-                    ):
-                        webhook_url = Config.VOICEPAY_WEBHOOK_URL_SANDBOX
-                        webhook_secret = Config.VOICEPAY_WEBHOOK_SECRET_SANDBOX
-                    else:
-                        webhook_url = Config.VOICEPAY_WEBHOOK_URL
-                        webhook_secret = Config.VOICEPAY_WEBHOOK_SECRET
-
-                    # Build and send VoicePay webhook
-                    payload = build_voicepay_payload(t)
-                    result = send_voicepay_webhook(
-                        payload=payload,
-                        webhook_url=webhook_url,
-                        secret=webhook_secret,
-                        timeout=Config.VOICEPAY_WEBHOOK_TIMEOUT_SECS,
-                        max_retries=Config.VOICEPAY_WEBHOOK_MAX_RETRIES,
-                    )
-
-                    if result.get("success"):
-                        logger.info(
-                            "VoicePay webhook delivered | ref=%s status_code=%d",
-                            reference,
-                            result.get("status_code"),
-                        )
-                    else:
-                        logger.warning(
-                            "VoicePay webhook delivery failed | ref=%s error=%s",
-                            reference,
-                            result.get("error"),
-                        )
-                except Exception as e:
-                    # Log error but don't block KoraPay webhook response
-                    logger.error(
-                        "VoicePay webhook forwarding error | ref=%s error=%s",
-                        reference,
-                        e,
-                        exc_info=True,
-                    )
+            _forward_to_voicepay(t, reference)
 
             # Deliver webhook if configured
             if t.webhook_url:
@@ -784,8 +761,8 @@ def health():
             from core.audit import cleanup_old_audit_logs
 
             cleanup_old_audit_logs(db, retention_days=90)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Health check cleanup error: %s", e)
 
     # Check KoraPay configuration status
     korapay_ok = korapay.is_configured()

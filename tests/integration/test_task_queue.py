@@ -8,17 +8,18 @@ Tests for Huey task queue integration:
 - Backward compatibility with thread-based delivery
 """
 
+from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from datetime import datetime, timezone, timedelta
 
 from services.task_queue import (
-    huey,
-    deliver_webhook_task,
-    cleanup_rate_limits,
     cleanup_audit_logs,
-    cleanup_webhook_idempotency_task,
+    cleanup_rate_limits,
     cleanup_webhook_idempotency_records,
+    cleanup_webhook_idempotency_task,
+    deliver_webhook_task,
+    huey,
 )
 from services.webhook import deliver_webhook_from_dict, queue_webhook_delivery
 

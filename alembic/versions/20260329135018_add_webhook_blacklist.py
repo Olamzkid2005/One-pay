@@ -5,9 +5,9 @@ Revises: 20260327000001
 Create Date: 2026-03-29 13:50:18
 
 """
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = '20260329135018'
@@ -26,7 +26,7 @@ def upgrade():
         sa.Column('attempts', sa.Integer(), nullable=False, server_default='1'),
         sa.PrimaryKeyConstraint('url')
     )
-    
+
     # Create index on blacklisted_at for cleanup queries
     op.create_index('ix_webhook_blacklist_blacklisted_at', 'webhook_blacklist', ['blacklisted_at'])
 

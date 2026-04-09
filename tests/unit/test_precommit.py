@@ -5,7 +5,6 @@ import os
 import pytest
 import yaml
 
-
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", ".pre-commit-config.yaml")
 SETUP_SH_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "scripts", "setup.sh")
 

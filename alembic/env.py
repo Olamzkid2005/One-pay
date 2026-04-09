@@ -1,18 +1,18 @@
-from logging.config import fileConfig
-
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
-from alembic import context
+import os
 
 # Import OnePay config and models
 import sys
-import os
+from logging.config import fileConfig
+
+from sqlalchemy import engine_from_config, pool
+
+from alembic import context
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+import models  # noqa: F401 - imports all models to register them with Base
 from config import Config
 from models.base import Base
-import models  # noqa: F401 - imports all models to register them with Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

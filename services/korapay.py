@@ -8,12 +8,15 @@ Mock mode activates when KORAPAY_SECRET_KEY is empty or < 32 characters.
 """
 
 import logging
-import requests
+import secrets
 import threading
 import time
 from collections import deque
 from datetime import datetime, timezone
+
+import requests
 from requests.adapters import HTTPAdapter
+
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -141,7 +144,7 @@ class CircuitBreaker:
             result = func(*args, **kwargs)
             self.record_success()
             return result
-        except Exception as e:
+        except Exception:
             self.record_failure()
             raise
 
@@ -305,6 +308,7 @@ class KoraPayService:
             and X-Correlation-ID headers
         """
         import uuid
+
         from config import Config as FreshConfig
 
         headers = {
@@ -343,7 +347,7 @@ class KoraPayService:
             KoraPayError: On request failure after retries
         """
         import time
-        import random
+
         from config import Config as FreshConfig
 
         # Build full URL
@@ -440,8 +444,8 @@ class KoraPayService:
                         error_data = response.json()
                         if "message" in error_data:
                             error_msg = f"{error_msg} - {error_data['message']}"
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Could not parse error response body: %s", e)
 
                     with self._metrics_lock:
                         self._metrics["total_requests"] += 1
@@ -456,7 +460,7 @@ class KoraPayService:
                 if response.status_code >= 500:
                     if attempt < max_retries:
                         # Exponential backoff: 2^(attempt-1) + jitter
-                        delay = (2 ** (attempt - 1)) + random.uniform(0, 0.5)
+                        delay = (2 ** (attempt - 1)) + (secrets.randbelow(500) / 1000)
                         logger.warning(
                             "Server error, retry in %.1fs | status=%d attempt=%d request_id=%s",
                             delay,
@@ -486,7 +490,7 @@ class KoraPayService:
                         self._metrics["last_request_time"] = time.time()
                     self._response_times.append(duration_ms)
                     return response_data
-                except requests.exceptions.JSONDecodeError as e:
+                except requests.exceptions.JSONDecodeError:
                     logger.error(
                         "Invalid JSON response | status=%d request_id=%s",
                         response.status_code,
@@ -500,7 +504,7 @@ class KoraPayService:
             except requests.Timeout as e:
                 last_error = e
                 if attempt < max_retries:
-                    delay = (2 ** (attempt - 1)) + random.uniform(0, 0.5)
+                    delay = (2 ** (attempt - 1)) + (secrets.randbelow(500) / 1000)
                     logger.warning(
                         "Request timeout, retry in %.1fs | attempt=%d request_id=%s",
                         delay,
@@ -536,7 +540,7 @@ class KoraPayService:
             except requests.ConnectionError as e:
                 last_error = e
                 if attempt < max_retries:
-                    delay = (2 ** (attempt - 1)) + random.uniform(0, 0.5)
+                    delay = (2 ** (attempt - 1)) + (secrets.randbelow(500) / 1000)
                     logger.warning(
                         "Connection error, retry in %.1fs | attempt=%d request_id=%s",
                         delay,
@@ -835,7 +839,6 @@ class KoraPayService:
         Returns:
             Dict with Quickteller-compatible structure
         """
-        from datetime import datetime
 
         # Extract bank account details
         bank_account = kora_response["bank_account"]
@@ -1062,9 +1065,10 @@ def verify_korapay_webhook_signature(payload: dict, signature: str) -> bool:
         - Signs only the 'data' object (KoraPay-specific behavior)
         - Returns False on any error (missing data, missing signature, etc.)
     """
-    import hmac
     import hashlib
+    import hmac
     import json
+
     from config import Config as FreshConfig
 
     # Validate inputs

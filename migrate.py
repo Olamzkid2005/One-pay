@@ -17,6 +17,7 @@ Usage:
 import os
 import sys
 import warnings
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -52,12 +53,12 @@ MIGRATIONS = [
 ]
 
 
-def get_existing_columns_sqlite(cur, table):
+def get_existing_columns_sqlite(cur, table: str) -> set:
     cur.execute("PRAGMA table_info(?)", (table,))
     return {row[1] for row in cur.fetchall()}
 
 
-def get_existing_columns_postgres(cur, table):
+def get_existing_columns_postgres(cur, table: str) -> set:
     cur.execute("""
         SELECT column_name FROM information_schema.columns
         WHERE table_name = %s
@@ -65,10 +66,10 @@ def get_existing_columns_postgres(cur, table):
     return {row[0] for row in cur.fetchall()}
 
 
-def run_sqlite():
+def run_sqlite() -> None:
     import sqlite3
-    DB_PATH = DATABASE_URL.replace("sqlite:///", "")
-    conn = sqlite3.connect(DB_PATH)
+    db_path = DATABASE_URL.replace("sqlite:///", "")
+    conn = sqlite3.connect(db_path)
     cur  = conn.cursor()
 
     applied = 0
@@ -114,10 +115,11 @@ def run_sqlite():
     print(f"\nDone — {applied} column(s) added, {skipped} skipped.")
 
 
-def run_postgres():
-    import psycopg2
+def run_postgres() -> None:
     from urllib.parse import urlparse
-    
+
+    import psycopg2
+
     parsed = urlparse(DATABASE_URL)
     conn = psycopg2.connect(
         host=parsed.hostname,

@@ -5,11 +5,14 @@ Tests the /api/v1/payments/link endpoint covering idempotency,
 happy-path generation, and negative inputs.
 """
 
-import pytest
 import json
-from unittest.mock import Mock, patch, MagicMock
 from decimal import Decimal
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
+
 from models.transaction import Transaction
+
 
 class TestPaymentLinkRoutes:
     """
@@ -35,10 +38,10 @@ class TestPaymentLinkRoutes:
         """Setup mock database chain for transaction queries."""
         mock_tx_query = MagicMock()
         mock_db.query.return_value = mock_tx_query
-        
+
         mock_tx_filter = MagicMock()
         mock_tx_query.filter.return_value = mock_tx_filter
-        
+
         # If an existing_tx_mock is provided, it simulates an idempotent hit.
         mock_tx_filter.first.return_value = existing_tx_mock
 
@@ -76,14 +79,14 @@ class TestPaymentLinkRoutes:
                 with patch('blueprints.payments.get_db') as mock_get_db:
                     mock_db = MagicMock()
                     mock_get_db.return_value.__enter__.return_value = mock_db
-                    
+
                     self._setup_mock_db(mock_db, existing_tx_mock=None)
 
                     response = client.post('/api/v1/payments/link',
                         json={"amount": -5000},
                         headers={"Content-Type": "application/json", "Authorization": "Bearer onepay_live_test_key"}
                     )
-                    
+
                     assert response.status_code == 400
                     data = json.loads(response.data)
                     assert "positive finite number" in data.get("message", "")
@@ -97,14 +100,14 @@ class TestPaymentLinkRoutes:
                 with patch('blueprints.payments.get_db') as mock_get_db:
                     mock_db = MagicMock()
                     mock_get_db.return_value.__enter__.return_value = mock_db
-                    
+
                     self._setup_mock_db(mock_db, existing_tx_mock=None)
 
                     response = client.post('/api/v1/payments/link',
                         json={"amount": 150000000},  # 150 Million
                         headers={"Content-Type": "application/json", "Authorization": "Bearer onepay_live_test_key"}
                     )
-                    
+
                     assert response.status_code == 400
 
     def test_payment_link_happy_path_success(self, client):
@@ -116,7 +119,7 @@ class TestPaymentLinkRoutes:
                 with patch('blueprints.payments.get_db') as mock_get_db:
                     with patch('blueprints.payments.korapay') as mock_kora:
                         mock_kora.is_transfer_configured.return_value = False
-                        
+
                         mock_db = MagicMock()
                         mock_get_db.return_value.__enter__.return_value = mock_db
                         self._setup_mock_db(mock_db, existing_tx_mock=None)
@@ -132,7 +135,7 @@ class TestPaymentLinkRoutes:
                                 "Authorization": "Bearer onepay_live_test_key"
                             }
                         )
-                        
+
                         assert response.status_code == 201
                         add_calls = mock_db.add.call_args_list
                         assert len(add_calls) >= 1  # Verify Transaction was added
@@ -152,7 +155,7 @@ class TestPaymentLinkRoutes:
                 with patch('blueprints.payments.get_db') as mock_get_db:
                     mock_db = MagicMock()
                     mock_get_db.return_value.__enter__.return_value = mock_db
-                    
+
                     # Create an existing mock transaction
                     existing_tx = Mock()
                     existing_tx.tx_ref = "ONEPAY-EXT-123"
@@ -176,11 +179,11 @@ class TestPaymentLinkRoutes:
                             "Authorization": "Bearer onepay_live_test_key"
                         }
                     )
-                    
+
                     assert response.status_code == 200
                     data = json.loads(response.data)
                     assert data["tx_ref"] == "ONEPAY-EXT-123"
-                    
+
                     # Verify DB.add was NOT called, to prove idempotency stopped insertion
                     add_calls = mock_db.add.call_args_list
                     assert len(add_calls) == 0

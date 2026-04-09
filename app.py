@@ -5,14 +5,14 @@ All routes live in blueprints:
   blueprints/payments.py — dashboard, create link, status, history
   blueprints/public.py   — verify page, preview API, polling, health
 """
-
+# ruff: noqa: E402  (warnings must be silenced before other imports)
 import hashlib
 import logging
 import os
-import warnings
-import uuid
 import secrets
-from datetime import timedelta, datetime, timezone
+import uuid
+import warnings
+from datetime import datetime, timedelta, timezone
 
 # Silence warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -21,17 +21,17 @@ warnings.filterwarnings("ignore", category=ResourceWarning)
 warnings.filterwarnings("ignore", message=".*urllib3 v2 only supports OpenSSL.*")
 warnings.filterwarnings("ignore", message=".*Python version 3.9 past its end of life.*")
 
-from flask import Flask, request, redirect, g, jsonify, render_template, session
+from flask import Flask, g, jsonify, redirect, render_template, request, session
 
-from config import Config
-from database import init_db
+from blueprints.api_keys import api_keys_bp
 from blueprints.auth import auth_bp
+from blueprints.invoices import invoices_bp
 from blueprints.payments import payments_bp
 from blueprints.public import public_bp
-from blueprints.invoices import invoices_bp
-from blueprints.api_keys import api_keys_bp
 from blueprints.webhooks import webhooks_bp
+from config import Config
 from core.exceptions import OnePayError
+from database import init_db
 
 # Huey task queue (for worker command: huey_consumer app.huey)
 from services.task_queue import huey
@@ -57,7 +57,7 @@ def _configure_logging():
     Use JSON structured logging in production, plain text in debug.
     JSON logs are easier to ingest in log aggregators (CloudWatch, Datadog, etc.)
     """
-    from core.logging_filters import SensitiveDataFilter, CorrelationIdFilter
+    from core.logging_filters import CorrelationIdFilter, SensitiveDataFilter
 
     request_id_filter = RequestIdFilter()
     correlation_id_filter = CorrelationIdFilter()
@@ -119,9 +119,9 @@ def create_app() -> Flask:
     app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # 1MB max request size
     app.config.update(
         SESSION_COOKIE_HTTPONLY=True,
-        SESSION_COOKIE_SAMESITE="Lax",  # Better compatibility while maintaining security
+        SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=Config.ENFORCE_HTTPS,
-        SESSION_COOKIE_DOMAIN=None,  # Restrict to exact domain (no subdomains)
+        SESSION_COOKIE_DOMAIN=None,
         SESSION_PERMANENT=True,
         PERMANENT_SESSION_LIFETIME=timedelta(hours=Config.PERMANENT_SESSION_LIFETIME),
         SESSION_TIMEOUT_AUTHENTICATED=Config.SESSION_TIMEOUT_AUTHENTICATED,
@@ -130,521 +130,22 @@ def create_app() -> Flask:
 
     Config.validate()
 
-    # Boot timestamp — used to invalidate sessions from before this restart
-    BOOT_TIME = datetime.now(timezone.utc).isoformat()
-    app.config["BOOT_TIME"] = BOOT_TIME
+    app.config["BOOT_TIME"] = datetime.now(timezone.utc).isoformat()
 
-    # ── Production config verification ────────────────────────────────────────
-    @app.before_request
-    def verify_production_config():
-        """Runtime assertion to prevent DEBUG in production."""
-        import os
+    # ── Middleware, error handlers ─────────────────────────────────────────────
+    from core.error_handlers import register_error_handlers
+    from core.middleware import register_middleware
 
-        if os.getenv("APP_ENV") == "production":
-            assert not app.config["DEBUG"], "DEBUG must be False in production"
-            assert app.config["SESSION_COOKIE_SECURE"], (
-                "SESSION_COOKIE_SECURE must be True in production"
-            )
-            assert Config.ENFORCE_HTTPS, "HTTPS must be enforced in production"
-
-    # ── Correlation ID tracing (Requirement 22) ────────────────────────────────
-    @app.before_request
-    def inject_correlation_id():
-        """Generate or extract correlation ID for request tracing."""
-        correlation_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
-        g.correlation_id = correlation_id
-
-    # ── Request ID tracing ─────────────────────────────────────────────────────
-    @app.before_request
-    def inject_request_id():
-        g.request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
-        g.csp_nonce = secrets.token_urlsafe(16)
-
-    # ── API Key Authentication ─────────────────────────────────────────────────
-    @app.before_request
-    def authenticate_api_key():
-        """Check for API key in Authorization header"""
-        from core.api_auth import validate_api_key
-        from core.audit import log_event
-        from core.ip import client_ip
-        from database import get_db
-
-        auth_header = request.headers.get("Authorization", "")
-
-        if auth_header.startswith("Bearer "):
-            api_key = auth_header[7:]  # Remove 'Bearer ' prefix
-            is_valid, user_id = validate_api_key(api_key)
-
-            if is_valid:
-                g.api_key_authenticated = True
-                g.user_id = user_id
-                g.api_key = api_key
-
-                # Log API key usage
-                with get_db() as db:
-                    log_event(
-                        db,
-                        "api_key.used",
-                        user_id=user_id,
-                        ip_address=client_ip(),
-                        detail={"endpoint": request.endpoint},
-                    )
-
-    @app.after_request
-    def add_request_id_header(response):
-        response.headers["X-Request-ID"] = g.get("request_id", "")
-        response.headers["X-Correlation-ID"] = g.get("correlation_id", "")
-        return response
-
-    # ── Cache-Control headers for static assets (Requirement 23) ──────────────
-    @app.after_request
-    def add_cache_headers(response):
-        """
-        Add Cache-Control and ETag headers to static assets.
-
-        Versioned assets (8-char content hash before extension) get a
-        1-year max-age.  All other static assets get a 1-hour max-age.
-
-        Format: name.HASH.ext (e.g., output.a09f3865.css)
-
-        ETag is generated from the MD5 hash of the response body and supports
-        conditional requests via If-None-Match (returns 304 Not Modified).
-        """
-        if request.path.startswith("/static/"):
-            filename = request.path[len("/static/"):]
-            # Check for versioned format: name.HASH.ext
-            parts = filename.rsplit(".", 2)
-            if len(parts) == 3 and len(parts[1]) == 8 and parts[1].isalnum():
-                # Versioned asset — cache for 1 year
-                response.headers["Cache-Control"] = "public, max-age=31536000"
-            else:
-                # Non-versioned asset — cache for 1 hour
-                response.headers["Cache-Control"] = "public, max-age=3600"
-
-            # Generate ETag from content hash (quoted per HTTP spec)
-            # Buffer the response to allow reading its data (static files use streaming)
-            if response.direct_passthrough:
-                response.direct_passthrough = False
-            etag = '"' + hashlib.md5(response.get_data()).hexdigest() + '"'
-            response.headers["ETag"] = etag
-
-            # Handle conditional request: return 304 if ETag matches
-            if_none_match = request.headers.get("If-None-Match")
-            if if_none_match and if_none_match == etag:
-                response = response.__class__(status=304)
-                response.headers["ETag"] = etag
-
-        return response
-
-    # ── Invalidate pre-restart sessions ───────────────────────────────────────
-    @app.before_request
-    def invalidate_old_sessions():
-        """Clear any session that was created before this app boot."""
-        # Skip validation in test mode
-        if app.config.get("TESTING"):
-            return None
-
-        boot_time = app.config.get("BOOT_TIME")
-        if session.get("_boot") != boot_time:
-            session.clear()
-            session["_boot"] = boot_time
-            return
-
-        # Absolute maximum session lifetime (7 days)
-        session_created = session.get("_created")
-        if session_created:
-            try:
-                created_dt = datetime.fromisoformat(session_created)
-                max_age = timedelta(days=7)
-                if datetime.now(timezone.utc) - created_dt > max_age:
-                    if session.get("user_id"):
-                        logger.info(
-                            "Session expired due to maximum age | user=%s",
-                            session.get("username"),
-                        )
-                    session.clear()
-                    return
-            except (ValueError, TypeError):
-                pass
-
-        # Session inactivity timeout - applies to ALL sessions
-        last_activity = session.get("_last_activity")
-        if last_activity:
-            try:
-                last_active_dt = datetime.fromisoformat(last_activity)
-                # Different timeout for authenticated vs unauthenticated sessions
-                timeout_minutes = (
-                    Config.SESSION_TIMEOUT_AUTHENTICATED
-                    if session.get("user_id")
-                    else Config.SESSION_TIMEOUT_UNAUTHENTICATED
-                )
-                if datetime.now(timezone.utc) - last_active_dt > timedelta(
-                    minutes=timeout_minutes
-                ):
-                    if session.get("user_id"):
-                        logger.info(
-                            "Session expired due to inactivity | user=%s",
-                            session.get("username"),
-                        )
-                    session.clear()
-                    return
-            except (ValueError, TypeError):
-                pass
-
-        # Update last activity timestamp for all sessions
-        session["_last_activity"] = datetime.now(timezone.utc).isoformat()
-
-    # ── Session binding validation (defense-in-depth against session fixation) ─
-    @app.before_request
-    def validate_session_binding():
-        """Validate session is bound to same IP and User-Agent."""
-        # Skip validation in test mode
-        if app.config.get("TESTING"):
-            return None
-
-        from core.ip import client_ip
-
-        if "user_id" in session:
-            # Check IP binding
-            session_ip = session.get("_ip")
-            current_ip = client_ip()
-            if session_ip and session_ip != current_ip:
-
-                def _is_private(ip: str) -> bool:
-                    return (
-                        ip.startswith("10.")
-                        or ip.startswith("127.")
-                        or ip.startswith("192.168.")
-                        or (
-                            ip.startswith("172.")
-                            and ip.split(".")[1].isdigit()
-                            and 16 <= int(ip.split(".")[1]) <= 31
-                        )
-                    )
-
-                if _is_private(session_ip) and _is_private(current_ip):
-                    logger.warning(
-                        "Session IP changed within private network | user=%s from=%s to=%s",
-                        session.get("username"),
-                        session_ip,
-                        current_ip,
-                    )
-                    session["_ip"] = current_ip
-                else:
-                    logger.warning(
-                        "Session IP mismatch | user=%s session_ip=%s current_ip=%s",
-                        session.get("username"),
-                        session_ip,
-                        current_ip,
-                    )
-                    session.clear()
-                    return redirect("/login")
-
-            # Check User-Agent binding
-            session_ua = session.get("_user_agent")
-            current_ua = request.headers.get("User-Agent", "")[:200]
-            if session_ua and session_ua != current_ua:
-                logger.warning(
-                    "Session User-Agent mismatch | user=%s", session.get("username")
-                )
-                session.clear()
-                return redirect("/login")
-
-    # ── HTTPS enforcement ──────────────────────────────────────────────────────
-    @app.before_request
-    def enforce_https():
-        if not Config.ENFORCE_HTTPS or Config.DEBUG:
-            return None
-        if request.is_secure:
-            return None
-        if Config.TRUST_X_FORWARDED_PROTO:
-            if (request.headers.get("X-Forwarded-Proto") or "").lower() == "https":
-                return None
-        return redirect(request.url.replace("http://", "https://", 1), code=301)
-
-    # ── Security response headers ──────────────────────────────────────────────
-    @app.after_request
-    def set_security_headers(response):
-        """
-        Add defence-in-depth HTTP security headers to every response.
-
-        Content-Security-Policy: restricts what the browser can load.
-          - default-src 'self': only same-origin resources by default
-          - script-src 'self' 'unsafe-inline': allows inline JS (needed for
-            the CSRF token injected via Jinja into <script> blocks).
-            For stronger protection, replace 'unsafe-inline' with a nonce.
-          - style-src 'self' 'unsafe-inline' fonts.googleapis.com: allows
-            inline styles and Google Fonts.
-        X-Frame-Options: DENY prevents the verify page being clickjacked.
-        X-Content-Type-Options: nosniff prevents MIME-type sniffing.
-        Referrer-Policy: no-referrer-when-downgrade avoids leaking URLs.
-        Permissions-Policy: disables unnecessary browser features.
-        X-XSS-Protection: enables browser XSS filter (legacy browsers).
-        X-Download-Options: prevents IE from executing downloads in site context.
-        """
-        nonce = g.get('csp_nonce', '')
-        response.headers.setdefault(
-            "Content-Security-Policy",
-            f"default-src 'self'; "
-            f"script-src 'self' 'nonce-{nonce}' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://accounts.google.com/gsi/ https://accounts.google.com; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://accounts.google.com; "
-            "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com; "
-            "img-src 'self' data: https://lh3.googleusercontent.com; "
-            "connect-src 'self' https://accounts.google.com https://*.google.com; "
-            "frame-src https://accounts.google.com https://*.google.com; "
-            "child-src https://accounts.google.com; "
-            "frame-ancestors 'none'; "
-            "base-uri 'self'; "
-            "form-action 'self';",
-        )
-
-        # X-Frame-Options: Don't set DENY on login/register pages (Google OAuth needs popups)
-        # CSP frame-ancestors 'none' provides equivalent protection
-        if request.endpoint not in ["auth.login_page", "auth.register_page"]:
-            response.headers.setdefault("X-Frame-Options", "DENY")
-
-        response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault(
-            "Referrer-Policy", "strict-origin-when-cross-origin"
-        )
-        response.headers.setdefault(
-            "Permissions-Policy",
-            "geolocation=(), camera=(), microphone=(), payment=(), usb=(), magnetometer=()",
-        )
-
-        # Cross-Origin-Opener-Policy: Don't use same-origin on login/register (blocks OAuth popups)
-        if request.endpoint not in ["auth.login_page", "auth.register_page"]:
-            response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
-
-        # Removed Cross-Origin-Embedder-Policy as it blocks CDN resources
-        response.headers.setdefault("X-XSS-Protection", "1; mode=block")
-        response.headers.setdefault("X-Download-Options", "noopen")
-        response.headers.setdefault("X-Permitted-Cross-Domain-Policies", "none")
-
-        # Additional headers for maximum compatibility
-        response.headers.setdefault(
-            "X-Content-Security-Policy",
-            response.headers.get("Content-Security-Policy", ""),
-        )
-        response.headers.setdefault("Expect-CT", "max-age=86400, enforce")
-
-        # HSTS header (defense-in-depth, also set by Talisman)
-        if Config.ENFORCE_HTTPS:
-            response.headers.setdefault(
-                "Strict-Transport-Security",
-                "max-age=31536000; includeSubDomains; preload",
-            )
-
-        return response
-
-    # ── Asset manifest context processor (Requirement 23.4) ───────────────────
-    _asset_manifest: dict = {}
-
-    def _load_asset_manifest() -> dict:
-        """Load static/manifest.json once and cache it in memory."""
-        if not _asset_manifest:
-            manifest_path = os.path.join(app.root_path, "static", "manifest.json")
-            try:
-                with open(manifest_path) as f:
-                    import json
-                    _asset_manifest.update(json.load(f))
-            except (FileNotFoundError, ValueError):
-                pass  # Fall back to unhashed filenames
-        return _asset_manifest
-
-    @app.context_processor
-    def inject_hashed_assets():
-        """Expose a `hashed_url` helper to all templates."""
-        manifest = _load_asset_manifest()
-
-        def hashed_url(filename: str) -> str:
-            """Return url_for path using hashed filename if available."""
-            from flask import url_for as _url_for
-            # filename is relative to static/, e.g. "css/output.css" or "js/login.js"
-            hashed_path = manifest.get(filename, filename)
-            return _url_for("static", filename=hashed_path)
-
-        return {"hashed_url": hashed_url}
+    register_middleware(app)
+    register_error_handlers(app)
 
     # ── Blueprints ─────────────────────────────────────────────────────────────
-    # Public routes (no versioning)
     app.register_blueprint(public_bp)
-
-    # API v1 routes
     app.register_blueprint(auth_bp, url_prefix="/api/v1")
     app.register_blueprint(payments_bp, url_prefix="/api/v1")
     app.register_blueprint(invoices_bp, url_prefix="/api/v1")
     app.register_blueprint(api_keys_bp, url_prefix="/api/v1")
     app.register_blueprint(webhooks_bp, url_prefix="/api/v1")
-
-    # ── Error handlers ─────────────────────────────────────────────────────────
-    @app.errorhandler(OnePayError)
-    def handle_onepay_error(error: OnePayError):
-        """Handle all OnePay exceptions consistently."""
-        logger.error(
-            "OnePay error | code=%s message=%s correlation_id=%s",
-            error.error_code,
-            error.message,
-            g.get("correlation_id")
-        )
-        
-        return jsonify({
-            "success": False,
-            "message": error.message,
-            "error_code": error.error_code
-        }), error.status_code
-
-    @app.errorhandler(404)
-    def not_found_error(error):
-        """Handle 404 errors with a friendly message."""
-        logger.warning(
-            "Not found | path=%s method=%s correlation_id=%s",
-            request.path,
-            request.method,
-            g.get("correlation_id"),
-        )
-        if request.path.startswith("/api/"):
-            return jsonify(
-                {
-                    "success": False,
-                    "error": "NOT_FOUND",
-                    "message": "The requested resource was not found",
-                }
-            ), 404
-        return render_template("base.html"), 404
-
-    @app.errorhandler(413)
-    def request_entity_too_large(error):
-        """Handle requests that exceed MAX_CONTENT_LENGTH."""
-        from core.ip import client_ip
-
-        logger.warning(
-            "Request too large | ip=%s path=%s correlation_id=%s",
-            client_ip(),
-            request.path,
-            g.get("correlation_id"),
-        )
-        return jsonify(
-            {
-                "success": False,
-                "error": "REQUEST_TOO_LARGE",
-                "message": "Request too large (max 1MB)",
-                "max_size_mb": 1,
-            }
-        ), 413
-
-    @app.errorhandler(500)
-    def internal_error(error):
-        """Handle 500 errors without exposing stack traces."""
-        # Only log full trace in debug mode
-        if Config.DEBUG:
-            logger.error(
-                "Internal server error | correlation_id=%s error=%s",
-                g.get("correlation_id"),
-                error,
-                exc_info=True,
-            )
-        else:
-            logger.error(
-                "Internal server error | correlation_id=%s error=%s",
-                g.get("correlation_id"),
-                str(error)[:200],
-            )
-
-        # Rollback any pending database transactions
-        try:
-            from database import get_db
-
-            with get_db() as db:
-                db.rollback()
-        except Exception:
-            logger.exception("Unhandled exception in error handler: %s")
-
-        if request.path.startswith("/api/"):
-            return jsonify(
-                {
-                    "success": False,
-                    "error": "INTERNAL_ERROR",
-                    "message": "An internal error occurred. Please try again later.",
-                }
-            ), 500
-
-        return render_template("base.html"), 500
-
-    @app.errorhandler(403)
-    def forbidden_error(error):
-        """Handle 403 errors."""
-        logger.warning(
-            "Forbidden | path=%s method=%s correlation_id=%s",
-            request.path,
-            request.method,
-            g.get("correlation_id"),
-        )
-        if request.path.startswith("/api/"):
-            return jsonify(
-                {
-                    "success": False,
-                    "error": "FORBIDDEN",
-                    "message": "You don't have permission to access this resource",
-                }
-            ), 403
-        return render_template("base.html"), 403
-
-    @app.errorhandler(Exception)
-    def handle_unexpected_error(error):
-        """
-        Catch-all handler for unexpected exceptions.
-        VULN-007 FIX: Prevents stack trace leakage in production.
-        """
-        from core.ip import client_ip
-
-        # Log full error server-side with context
-        logger.error(
-            "Unexpected error | correlation_id=%s error=%s",
-            g.get("correlation_id"),
-            str(error),
-            exc_info=True,
-            extra={
-                "url": request.url,
-                "method": request.method,
-                "ip": client_ip(),
-                "user_id": session.get("user_id"),
-            },
-        )
-
-        # Rollback any pending database transactions
-        try:
-            from database import get_db
-
-            with get_db() as db:
-                db.rollback()
-        except Exception:
-            logger.exception("Unhandled exception in after_request: %s")
-
-        # Return generic error to client (no details in production)
-        if app.config.get("DEBUG"):
-            # In development, include error details for debugging
-            if request.path.startswith("/api/"):
-                return jsonify(
-                    {
-                        "success": False,
-                        "error": "INTERNAL_ERROR",
-                        "message": str(error),
-                        "type": type(error).__name__,
-                    }
-                ), 500
-            return render_template("base.html"), 500
-        else:
-            # In production, generic message only
-            if request.path.startswith("/api/"):
-                return jsonify(
-                    {
-                        "success": False,
-                        "error": "INTERNAL_ERROR",
-                        "message": "An internal error occurred. Please try again later.",
-                    }
-                ), 500
-            return render_template("base.html"), 500
 
     # ── Security headers (Talisman) ────────────────────────────────────────────
     if not Config.TESTING and not Config.DEBUG:
@@ -652,30 +153,15 @@ def create_app() -> Flask:
 
         csp = {
             "default-src": ["'self'"],
-            "script-src": [
-                "'self'",
-                "'unsafe-inline'",
-                "https://cdn.tailwindcss.com",
-                "https://cdn.jsdelivr.net",
-            ],
-            "style-src": [
-                "'self'",
-                "'unsafe-inline'",
-                "https://fonts.googleapis.com",
-                "https://cdn.tailwindcss.com",
-            ],
-            "font-src": [
-                "'self'",
-                "https://fonts.gstatic.com",
-                "https://fonts.googleapis.com",
-            ],
+            "script-src": ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://cdn.jsdelivr.net"],
+            "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.tailwindcss.com"],
+            "font-src": ["'self'", "https://fonts.gstatic.com", "https://fonts.googleapis.com"],
             "img-src": ["'self'", "data:", "https://lh3.googleusercontent.com"],
             "connect-src": ["'self'"],
             "frame-ancestors": ["'none'"],
             "base-uri": ["'self'"],
             "form-action": ["'self'"],
         }
-
         Talisman(
             app,
             force_https=Config.ENFORCE_HTTPS,
@@ -690,9 +176,10 @@ def create_app() -> Flask:
     # ── Database ───────────────────────────────────────────────────────────────
     init_db()
 
-    # ── Development query count monitoring (Requirement 9.3) ──────────────────
+    # ── Development query count monitoring ────────────────────────────────────
     if Config.DEBUG:
         from sqlalchemy import event as _sa_event
+
         from database import engine as _engine
 
         @_sa_event.listens_for(_engine, "before_cursor_execute")
@@ -707,81 +194,20 @@ def create_app() -> Flask:
             if count > Config.QUERY_COUNT_WARN_THRESHOLD:
                 logger.warning(
                     "High query count | endpoint=%s count=%d threshold=%d",
-                    request.endpoint,
-                    count,
-                    Config.QUERY_COUNT_WARN_THRESHOLD,
+                    request.endpoint, count, Config.QUERY_COUNT_WARN_THRESHOLD,
                 )
             return response
 
     # ── Background threads ─────────────────────────────────────────────────────
     import threading
-    import time
-    from database import get_db
-    from services.webhook import retry_failed_webhooks
-    from services.security_monitor import detect_suspicious_activity
 
-    try:
-        from app_cleanup import start_cleanup_threads
-    except ImportError:
-        # app_cleanup module not available (e.g., in test environment)
-        def start_cleanup_threads():
-            pass
+    from core.background import start_background_threads
 
-    # Shutdown event for background threads
     _shutdown_event = threading.Event()
-    
-    # Store shutdown event on app for testing
     app._shutdown_event = _shutdown_event
-
-    def _webhook_retry_loop():
-        """Background thread that retries failed webhook deliveries."""
-        # Wait a bit for DB to be fully initialized
-        time.sleep(5)
-        while not _shutdown_event.is_set():
-            try:
-                with get_db() as db:
-                    retry_failed_webhooks(db)
-            except Exception as e:
-                logger.error("Webhook retry loop error: %s", e)
-            if not _shutdown_event.is_set():
-                _shutdown_event.wait(60)
-
-    def _security_monitor_loop():
-        """Background thread that monitors for suspicious activity patterns."""
-        # Wait a bit for DB to be fully initialized
-        time.sleep(10)
-        while not _shutdown_event.is_set():
-            try:
-                with get_db() as db:
-                    alerts = detect_suspicious_activity(db)
-                    # Alerts are automatically logged by detect_suspicious_activity
-                    if alerts:
-                        logger.info(
-                            "Security monitoring detected %d alerts", len(alerts)
-                        )
-            except Exception as e:
-                logger.error("Security monitoring error: %s", e)
-            if not _shutdown_event.is_set():
-                _shutdown_event.wait(300)  # Every 5 minutes
-
-    webhook_thread = threading.Thread(
-        target=_webhook_retry_loop, daemon=True, name="webhook-retry"
-    )
-    webhook_thread.start()
-    logger.info("Webhook retry thread started")
-
-    # Start security monitoring thread (VULN-011 fix)
-    security_monitor_thread = threading.Thread(
-        target=_security_monitor_loop, daemon=True, name="security-monitor"
-    )
-    security_monitor_thread.start()
-    logger.info("Security monitoring thread started")
-
-    # Start cleanup threads for audit logs and rate limits
-    start_cleanup_threads()
+    start_background_threads(_shutdown_event)
 
     return app
-
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 # Module-level app instance for gunicorn (gunicorn app:app)
@@ -790,4 +216,4 @@ def create_app() -> Flask:
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=Config.DEBUG)
+    app.run(host="127.0.0.1", port=5000, debug=Config.DEBUG)

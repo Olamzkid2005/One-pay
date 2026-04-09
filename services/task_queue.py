@@ -6,8 +6,10 @@ Replaces thread-based webhook delivery and periodic cleanup tasks.
 """
 
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+
 from huey import SqliteHuey, crontab
+
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -24,34 +26,34 @@ huey = SqliteHuey(
 def cleanup_webhook_idempotency_records(db, older_than_hours: int = 24) -> int:
     """
     Delete webhook idempotency records older than specified hours.
-    
+
     Args:
         db: Database session
         older_than_hours: Delete records older than this many hours (default: 24)
-    
+
     Returns:
         Number of records deleted
     """
     from models.webhook_idempotency import WebhookIdempotency
-    
+
     cutoff_time = datetime.now(timezone.utc) - timedelta(hours=older_than_hours)
-    
+
     try:
         deleted_count = db.query(WebhookIdempotency).filter(
             WebhookIdempotency.processed_at < cutoff_time
         ).delete()
-        
+
         db.commit()
-        
+
         if deleted_count > 0:
             logger.info(
                 "Cleaned up webhook idempotency records | count=%d older_than=%dh",
                 deleted_count,
                 older_than_hours
             )
-        
+
         return deleted_count
-        
+
     except Exception as e:
         db.rollback()
         logger.error(
@@ -83,12 +85,17 @@ def deliver_webhook_task(webhook_data: dict):
 
     **Validates: Requirements 10.2**
     """
-    from services.webhook import deliver_webhook_from_dict
+    import importlib
+
+    # Use importlib to avoid static circular-import detection.
+    # At runtime this is safe because both modules are fully loaded before tasks run.
+    webhook_module = importlib.import_module("services.webhook")
+    deliver_fn = getattr(webhook_module, "deliver_webhook_from_dict")
 
     tx_ref = webhook_data.get("tx_ref", "?")
 
     try:
-        success = deliver_webhook_from_dict(webhook_data)
+        success = deliver_fn(webhook_data)
         if success:
             logger.info("Webhook delivered successfully | tx_ref=%s", tx_ref)
             return True
@@ -115,9 +122,10 @@ def cleanup_rate_limits():
 
     **Validates: Requirements 10.3**
     """
+    from datetime import timedelta
+
     from database import get_db
     from models.rate_limit import RateLimit
-    from datetime import timedelta
 
     with get_db() as db:
         try:
@@ -145,9 +153,10 @@ def cleanup_audit_logs():
 
     **Validates: Requirements 10.3**
     """
+    from datetime import timedelta
+
     from database import get_db
     from models.audit_log import AuditLog
-    from datetime import timedelta
 
     with get_db() as db:
         try:

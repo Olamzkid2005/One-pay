@@ -1,7 +1,9 @@
 """API Key model for machine-to-machine authentication"""
 
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, DateTime, Boolean, ForeignKey, Index
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String
+
 from models.base import Base
 
 
@@ -29,7 +31,7 @@ class APIKey(Base):
         Index("idx_api_keys_key_hash", "key_hash"),
     )
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         """Safe dict for JSON responses - never exposes full key"""
         return {
             "id": self.id,

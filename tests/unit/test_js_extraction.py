@@ -9,8 +9,8 @@ Verifies that:
 **Validates: Requirements 14.2, 14.4, 14.5**
 """
 import os
-import pytest
 
+import pytest
 
 # ── File existence tests ───────────────────────────────────────────────────────
 
@@ -113,7 +113,7 @@ class TestLoginPageRenders:
         flask_app.config["WTF_CSRF_ENABLED"] = False
         with flask_app.test_client() as c:
             yield c
-        
+
         # Cleanup: Signal background threads to stop
         if hasattr(flask_app, '_shutdown_event'):
             flask_app._shutdown_event.set()

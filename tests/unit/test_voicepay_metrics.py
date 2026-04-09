@@ -19,7 +19,7 @@ def test_voicepay_metrics_registered():
     """Test that VoicePay metrics are registered with Prometheus"""
     # Get all registered metric names
     metric_names = [m.name for m in REGISTRY.collect()]
-    
+
     # Verify VoicePay metrics exist
     assert 'voicepay_webhooks_sent_total' in metric_names
     assert 'voicepay_webhook_duration_seconds' in metric_names
@@ -30,22 +30,23 @@ def test_voicepay_metrics_registered():
 @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="prometheus_client not installed")
 def test_voicepay_webhook_success_metric(monkeypatch):
     """Test that successful webhook delivery increments success counter"""
-    from services.voicepay_webhook import send_voicepay_webhook
     from prometheus_client import REGISTRY
-    
+
+    from services.voicepay_webhook import send_voicepay_webhook
+
     # Mock successful response
     class MockResponse:
         status_code = 200
         content = b'{"success": true}'
-        
+
         def json(self):
             return {"success": True}
-    
+
     def mock_post(*args, **kwargs):
         return MockResponse()
-    
+
     monkeypatch.setattr("requests.post", mock_post)
-    
+
     # Get initial metric value
     initial_value = None
     for metric in REGISTRY.collect():
@@ -54,7 +55,7 @@ def test_voicepay_webhook_success_metric(monkeypatch):
                 if sample.labels.get('status') == 'success':
                     initial_value = sample.value
                     break
-    
+
     # Send webhook
     payload = {"event": "payment.verified", "tx_ref": "VP-TEST-123"}
     result = send_voicepay_webhook(
@@ -62,9 +63,9 @@ def test_voicepay_webhook_success_metric(monkeypatch):
         webhook_url="https://voicepay.ng/webhook",
         secret="test-secret"
     )
-    
+
     assert result["success"] is True
-    
+
     # Verify metric incremented
     final_value = None
     for metric in REGISTRY.collect():
@@ -73,7 +74,7 @@ def test_voicepay_webhook_success_metric(monkeypatch):
                 if sample.labels.get('status') == 'success':
                     final_value = sample.value
                     break
-    
+
     if initial_value is not None:
         assert final_value > initial_value
 
@@ -81,22 +82,23 @@ def test_voicepay_webhook_success_metric(monkeypatch):
 @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="prometheus_client not installed")
 def test_voicepay_webhook_failure_metric(monkeypatch):
     """Test that failed webhook delivery increments failure counter"""
-    from services.voicepay_webhook import send_voicepay_webhook
     from prometheus_client import REGISTRY
-    
+
+    from services.voicepay_webhook import send_voicepay_webhook
+
     # Mock failed response
     class MockResponse:
         status_code = 500
         content = b'{"error": "Internal server error"}'
-        
+
         def json(self):
             return {"error": "Internal server error"}
-    
+
     def mock_post(*args, **kwargs):
         return MockResponse()
-    
+
     monkeypatch.setattr("requests.post", mock_post)
-    
+
     # Get initial metric value
     initial_value = None
     for metric in REGISTRY.collect():
@@ -105,7 +107,7 @@ def test_voicepay_webhook_failure_metric(monkeypatch):
                 if sample.labels.get('status') == 'failure':
                     initial_value = sample.value
                     break
-    
+
     # Send webhook
     payload = {"event": "payment.verified", "tx_ref": "VP-TEST-456"}
     result = send_voicepay_webhook(
@@ -114,9 +116,9 @@ def test_voicepay_webhook_failure_metric(monkeypatch):
         secret="test-secret",
         max_retries=1
     )
-    
+
     assert result["success"] is False
-    
+
     # Verify metric incremented
     final_value = None
     for metric in REGISTRY.collect():
@@ -125,7 +127,7 @@ def test_voicepay_webhook_failure_metric(monkeypatch):
                 if sample.labels.get('status') == 'failure':
                     final_value = sample.value
                     break
-    
+
     if initial_value is not None:
         assert final_value > initial_value
 
@@ -133,24 +135,26 @@ def test_voicepay_webhook_failure_metric(monkeypatch):
 @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="prometheus_client not installed")
 def test_voicepay_webhook_duration_metric(monkeypatch):
     """Test that webhook duration is tracked"""
-    from services.voicepay_webhook import send_voicepay_webhook
-    from prometheus_client import REGISTRY
     import time
-    
+
+    from prometheus_client import REGISTRY
+
+    from services.voicepay_webhook import send_voicepay_webhook
+
     # Mock response with delay
     class MockResponse:
         status_code = 200
         content = b'{"success": true}'
-        
+
         def json(self):
             return {"success": True}
-    
+
     def mock_post(*args, **kwargs):
         time.sleep(0.1)  # Simulate network delay
         return MockResponse()
-    
+
     monkeypatch.setattr("requests.post", mock_post)
-    
+
     # Send webhook
     payload = {"event": "payment.verified", "tx_ref": "VP-TEST-789"}
     result = send_voicepay_webhook(
@@ -158,9 +162,9 @@ def test_voicepay_webhook_duration_metric(monkeypatch):
         webhook_url="https://voicepay.ng/webhook",
         secret="test-secret"
     )
-    
+
     assert result["success"] is True
-    
+
     # Verify duration metric exists and has samples
     duration_found = False
     for metric in REGISTRY.collect():
@@ -168,19 +172,21 @@ def test_voicepay_webhook_duration_metric(monkeypatch):
             duration_found = True
             assert len(metric.samples) > 0
             break
-    
+
     assert duration_found
 
 
 @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="prometheus_client not installed")
 def test_voicepay_payment_amount_metric():
     """Test that payment amounts are tracked"""
-    from services.voicepay_webhook import build_voicepay_payload
-    from models.transaction import Transaction, TransactionStatus
+    from datetime import datetime, timedelta, timezone
     from decimal import Decimal
-    from datetime import datetime, timezone, timedelta
+
     from prometheus_client import REGISTRY
-    
+
+    from models.transaction import Transaction, TransactionStatus
+    from services.voicepay_webhook import build_voicepay_payload
+
     # Create transaction
     transaction = Transaction(
         tx_ref="VP-BILL-METRIC-TEST",
@@ -193,15 +199,15 @@ def test_voicepay_payment_amount_metric():
         created_at=datetime.now(timezone.utc),
         verified_at=datetime.now(timezone.utc)
     )
-    
+
     # Build payload (should track amount)
-    payload = build_voicepay_payload(transaction)
-    
+    build_voicepay_payload(transaction)
+
     # Verify amount metric exists
     amount_found = False
     for metric in REGISTRY.collect():
         if metric.name == 'voicepay_payment_amount_naira':
             amount_found = True
             break
-    
+
     assert amount_found

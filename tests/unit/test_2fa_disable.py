@@ -5,8 +5,9 @@ Validates Requirement 4.4: WHEN a user disables 2FA, THE System SHALL set
 two_factor_enabled to False.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from flask import Flask
 
 

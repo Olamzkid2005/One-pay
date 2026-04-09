@@ -1,3 +1,7 @@
+---
+inclusion: auto
+---
+
 # Invoice Generation Skill
 
 Generate and manage invoices for the OnePay platform.

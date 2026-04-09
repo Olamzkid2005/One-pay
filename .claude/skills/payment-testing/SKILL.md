@@ -1,3 +1,7 @@
+---
+inclusion: auto
+---
+
 # Payment Testing Skill
 
 Test KoraPay and VoicePay payment integration end-to-end.

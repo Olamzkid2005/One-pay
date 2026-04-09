@@ -2,17 +2,16 @@
 OnePay — Logging filters for sensitive data redaction
 Prevents credentials, tokens, and PII from appearing in logs.
 """
-import re
 import logging
+import re
 
 
 class CorrelationIdFilter(logging.Filter):
     """Inject correlation_id from Flask g into every log record."""
 
-    def filter(self, record):
+    def filter(self, record: logging.LogRecord) -> bool:
         try:
             from flask import g
-
             record.correlation_id = g.get("correlation_id", "-")
         except RuntimeError:
             record.correlation_id = "-"
@@ -22,7 +21,7 @@ class CorrelationIdFilter(logging.Filter):
 class SensitiveDataFilter(logging.Filter):
     """
     Redact sensitive data from log messages.
-    
+
     Patterns redacted:
     - API keys and tokens (Bearer, API-Key headers)
     - Email addresses
@@ -31,7 +30,7 @@ class SensitiveDataFilter(logging.Filter):
     - Password fields
     - Session tokens
     """
-    
+
     # Patterns to redact
     PATTERNS = [
         (re.compile(r'Bearer\s+[A-Za-z0-9\-._~+/]+=*', re.IGNORECASE), 'Bearer [REDACTED]'),
@@ -42,8 +41,8 @@ class SensitiveDataFilter(logging.Filter):
         (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'), '[EMAIL]'),
         (re.compile(r'\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b'), '[CARD]'),
     ]
-    
-    def filter(self, record):
+
+    def filter(self, record: logging.LogRecord) -> bool:
         """Redact sensitive data from the log message."""
         if hasattr(record, 'msg') and isinstance(record.msg, str):
             message = record.msg

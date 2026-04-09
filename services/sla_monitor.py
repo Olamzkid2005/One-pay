@@ -222,7 +222,7 @@ class SLAMonitor:
         success_rate = self.get_success_rate()
         va_p95 = self.get_p95_response_time("create_virtual_account")
         ts_p95 = self.get_p95_response_time("confirm_transfer")
-        
+
         with self._lock:
             return {
                 "success_rate": round(success_rate, 2),

@@ -27,7 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
-def compute_file_hash(filepath):
+def compute_file_hash(filepath: str) -> str:
     """Compute SHA256 hash of a file."""
     import hashlib
     sha256_hash = hashlib.sha256()
@@ -37,7 +37,7 @@ def compute_file_hash(filepath):
     return sha256_hash.hexdigest()
 
 
-def check_rollback_eligibility():
+def check_rollback_eligibility() -> None:
     """
     Check if rollback is possible and document decision criteria.
     Requirements: 33.49, 33.50
@@ -51,7 +51,7 @@ def check_rollback_eligibility():
 
     # Check for backup file
     try:
-        with open("migration_backup_info.json", 'r') as f:
+        with open("migration_backup_info.json") as f:
             backup_info = json.load(f)
         print(f"✅ Backup found: {backup_info['backup_file']}")
         print(f"   Created: {backup_info['timestamp']}")
@@ -80,7 +80,7 @@ def check_rollback_eligibility():
         )
         if 'pre-korapay-migration' not in result.stdout:
             warnings.append("Rollback tag 'pre-korapay-migration' not found.")
-    except:
+    except Exception:
         warnings.append("Could not check for rollback tag.")
 
     # Print results
@@ -106,7 +106,7 @@ def check_rollback_eligibility():
     return True
 
 
-def restore_backup():
+def restore_backup() -> None:
     """
     Restore database from backup file.
     Requirements: 33.51, 33.52, 33.53
@@ -119,7 +119,7 @@ def restore_backup():
 
     # Load backup info
     try:
-        with open("migration_backup_info.json", 'r') as f:
+        with open("migration_backup_info.json") as f:
             backup_info = json.load(f)
         backup_file = backup_info['backup_file']
         expected_checksum = backup_info['checksum']
@@ -139,7 +139,7 @@ def restore_backup():
         print(f"   Expected: {expected_checksum}")
         print(f"   Current:  {current_checksum}")
         return False
-    print(f"✅ Backup checksum verified")
+    print("✅ Backup checksum verified")
 
     # Determine database type
     db_url = os.environ.get('DATABASE_URL', 'sqlite:///onepay.db')
@@ -165,7 +165,7 @@ def restore_backup():
     return True
 
 
-def revert_code():
+def revert_code() -> None:
     """
     Revert code to pre-migration tagged commit.
     Requirements: 33.54, 33.55, 33.56, 33.57
@@ -218,7 +218,7 @@ def revert_code():
         subprocess.run(['git', 'checkout', '-b', branch_name], check=True)
         subprocess.run(['git', 'checkout', 'pre-korapay-migration'], check=True)
 
-        print(f"✅ Code reverted to: pre-korapay-migration")
+        print("✅ Code reverted to: pre-korapay-migration")
         print(f"   New branch: {branch_name}")
 
     except subprocess.CalledProcessError as e:
@@ -234,7 +234,7 @@ def revert_code():
     return True
 
 
-def verify_rollback():
+def verify_rollback() -> None:
     """
     Verify rollback was successful.
     Requirements: 33.58, 33.59, 33.60, 33.61, 33.62, 33.63, 33.64, 33.65, 33.66
@@ -255,7 +255,7 @@ def verify_rollback():
         )
         current_branch = result.stdout.strip()
         print(f"Current branch: {current_branch}")
-    except:
+    except Exception:
         warnings.append("Could not determine current branch")
 
     # Verify Quickteller service exists
@@ -323,7 +323,7 @@ def verify_rollback():
     return True
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Rollback to Quickteller Script",
         formatter_class=argparse.RawDescriptionHelpFormatter,

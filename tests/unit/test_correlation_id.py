@@ -13,10 +13,10 @@ core/logging_filters.py to ensure:
 """
 import logging
 import uuid
-import pytest
-from unittest.mock import patch, MagicMock
-from flask import Flask, g
+from unittest.mock import MagicMock, patch
 
+import pytest
+from flask import Flask, g
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -316,8 +316,9 @@ class TestCorrelationIdFilter:
 
         **Validates: Requirements 22.2**
         """
-        from core.logging_filters import CorrelationIdFilter
         import io
+
+        from core.logging_filters import CorrelationIdFilter
 
         filt = CorrelationIdFilter()
         stream = io.StringIO()

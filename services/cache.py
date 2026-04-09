@@ -13,9 +13,8 @@ import time
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional, Union
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -301,7 +300,7 @@ class RedisCache:
         if self._connected:
             try:
                 import re
-                regex_pattern = pattern.replace("*", ".*")
+                pattern.replace("*", ".*")
                 keys = self._redis.keys(pattern)
                 if keys:
                     self._redis.delete(*keys)

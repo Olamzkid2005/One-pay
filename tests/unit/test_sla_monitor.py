@@ -12,9 +12,9 @@ import pytest
 
 from services.sla_monitor import (
     SLAConfig,
-    SLAVioLationType,
-    SLAViolation,
     SLAMonitor,
+    SLAViolation,
+    SLAVioLationType,
     get_sla_monitor,
     reset_sla_monitor,
 )
@@ -223,7 +223,7 @@ class TestSLAMonitor:
 
         # Get timestamp before adding violations
         since = datetime.now(timezone.utc)
-        
+
         # Add some violations
         for _ in range(100):
             monitor.record_request("create_virtual_account", 500.0, success=True)

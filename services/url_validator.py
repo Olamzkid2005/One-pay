@@ -10,13 +10,14 @@ SSRF attacks via DNS rebinding (TOCTOU vulnerabilities).
 Requirement 3.4: DNS rebinding race condition detection via TTL checks.
 """
 
-import socket
 import ipaddress
 import logging
-import dns.resolver
-import dns.exception
-from typing import Optional, Tuple
+import socket
+from typing import Optional
 from urllib.parse import urlparse
+
+import dns.exception
+import dns.resolver
 
 logger = logging.getLogger(__name__)
 
@@ -44,61 +45,61 @@ PRIVATE_NETWORKS = [
 ]
 
 
-def validate_url_for_ssrf(url: str) -> Tuple[bool, Optional[str], Optional[str]]:
+def validate_url_for_ssrf(url: str) -> tuple[bool, Optional[str], Optional[str]]:
     """
     Validate URL and resolve to safe IP address with SSRF protection.
-    
+
     This function implements DNS resolution BEFORE HTTP requests to prevent
     DNS rebinding attacks (TOCTOU). The resolved IP should be used directly
     for HTTP requests with the original hostname in the Host header.
-    
+
     **Validates: Requirements 3.1, 3.2, 3.3, 3.4**
-    
+
     Requirement 3.4: DNS rebinding race condition detection via TTL checks.
     If DNS TTL is suspiciously low (< 300 seconds), the request is rejected
     as it may indicate a DNS rebinding attack preparation.
-    
+
     Args:
         url: The URL to validate (must be HTTP or HTTPS)
-    
+
     Returns:
         Tuple of (is_valid, resolved_ip, error_message):
         - is_valid: True if URL is safe to use, False otherwise
         - resolved_ip: The resolved IP address if valid, None otherwise
         - error_message: Human-readable error if invalid, None if valid
-    
+
     Example:
         >>> is_valid, ip, error = validate_url_for_ssrf("https://example.com/logo.png")
         >>> if is_valid:
         ...     # Use ip for HTTP request with Host: example.com header
-        ...     response = requests.get(f"https://{ip}/logo.png", 
+        ...     response = requests.get(f"https://{ip}/logo.png",
         ...                            headers={"Host": "example.com"})
     """
     try:
         # Parse URL
         parsed = urlparse(url)
-        
+
         # Requirement 3.1: Only allow HTTP/HTTPS
         if parsed.scheme not in ('http', 'https'):
             return False, None, "URL must use HTTP or HTTPS protocol"
-        
+
         hostname = parsed.hostname
         if not hostname:
             return False, None, "URL must have a valid hostname"
-        
+
         # Requirement 3.4: Check DNS TTL for race condition detection
         # Use dnspython for TTL information
         try:
             resolver = dns.resolver.Resolver()
             resolver.timeout = 5
             resolver.lifetime = 5
-            
+
             # Query A record (IPv4)
             answers = resolver.resolve(hostname, 'A')
-            
+
             # Check TTL of DNS response
             ttl = answers.rrset.ttl
-            
+
             # Requirement 3.4: Reject if TTL is suspiciously low
             if ttl < MIN_SAFE_TTL:
                 logger.warning(
@@ -106,15 +107,15 @@ def validate_url_for_ssrf(url: str) -> Tuple[bool, Optional[str], Optional[str]]
                     url, hostname, ttl, MIN_SAFE_TTL
                 )
                 return False, None, "The URL could not be validated"
-            
+
             # Get first IP address from response
             ip = str(answers[0])
-            
+
             logger.debug(
                 "DNS resolution successful | url=%s hostname=%s ip=%s ttl=%d",
                 url, hostname, ip, ttl
             )
-            
+
         except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer) as e:
             logger.warning(
                 "DNS resolution failed (no record) | url=%s hostname=%s error=%s",
@@ -146,7 +147,7 @@ def validate_url_for_ssrf(url: str) -> Tuple[bool, Optional[str], Optional[str]]
                     url, hostname, str(socket_error)
                 )
                 return False, None, "The URL hostname could not be resolved"
-        
+
         # Additional check for AWS metadata endpoint (common SSRF target)
         # Check this BEFORE general private IP checks for specific error message
         if str(ip) == "169.254.169.254":
@@ -155,7 +156,7 @@ def validate_url_for_ssrf(url: str) -> Tuple[bool, Optional[str], Optional[str]]
                 url, hostname, ip
             )
             return False, None, "The URL resolves to a restricted address"
-        
+
         # Requirement 3.2: Check if IP is private/internal
         try:
             ip_obj = ipaddress.ip_address(ip)
@@ -165,7 +166,7 @@ def validate_url_for_ssrf(url: str) -> Tuple[bool, Optional[str], Optional[str]]
                 url, hostname, ip, str(e)
             )
             return False, None, "The URL could not be validated"
-        
+
         # Check against all private network ranges
         for network in PRIVATE_NETWORKS:
             if ip_obj in network:
@@ -174,14 +175,14 @@ def validate_url_for_ssrf(url: str) -> Tuple[bool, Optional[str], Optional[str]]
                     url, hostname, ip, network
                 )
                 return False, None, "The URL resolves to a restricted address"
-        
+
         # Requirement 3.3: Return resolved IP for Host header binding
         logger.info(
             "URL validated successfully | url=%s hostname=%s ip=%s",
             url, hostname, ip
         )
         return True, ip, None
-        
+
     except Exception as e:
         logger.error(
             "URL validation error | url=%s error=%s",
@@ -193,13 +194,13 @@ def validate_url_for_ssrf(url: str) -> Tuple[bool, Optional[str], Optional[str]]
 def is_private_ip(ip_str: str) -> bool:
     """
     Check if an IP address is private, loopback, link-local, or multicast.
-    
+
     Args:
         ip_str: IP address as string (IPv4 or IPv6)
-    
+
     Returns:
         True if IP is private/internal, False if public
-    
+
     Example:
         >>> is_private_ip("192.168.1.1")
         True
@@ -208,13 +209,13 @@ def is_private_ip(ip_str: str) -> bool:
     """
     try:
         ip_obj = ipaddress.ip_address(ip_str)
-        
+
         for network in PRIVATE_NETWORKS:
             if ip_obj in network:
                 return True
-        
+
         return False
-        
+
     except ValueError:
         # Invalid IP address
         return True  # Fail closed - treat invalid IPs as private

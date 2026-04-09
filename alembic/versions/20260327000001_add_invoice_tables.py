@@ -5,11 +5,12 @@ Revises: 395e926f1170
 Create Date: 2026-03-27 00:00:01.000000
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '20260327000001'
@@ -69,7 +70,7 @@ def upgrade() -> None:
         sa.UniqueConstraint('invoice_number'),
         sa.UniqueConstraint('transaction_id')
     )
-    
+
     # Create indexes for invoices table
     op.create_index('ix_invoices_invoice_number', 'invoices', ['invoice_number'], unique=False)
     op.create_index('ix_invoices_transaction', 'invoices', ['transaction_id'], unique=False)
@@ -84,10 +85,10 @@ def downgrade() -> None:
     op.drop_index('ix_invoices_transaction', table_name='invoices')
     op.drop_index('ix_invoices_invoice_number', table_name='invoices')
     op.drop_table('invoices')
-    
+
     # Drop invoice_settings table and indexes
     op.drop_index('ix_invoice_settings_user_id', table_name='invoice_settings')
     op.drop_table('invoice_settings')
-    
+
     # Drop enum type (PostgreSQL specific, SQLite ignores this)
     op.execute('DROP TYPE IF EXISTS invoicestatus')

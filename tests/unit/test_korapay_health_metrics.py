@@ -2,9 +2,11 @@
 Unit tests for KoraPay service module.
 """
 
-import pytest
-from unittest.mock import patch
 import os
+from unittest.mock import patch
+
+import pytest
+
 
 class TestHealthMetrics:
     """Test health metrics collection for monitoring KoraPay API performance."""
@@ -14,6 +16,7 @@ class TestHealthMetrics:
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
             import importlib
+
             import config as config_module
             importlib.reload(config_module)
 
@@ -33,6 +36,7 @@ class TestHealthMetrics:
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
             import importlib
+
             import config as config_module
             importlib.reload(config_module)
 
@@ -51,6 +55,7 @@ class TestHealthMetrics:
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
             import importlib
+
             import config as config_module
             importlib.reload(config_module)
 
@@ -69,6 +74,7 @@ class TestHealthMetrics:
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
             import importlib
+
             import config as config_module
             importlib.reload(config_module)
 
@@ -94,6 +100,7 @@ class TestHealthMetrics:
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
             import importlib
+
             import config as config_module
             importlib.reload(config_module)
 
@@ -109,6 +116,7 @@ class TestHealthMetrics:
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
             import importlib
+
             import config as config_module
             importlib.reload(config_module)
 
@@ -127,6 +135,7 @@ class TestHealthMetrics:
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
             import importlib
+
             import config as config_module
             importlib.reload(config_module)
 
@@ -161,6 +170,7 @@ class TestHealthMetrics:
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
             import importlib
+
             import config as config_module
             importlib.reload(config_module)
 
@@ -180,7 +190,7 @@ class TestHealthMetrics:
             with patch.object(korapay._session, 'request', side_effect=requests.ConnectionError("Network error")):
                 try:
                     korapay.confirm_transfer("TEST-REF")
-                except:
+                except Exception:
                     pass
 
             # Verify failure was tracked

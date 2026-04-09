@@ -10,9 +10,10 @@ Validates:
 - Non-static paths do not get ETag headers
 """
 import hashlib
-import pytest
-from flask import Flask, request as flask_request
 
+import pytest
+from flask import Flask
+from flask import request as flask_request
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -42,7 +43,7 @@ def app(tmp_path):
             # Buffer the response to allow reading its data (static files use streaming)
             if response.direct_passthrough:
                 response.direct_passthrough = False
-            etag = '"' + hashlib.md5(response.get_data()).hexdigest() + '"'
+            etag = '"' + hashlib.sha256(response.get_data()).hexdigest()[:32] + '"'
             response.headers["ETag"] = etag
 
             # Handle conditional request: return 304 if ETag matches
@@ -98,11 +99,11 @@ class TestETagPresence:
         )
 
     def test_etag_matches_md5_of_response_data(self, client, static_file):
-        """ETag value equals the MD5 hash of the actual response body."""
+        """ETag value equals the SHA-256 hash of the actual response body."""
         response = client.get(f"/static/{static_file}")
         assert response.status_code == 200
-        # Compute expected ETag from the actual response data
-        expected_etag = '"' + hashlib.md5(response.data).hexdigest() + '"'
+        # Compute expected ETag from the actual response data (SHA-256, first 32 chars)
+        expected_etag = '"' + hashlib.sha256(response.data).hexdigest()[:32] + '"'
         assert response.headers.get("ETag") == expected_etag
 
     def test_non_static_path_has_no_etag(self, client):

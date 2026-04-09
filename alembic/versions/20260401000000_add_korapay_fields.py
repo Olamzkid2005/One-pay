@@ -5,9 +5,9 @@ Revises: 20260329140000
 Create Date: 2026-04-01 00:00:00
 
 """
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = '20260401000000'
@@ -28,7 +28,7 @@ def upgrade():
     op.add_column('transactions', sa.Column('provider_status', sa.String(length=50), nullable=True))
     op.add_column('transactions', sa.Column('bank_code', sa.String(length=10), nullable=True))
     op.add_column('transactions', sa.Column('virtual_account_expiry', sa.DateTime(timezone=True), nullable=True))
-    
+
     # Create indexes for common queries
     op.create_index('idx_payment_provider_reference', 'transactions', ['payment_provider_reference'], unique=False)
     op.create_index('idx_provider_transaction_date', 'transactions', ['provider_transaction_date'], unique=False)
@@ -39,7 +39,7 @@ def downgrade():
     # Drop indexes first
     op.drop_index('idx_provider_transaction_date', table_name='transactions')
     op.drop_index('idx_payment_provider_reference', table_name='transactions')
-    
+
     # Drop columns
     op.drop_column('transactions', 'virtual_account_expiry')
     op.drop_column('transactions', 'bank_code')

@@ -3,6 +3,7 @@ OnePay — Client IP extraction.
 Single implementation used by all blueprints.
 """
 from flask import request
+
 from config import Config
 
 

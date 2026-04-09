@@ -4,8 +4,9 @@ OnePay — Webhook Blacklist Model
 Tracks malicious webhook URLs that have attempted DNS rebinding or other attacks.
 URLs on this list are permanently blocked from receiving webhooks.
 """
-from sqlalchemy import Column, String, DateTime, Text, Integer
 from datetime import datetime, timezone
+
+from sqlalchemy import Column, DateTime, Integer, String, Text
 
 from models.base import Base
 
@@ -13,7 +14,7 @@ from models.base import Base
 class WebhookBlacklist(Base):
     """
     Webhook URL blacklist for security violations.
-    
+
     URLs are added when:
     - DNS rebinding detected (resolves to private/loopback IP)
     - Redirect to internal IP detected
@@ -21,7 +22,7 @@ class WebhookBlacklist(Base):
     - Other SSRF attack patterns detected
     """
     __tablename__ = "webhook_blacklist"
-    
+
     url = Column(String(500), primary_key=True)
     reason = Column(Text, nullable=False)
     blacklisted_at = Column(
@@ -30,6 +31,6 @@ class WebhookBlacklist(Base):
         nullable=False
     )
     attempts = Column(Integer, default=1, nullable=False)
-    
-    def __repr__(self):
+
+    def __repr__(self) -> str:
         return f"<WebhookBlacklist(url={self.url!r}, reason={self.reason!r})>"

@@ -10,7 +10,6 @@ from decimal import Decimal
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # 20.1 / 20.2 — Database isolation: two tests must not share state
 # ---------------------------------------------------------------------------
@@ -20,7 +19,7 @@ class TestDatabaseIsolation:
 
     def test_insert_user_first(self, db_session, make_user):
         """Insert a user — should not be visible in the next test."""
-        user = make_user(username="isolation_test_user")
+        make_user(username="isolation_test_user")
         db_session.flush()
 
         from models.user import User
@@ -38,7 +37,7 @@ class TestDatabaseIsolation:
 
     def test_insert_transaction_first(self, db_session, make_transaction):
         """Insert a transaction — should not be visible in the next test."""
-        tx = make_transaction(tx_ref="ISOLATION-TX-001")
+        make_transaction(tx_ref="ISOLATION-TX-001")
         db_session.flush()
 
         from models.transaction import Transaction
@@ -63,7 +62,7 @@ class TestCacheIsolation:
 
     def test_cache_write(self, reset_cache_fixture):
         """Write a value to the cache."""
-        from services.cache import cache_set, cache_get
+        from services.cache import cache_get, cache_set
         cache_set("isolation_key", "isolation_value")
         assert cache_get("isolation_key") == "isolation_value"
 
@@ -77,7 +76,7 @@ class TestCacheIsolation:
 
     def test_reset_cache_fixture_clears_before_test(self, reset_cache_fixture):
         """reset_cache_fixture clears the cache at the start of the test."""
-        from services.cache import cache_set, cache_get, get_cache
+        from services.cache import cache_get, cache_set, get_cache
 
         # Manually pollute the cache before the fixture would have cleared it
         # (fixture already ran, so cache is clean — just verify it's empty)

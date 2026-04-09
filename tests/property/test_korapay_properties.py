@@ -6,8 +6,8 @@ universal correctness properties of the KoraPay integration.
 """
 
 import pytest
-from hypothesis import given, strategies as st
-
+from hypothesis import assume, given, settings
+from hypothesis import strategies as st
 
 # Property tests will be added following TDD principles
 
@@ -19,20 +19,20 @@ from hypothesis import given, strategies as st
 def test_amount_conversion_round_trip(amount_naira):
     """
     Property 1: Amount Conversion Round-Trip
-    
+
     Validates that converting amount from Naira to kobo and back to Naira
     preserves the original value within acceptable tolerance.
-    
+
     This ensures no precision loss in currency conversion.
     """
     from decimal import Decimal
-    
+
     # Convert to kobo (multiply by 100)
     amount_kobo = int(amount_naira * 100)
-    
+
     # Convert back to Naira (divide by 100)
     amount_naira_back = Decimal(amount_kobo) / 100
-    
+
     # Assert result equals original within 0.01 tolerance
     assert abs(amount_naira_back - amount_naira) <= Decimal('0.01')
 
@@ -40,37 +40,36 @@ def test_amount_conversion_round_trip(amount_naira):
 # Property 2: Mock Mode Account Number Determinism
 # Validates: Requirements 4.4, 4.5
 
-from hypothesis import settings
-
 @settings(deadline=None)  # Disable deadline due to module reloading overhead
 @given(st.text(min_size=8, max_size=50, alphabet=st.characters(min_codepoint=33, max_codepoint=126)))
 def test_mock_account_determinism(transaction_reference):
     """
     Property 2: Mock Mode Account Number Determinism
-    
+
     Validates that mock mode generates the same account number for the same
     transaction reference every time.
-    
+
     This ensures deterministic behavior for testing.
     """
     import os
     from unittest.mock import patch
-    
+
     # Set up mock mode
     with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': ''}, clear=False):
         import importlib
+
         import config as config_module
         importlib.reload(config_module)
-        
+
         from services.korapay import korapay
-        
+
         # Call _mock_create_virtual_account twice with same reference
         result1 = korapay._mock_create_virtual_account(transaction_reference, 100000, "Test")
         result2 = korapay._mock_create_virtual_account(transaction_reference, 100000, "Test")
-        
+
         # Assert both calls return identical account number
         assert result1["accountNumber"] == result2["accountNumber"]
-        
+
         # Verify account number matches formula
         seed = sum(ord(c) for c in transaction_reference)
         expected_account = str(3000000000 + (seed % 999999999)).zfill(10)
@@ -85,37 +84,38 @@ def test_mock_account_determinism(transaction_reference):
 def test_mock_polling_sequence(transaction_reference):
     """
     Property 3: Mock Mode Polling Sequence
-    
+
     Validates that mock mode returns "Z0" (pending) for the first 3 polls
     and "00" (confirmed) on the 4th poll, with proper counter cleanup.
-    
+
     This ensures correct polling simulation behavior.
     """
     import os
     from unittest.mock import patch
-    
+
     # Set up mock mode
     with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': ''}, clear=False):
         import importlib
+
         import config as config_module
         importlib.reload(config_module)
-        
+
         from services.korapay import korapay
-        
+
         # Reset mock state
         korapay._mock_poll_counts.clear()
-        
+
         # Poll N times where N <= 3, assert all return "Z0"
         for poll_num in range(1, 4):  # Polls 1, 2, 3
             result = korapay._mock_confirm_transfer(transaction_reference)
             assert result["responseCode"] == "Z0", f"Poll {poll_num} should return Z0"
             assert result["transactionReference"] == transaction_reference
-        
+
         # Poll 4th time, assert returns "00"
         result = korapay._mock_confirm_transfer(transaction_reference)
         assert result["responseCode"] == "00", "4th poll should return 00"
         assert result["transactionReference"] == transaction_reference
-        
+
         # Verify counter cleanup after confirmation
         assert transaction_reference not in korapay._mock_poll_counts, \
             "Counter should be cleaned up after confirmation"
@@ -144,6 +144,7 @@ def test_virtual_account_idempotency(tx_ref, amount_kobo, account_name):
 
     with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': ''}, clear=False):
         import importlib
+
         import config as config_module
         importlib.reload(config_module)
 
@@ -195,8 +196,8 @@ def test_webhook_signature_on_data_object_only(webhook_secret, ref, status, amou
     not the full payload. A signature computed on the full payload
     should fail verification.
     """
-    import hmac
     import hashlib
+    import hmac
     import json
 
     # Build webhook payload
@@ -371,7 +372,7 @@ def test_amount_rounding_consistency(amount):
     Validates that amounts with more than 2 decimal places are rounded
     consistently using ROUND_HALF_UP and result has exactly 2 decimal places.
     """
-    from decimal import Decimal, ROUND_HALF_UP
+    from decimal import ROUND_HALF_UP, Decimal
 
     # Round using ROUND_HALF_UP
     rounded = amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
@@ -424,7 +425,6 @@ def test_status_code_mapping_consistency(status):
 # Property 18: Fee Calculation Sanity Check
 # Validates: Requirements 26.36
 
-from hypothesis import assume
 
 @settings(deadline=None)
 @given(
@@ -467,6 +467,7 @@ def test_mock_poll_counter_cleanup(tx_ref):
 
     with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': ''}, clear=False):
         import importlib
+
         import config as config_module
         importlib.reload(config_module)
 

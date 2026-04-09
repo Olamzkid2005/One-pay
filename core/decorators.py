@@ -5,7 +5,8 @@ Provides rate limiting, caching, and audit logging decorators.
 """
 import logging
 from functools import wraps
-from flask import request, g, jsonify
+
+from flask import g, jsonify, request
 
 from core.ip import client_ip
 from database import get_db

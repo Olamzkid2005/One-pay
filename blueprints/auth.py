@@ -10,36 +10,36 @@ from datetime import datetime, timedelta, timezone
 
 from flask import (
     Blueprint,
-    request,
-    render_template,
-    session,
-    redirect,
-    url_for,
     flash,
     jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
 )
 
 from config import Config
-from database import get_db
-from models.user import User
-from services.rate_limiter import check_rate_limit
-from services.security import generate_reset_token, validate_webhook_url
-from core.decorators import rate_limit
-from services.email import send_password_reset
-from services.google_oauth import GoogleTokenValidator, GoogleProfileExtractor
-from services.github_oauth import GitHubOAuthService
+from core.audit import log_event
 from core.auth import (
-    get_csrf_token,
-    is_valid_csrf_token,
     current_user_id,
     current_username,
+    get_csrf_token,
+    is_valid_csrf_token,
     valid_username,
 )
+from core.decorators import rate_limit
+from core.exceptions import AuthenticationError, AuthorizationError, ValidationError
 from core.ip import client_ip
 from core.responses import error
-from core.audit import log_event
+from database import get_db
+from models.user import User
+from services.email import send_password_reset
+from services.github_oauth import GitHubOAuthService
+from services.google_oauth import GoogleProfileExtractor, GoogleTokenValidator
+from services.rate_limiter import check_rate_limit
+from services.security import generate_reset_token, validate_webhook_url
 from services.validators import validate_email, validate_phone
-from core.exceptions import ValidationError, AuthenticationError, AuthorizationError
 
 logger = logging.getLogger(__name__)
 auth_bp = Blueprint("auth", __name__)
@@ -118,6 +118,28 @@ def _regenerate_session_secure_minimal():
 # ── Register ───────────────────────────────────────────────────────────────────
 
 
+def _validate_registration_inputs(username: str, raw_email: str, password: str, password2: str):
+    """
+    Validate registration form inputs.
+    Returns (email, error_message) — email is None if invalid.
+    """
+    from services.password_validator import validate_password_strength
+
+    email = validate_email(raw_email)
+
+    if not valid_username(username):
+        return None, "Username must be 3–30 characters: letters, digits, underscores only."
+    if not email:
+        return None, "Please enter a valid email address."
+
+    is_valid, error_msg = validate_password_strength(password)
+    if not is_valid:
+        return email, error_msg
+    if password != password2:
+        return email, "Passwords do not match."
+    return email, None
+
+
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register_page():
     if current_user_id():
@@ -128,70 +150,30 @@ def register_page():
 
     username = (request.form.get("username") or "").strip()
     raw_email = (request.form.get("email") or "").strip()
-    email = validate_email(raw_email)
     password = request.form.get("password") or ""
     password2 = request.form.get("password2") or ""
 
+    def _re_render(msg=None):
+        if msg:
+            flash(msg, "error")
+        return render_template("register.html", username=username, email=raw_email, csrf_token=get_csrf_token())
+
     if not is_valid_csrf_token(request.form.get("csrf_token")):
-        flash("Session expired — please refresh and try again.", "error")
-        return render_template("register.html", username=username, email=raw_email, csrf_token=get_csrf_token())
+        return _re_render("Session expired — please refresh and try again.")
 
-    if not valid_username(username):
-        flash(
-            "Username must be 3–30 characters: letters, digits, underscores only.",
-            "error",
-        )
-        return render_template("register.html", username=username, email=raw_email, csrf_token=get_csrf_token())
-
-    if not email:
-        flash("Please enter a valid email address.", "error")
-        return render_template("register.html", username=username, email=raw_email, csrf_token=get_csrf_token())
-
-    # Validate password strength (VULN-006 fix)
-    from services.password_validator import validate_password_strength
-
-    is_valid, error_msg = validate_password_strength(password)
-    if not is_valid:
-        flash(error_msg, "error")
-        return render_template("register.html", username=username, email=email, csrf_token=get_csrf_token())
-
-    if password != password2:
-        flash("Passwords do not match.", "error")
-        return render_template("register.html", username=username, email=email, csrf_token=get_csrf_token())
+    email, err = _validate_registration_inputs(username, raw_email, password, password2)
+    if err:
+        return _re_render(err)
 
     with get_db() as db:
-        # Global rate limit to prevent distributed attacks
         if not check_rate_limit(db, "register:global", limit=100, window_secs=3600):
-            flash("Service temporarily unavailable — please try again later.", "error")
-            return render_template("register.html", csrf_token=get_csrf_token())
-
-        # Rate limit registration to prevent spam and account enumeration
+            return _re_render("Service temporarily unavailable — please try again later.")
         if not check_rate_limit(db, f"register:{client_ip()}", limit=3, window_secs=3600):
-            flash(
-                "Too many registration attempts — please wait before trying again.",
-                "error",
-            )
-            return render_template("register.html", csrf_token=get_csrf_token())
-
-        # Check for duplicate username
+            return _re_render("Too many registration attempts — please wait before trying again.")
         if db.query(User).filter(User.username == username).first():
-            flash("That username is already taken.", "error")
-            return render_template(
-                "register.html",
-                username=username,
-                email=email,
-                csrf_token=get_csrf_token(),
-            )
-
-        # Check for duplicate email
+            return _re_render("That username is already taken.")
         if db.query(User).filter(User.email == email).first():
-            flash("That email address is already registered.", "error")
-            return render_template(
-                "register.html",
-                username=username,
-                email=email,
-                csrf_token=get_csrf_token(),
-            )
+            return _re_render("That email address is already registered.")
 
         try:
             user = User(username=username, email=email)
@@ -201,24 +183,10 @@ def register_page():
             db.refresh(user)
         except Exception as e:
             logger.error("Registration failed | username=%s error=%s", username, e, exc_info=True)
-            flash("Unable to create account. Please try again later.", "error")
-            return render_template(
-                "register.html",
-                username=username,
-                email=email,
-                csrf_token=get_csrf_token(),
-            )
+            return _re_render("Unable to create account. Please try again later.")
 
-        # Regenerate session completely to prevent session fixation attacks
         _regenerate_session_secure(user.id, user.username)
-
-        log_event(
-            db,
-            "merchant.registered",
-            user_id=user.id,
-            ip_address=client_ip(),
-            detail={"username": username},
-        )
+        log_event(db, "merchant.registered", user_id=user.id, ip_address=client_ip(), detail={"username": username})
         logger.info("New merchant registered: %s", username)
         flash(f"Welcome, {username}! Your account has been created.", "success")
         return redirect(url_for("payments.dashboard"))
@@ -402,13 +370,25 @@ def forgot_password():
 # ── Reset password ─────────────────────────────────────────────────────────────
 
 
+def _get_valid_reset_user(db, token: str):
+    """Return user if reset token is valid and not expired, else None."""
+    user = db.query(User).filter(User.reset_token == token).first()
+    if not user or not user.reset_token_expires_at:
+        return None
+    expires = user.reset_token_expires_at
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires:
+        return None
+    return user
+
+
 @auth_bp.route("/reset-password/<token>", methods=["GET", "POST"])
 def reset_password(token: str):
     def _invalid():
         flash("This reset link is invalid or has expired.", "error")
         return redirect(url_for("auth.login_page"))
 
-    # Add rate limiting on token validation to prevent brute-force
     with get_db() as db:
         if not check_rate_limit(db, f"reset_validate:{client_ip()}", limit=10, window_secs=300):
             flash("Too many attempts — please wait before trying again.", "error")
@@ -416,13 +396,7 @@ def reset_password(token: str):
 
     if request.method == "GET":
         with get_db() as db:
-            user = db.query(User).filter(User.reset_token == token).first()
-            if not user or not user.reset_token_expires_at:
-                return _invalid()
-            expires = user.reset_token_expires_at
-            if expires.tzinfo is None:
-                expires = expires.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) > expires:
+            if not _get_valid_reset_user(db, token):
                 return _invalid()
         return render_template("reset_password.html", token=token, csrf_token=get_csrf_token())
 
@@ -433,9 +407,7 @@ def reset_password(token: str):
     password = request.form.get("password") or ""
     password2 = request.form.get("password2") or ""
 
-    # Validate password strength (VULN-006 fix)
     from services.password_validator import validate_password_strength
-
     is_valid, error_msg = validate_password_strength(password)
     if not is_valid:
         flash(error_msg, "error")
@@ -446,16 +418,9 @@ def reset_password(token: str):
         return render_template("reset_password.html", token=token, csrf_token=get_csrf_token())
 
     with get_db() as db:
-        user = db.query(User).filter(User.reset_token == token).first()
-        if not user or not user.reset_token_expires_at:
+        user = _get_valid_reset_user(db, token)
+        if not user:
             return _invalid()
-        expires = user.reset_token_expires_at
-        if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=timezone.utc)
-        if datetime.now(timezone.utc) > expires:
-            return _invalid()
-
-        # Check if new password is same as current password
         if user.check_password(password):
             flash("New password cannot be the same as your current password.", "error")
             return render_template("reset_password.html", token=token, csrf_token=get_csrf_token())
@@ -539,6 +504,25 @@ def google_config():
     return jsonify({"enabled": True, "client_id": client_id})
 
 
+def _handle_oauth_2fa_or_login(db, user, provider: str, profile: dict):
+    """
+    Handle 2FA check or direct login for OAuth flows.
+    Returns a JSON response. Sets session data.
+    """
+    if getattr(user, "two_factor_enabled", False):
+        from services.email import send_2fa_code
+        otp_code = str(secrets.randbelow(1000000)).zfill(6)
+        user.email_otp = otp_code
+        user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+        send_2fa_code(user.email, otp_code)
+        session["pre_2fa_user_id"] = user.id
+        log_event(db, "2fa.code_sent", user_id=user.id, ip_address=client_ip(), detail={"provider": provider})
+        return jsonify({"success": True, "redirect_url": url_for("auth.verify_2fa")})
+    session["user_id"] = user.id
+    session["username"] = user.username
+    return None  # Caller should continue to set their own response
+
+
 @auth_bp.route("/auth/google/callback", methods=["POST"])
 def google_callback():
     """
@@ -602,32 +586,11 @@ def google_callback():
             if user:
                 # User exists with this Google ID - log them in
                 # Session already regenerated above, just set user data
-                if getattr(user, "two_factor_enabled", False):
-                    from services.email import send_2fa_code
-
-                    otp_code = str(secrets.randbelow(1000000)).zfill(6)
-                    user.email_otp = otp_code
-                    user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
-                    send_2fa_code(user.email, otp_code)
-                    session["pre_2fa_user_id"] = user.id
-                    log_event(
-                        db,
-                        "2fa.code_sent",
-                        user_id=user.id,
-                        ip_address=client_ip(),
-                        detail={"provider": "google"},
-                    )
-                    return jsonify({"success": True, "redirect_url": url_for("auth.verify_2fa")})
-
-                session["user_id"] = user.id
-                session["username"] = user.username
-                log_event(
-                    db,
-                    "oauth.login",
-                    user_id=user.id,
-                    ip_address=client_ip(),
-                    detail={"provider": "google", "email": profile["email"]},
-                )
+                resp = _handle_oauth_2fa_or_login(db, user, "google", profile)
+                if resp:
+                    return resp
+                log_event(db, "oauth.login", user_id=user.id, ip_address=client_ip(),
+                          detail={"provider": "google", "email": profile["email"]})
                 logger.info("Google OAuth login: %s", user.username)
                 return jsonify({"success": True, "redirect_url": url_for("payments.dashboard")})
 
@@ -659,37 +622,13 @@ def google_callback():
                 db.flush()
 
                 # Session already regenerated above, just set user data
-                if getattr(user, "two_factor_enabled", False):
-                    from services.email import send_2fa_code
-
-                    otp_code = str(secrets.randbelow(1000000)).zfill(6)
-                    user.email_otp = otp_code
-                    user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
-                    send_2fa_code(user.email, otp_code)
-                    session["pre_2fa_user_id"] = user.id
-                    log_event(
-                        db,
-                        "2fa.code_sent",
-                        user_id=user.id,
-                        ip_address=client_ip(),
-                        detail={"provider": "google"},
-                    )
-                    return jsonify({"success": True, "redirect_url": url_for("auth.verify_2fa")})
-
-                session["user_id"] = user.id
-                session["username"] = user.username
-                log_event(
-                    db,
-                    "oauth.account_linked",
-                    user_id=user.id,
-                    ip_address=client_ip(),
-                    detail={"provider": "google", "email": profile["email"]},
-                )
+                resp = _handle_oauth_2fa_or_login(db, user, "google", profile)
+                if resp:
+                    return resp
+                log_event(db, "oauth.account_linked", user_id=user.id, ip_address=client_ip(),
+                          detail={"provider": "google", "email": profile["email"]})
                 logger.info("Google account linked to existing user: %s", user.username)
-                flash(
-                    f"Welcome back, {user.username}! Your Google account has been linked.",
-                    "success",
-                )
+                flash(f"Welcome back, {user.username}! Your Google account has been linked.", "success")
                 return jsonify({"success": True, "redirect_url": url_for("payments.dashboard")})
 
             # No existing user - create new account
@@ -698,36 +637,11 @@ def google_callback():
             db.refresh(user)
 
             # Session already regenerated above, just set user data
-            if getattr(user, "two_factor_enabled", False):
-                from services.email import send_2fa_code
-
-                otp_code = str(secrets.randbelow(1000000)).zfill(6)
-                user.email_otp = otp_code
-                user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
-                send_2fa_code(user.email, otp_code)
-                session["pre_2fa_user_id"] = user.id
-                log_event(
-                    db,
-                    "2fa.code_sent",
-                    user_id=user.id,
-                    ip_address=client_ip(),
-                    detail={"provider": "google"},
-                )
-                return jsonify({"success": True, "redirect_url": url_for("auth.verify_2fa")})
-
-            session["user_id"] = user.id
-            session["username"] = user.username
-            log_event(
-                db,
-                "oauth.account_created",
-                user_id=user.id,
-                ip_address=client_ip(),
-                detail={
-                    "provider": "google",
-                    "email": profile["email"],
-                    "username": user.username,
-                },
-            )
+            resp = _handle_oauth_2fa_or_login(db, user, "google", profile)
+            if resp:
+                return resp
+            log_event(db, "oauth.account_created", user_id=user.id, ip_address=client_ip(),
+                      detail={"provider": "google", "email": profile["email"], "username": user.username})
             logger.info("New user created via Google OAuth: %s", user.username)
             flash(f"Welcome, {user.username}! Your account has been created.", "success")
             return jsonify({"success": True, "redirect_url": url_for("payments.dashboard")})
@@ -858,7 +772,7 @@ def github_login():
     try:
         url = GitHubOAuthService.get_auth_url()
         return redirect(url)
-    except Exception as e:
+    except Exception:
         flash("GitHub login is currently unavailable.", "error")
         return redirect(url_for("auth.login_page"))
 

@@ -10,12 +10,13 @@ Tests for the caching layer (Requirement 11):
 """
 
 import time
+
 import pytest
 
 from services.cache import (
+    cache_delete,
     cache_get,
     cache_set,
-    cache_delete,
     reset_cache,
 )
 

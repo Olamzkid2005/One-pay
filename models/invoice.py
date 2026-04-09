@@ -4,9 +4,18 @@ OnePay — Invoice database models
 import enum
 from datetime import datetime, timezone
 from typing import Optional
+
 from sqlalchemy import (
-    Column, String, Numeric, DateTime, Integer,
-    Enum, Boolean, ForeignKey, Text, Index,
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
 )
 from sqlalchemy.orm import relationship
 
@@ -41,7 +50,7 @@ class Invoice(Base):
         nullable=True,
         index=True
     )
-    
+
     # SQLAlchemy relationships
     transaction = relationship("Transaction", backref="invoice", uselist=False)
 

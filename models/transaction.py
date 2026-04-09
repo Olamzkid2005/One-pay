@@ -4,9 +4,18 @@ OnePay — Transaction database model
 import enum
 from datetime import datetime, timezone
 from typing import Optional
+
 from sqlalchemy import (
-    Column, String, Numeric, DateTime, Integer,
-    Enum, Boolean, ForeignKey, Text, Index,
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
 )
 
 from models.base import Base

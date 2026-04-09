@@ -15,20 +15,18 @@ Requirements: 9.2, 9.4
 """
 
 import inspect
-import pytest
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from datetime import datetime, timezone, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
+import pytest
 from sqlalchemy import create_engine, event, text
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import Session, selectinload, sessionmaker
 
 from models.base import Base
-from models.transaction import Transaction, TransactionStatus
 from models.invoice import Invoice, InvoiceSettings, InvoiceStatus
+from models.transaction import Transaction, TransactionStatus
 from models.user import User
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -219,7 +217,7 @@ class TestTransactionHistoryQueryCount:
 
     def test_query_count_5_transactions(self, db_session, query_counter):
         """Loading 5 transactions should issue a constant number of queries."""
-        user = _make_user(db_session, user_id=10)
+        _make_user(db_session, user_id=10)
         for i in range(5):
             tx = _make_transaction(db_session, user_id=10, tx_num=i)
             _make_invoice(db_session, tx, user_id=10, seq=100 + i)
@@ -239,7 +237,7 @@ class TestTransactionHistoryQueryCount:
 
     def test_query_count_10_transactions(self, db_session, query_counter):
         """Loading 10 transactions should issue the same number of queries as 5."""
-        user = _make_user(db_session, user_id=20)
+        _make_user(db_session, user_id=20)
         for i in range(10):
             tx = _make_transaction(db_session, user_id=20, tx_num=i)
             _make_invoice(db_session, tx, user_id=20, seq=200 + i)
@@ -260,7 +258,7 @@ class TestTransactionHistoryQueryCount:
         The query count must be the same for page_size=5 and page_size=10.
         This is the core N+1 prevention assertion (Requirement 9.2, 9.4).
         """
-        user = _make_user(db_session, user_id=30)
+        _make_user(db_session, user_id=30)
         for i in range(10):
             tx = _make_transaction(db_session, user_id=30, tx_num=i)
             _make_invoice(db_session, tx, user_id=30, seq=300 + i)
@@ -284,7 +282,7 @@ class TestTransactionHistoryQueryCount:
 
     def test_no_n1_without_invoices(self, db_session, query_counter):
         """Transactions without invoices should also use a constant query count."""
-        user = _make_user(db_session, user_id=40)
+        _make_user(db_session, user_id=40)
         for i in range(8):
             _make_transaction(db_session, user_id=40, tx_num=i)
         db_session.flush()
@@ -330,7 +328,7 @@ class TestInvoiceHistoryQueryCount:
 
     def test_query_count_5_invoices(self, db_session, query_counter):
         """Loading 5 invoices should issue ≤3 queries."""
-        user = _make_user(db_session, user_id=50)
+        _make_user(db_session, user_id=50)
         for i in range(5):
             tx = _make_transaction(db_session, user_id=50, tx_num=i)
             _make_invoice(db_session, tx, user_id=50, seq=500 + i)
@@ -347,7 +345,7 @@ class TestInvoiceHistoryQueryCount:
 
     def test_query_count_10_invoices(self, db_session, query_counter):
         """Loading 10 invoices should issue the same number of queries as 5."""
-        user = _make_user(db_session, user_id=60)
+        _make_user(db_session, user_id=60)
         for i in range(10):
             tx = _make_transaction(db_session, user_id=60, tx_num=i)
             _make_invoice(db_session, tx, user_id=60, seq=600 + i)
@@ -369,7 +367,7 @@ class TestInvoiceHistoryQueryCount:
         Query count must be the same for page_size=5 and page_size=10.
         Requirements: 9.2, 9.4
         """
-        user = _make_user(db_session, user_id=70)
+        _make_user(db_session, user_id=70)
         for i in range(10):
             tx = _make_transaction(db_session, user_id=70, tx_num=i)
             _make_invoice(db_session, tx, user_id=70, seq=700 + i)

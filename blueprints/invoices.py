@@ -5,20 +5,20 @@ Handles: invoice creation, retrieval, download, email, and settings
 
 import logging
 
-from flask import Blueprint, request, jsonify, render_template
+from flask import Blueprint, jsonify, render_template, request
 
-from database import get_db
-from models.user import User
-from services.rate_limiter import check_rate_limit
-from services.validators import validate_email, validate_phone
 from core.auth import (
     current_user_id,
     current_username,
     get_csrf_token,
     login_required_redirect,
 )
+from core.exceptions import AuthenticationError, ProviderError, ValidationError
 from core.responses import error, rate_limited, unauthenticated
-from core.exceptions import ValidationError, AuthenticationError, ProviderError
+from database import get_db
+from models.user import User
+from services.rate_limiter import check_rate_limit
+from services.validators import validate_email, validate_phone
 
 logger = logging.getLogger(__name__)
 invoices_bp = Blueprint("invoices", __name__)
@@ -27,199 +27,108 @@ invoices_bp = Blueprint("invoices", __name__)
 # ── Create invoice ─────────────────────────────────────────────────────────────
 
 
+def _maybe_send_invoice_email_on_create(db, invoice, transaction, settings, data: dict) -> None:
+    """Send invoice email if auto_send_email is enabled and conditions are met."""
+    from datetime import datetime, timezone
+
+    from models.invoice import InvoiceStatus
+    from services.email import send_invoice_email
+    from services.invoice import invoice_service
+
+    auto_send = data.get("auto_send_email", False)
+    if not (auto_send and settings and settings.auto_send_email and transaction.customer_email):
+        return
+    try:
+        base_url = request.host_url.rstrip("/")
+        payment_url = f"{base_url}/pay/{transaction.tx_ref}"
+        pdf_bytes = invoice_service.generate_invoice_pdf(invoice=invoice, transaction=transaction, payment_url=payment_url)
+        email_sent = send_invoice_email(
+            to_email=transaction.customer_email, invoice=invoice, pdf_bytes=pdf_bytes,
+            payment_url=payment_url, qr_code_data_uri=transaction.qr_code_payment_url,
+        )
+        if email_sent:
+            invoice.status = InvoiceStatus.SENT
+            invoice.sent_at = datetime.now(timezone.utc)
+            db.flush()
+            logger.info("Invoice email sent | invoice=%s to=%s", invoice.invoice_number, transaction.customer_email)
+        else:
+            logger.warning("Invoice email failed | invoice=%s to=%s", invoice.invoice_number, transaction.customer_email)
+    except Exception as e:
+        logger.error("Failed to send invoice email | invoice=%s error=%s", invoice.invoice_number, e)
+
+
 @invoices_bp.route("/invoices/create", methods=["POST"])
 def create_invoice():
     """Create invoice for an existing transaction"""
     if not current_user_id():
         return unauthenticated()
 
-    # Validate Content-Type to prevent CSRF via form submission
     if request.content_type != "application/json":
         raise ValidationError("Content-Type must be application/json")
 
     with get_db() as db:
-        # Rate limit: 20 requests per minute
-        if not check_rate_limit(
-            db, f"invoice_create:{current_user_id()}", limit=20, window_secs=60
-        ):
+        if not check_rate_limit(db, f"invoice_create:{current_user_id()}", limit=20, window_secs=60):
             return rate_limited()
 
         data = request.get_json(silent=True) or {}
-
-        # Validate transaction_reference parameter
         transaction_reference = data.get("transaction_reference")
         if not transaction_reference:
             raise ValidationError("transaction_reference is required")
 
-        # Fetch transaction
         from models.transaction import Transaction
-
-        transaction = (
-            db.query(Transaction)
-            .filter(Transaction.tx_ref == transaction_reference)
-            .first()
-        )
-
-        if not transaction:
+        transaction = db.query(Transaction).filter(Transaction.tx_ref == transaction_reference).first()
+        if not transaction or transaction.user_id != current_user_id():
             raise ValidationError("Transaction not found")
 
-        # Verify transaction ownership
-        if transaction.user_id != current_user_id():
-            raise ValidationError("Transaction not found")
-
-        # Check if invoice already exists (idempotency)
+        from core.audit import log_event
         from models.invoice import Invoice, InvoiceSettings
         from services.invoice import invoice_service
-        from core.audit import log_event
 
-        existing_invoice = (
-            db.query(Invoice).filter(Invoice.transaction_id == transaction.id).first()
-        )
-
+        existing_invoice = db.query(Invoice).filter(Invoice.transaction_id == transaction.id).first()
         if existing_invoice:
-            # Idempotent - return existing invoice
-            logger.info(
-                "Existing invoice returned (idempotent) | invoice=%s tx_ref=%s user_id=%d",
-                existing_invoice.invoice_number,
-                transaction_reference,
-                current_user_id(),
-            )
+            logger.info("Existing invoice returned (idempotent) | invoice=%s tx_ref=%s user_id=%d",
+                        existing_invoice.invoice_number, transaction_reference, current_user_id())
+            return jsonify({"success": True, "invoice": {
+                "invoice_number": existing_invoice.invoice_number,
+                "transaction_reference": transaction.tx_ref,
+                "amount": str(existing_invoice.amount),
+                "currency": existing_invoice.currency,
+                "status": existing_invoice.status.value if hasattr(existing_invoice.status, "value") else str(existing_invoice.status),
+                "created_at": existing_invoice.created_at_utc_iso(),
+                "download_url": f"/api/invoices/{existing_invoice.invoice_number}/download",
+            }}), 200
 
-            return jsonify(
-                {
-                    "success": True,
-                    "invoice": {
-                        "invoice_number": existing_invoice.invoice_number,
-                        "transaction_reference": transaction.tx_ref,
-                        "amount": str(existing_invoice.amount),
-                        "currency": existing_invoice.currency,
-                        "status": existing_invoice.status.value
-                        if hasattr(existing_invoice.status, "value")
-                        else str(existing_invoice.status),
-                        "created_at": existing_invoice.created_at_utc_iso(),
-                        "download_url": f"/api/invoices/{existing_invoice.invoice_number}/download",
-                    },
-                }
-            ), 200
-
-        # Fetch user and settings
         from models.user import User
-
         user = db.query(User).filter(User.id == current_user_id()).first()
         if not user:
             raise ValidationError("User not found")
 
-        settings = (
-            db.query(InvoiceSettings)
-            .filter(InvoiceSettings.user_id == current_user_id())
-            .first()
-        )
+        settings = db.query(InvoiceSettings).filter(InvoiceSettings.user_id == current_user_id()).first()
 
-        # Create invoice using InvoiceService (isolated in savepoint to prevent session poisoning)
         with db.begin_nested():
             try:
-                invoice = invoice_service.create_invoice(
-                    db=db, transaction=transaction, user=user, settings=settings
-                )
+                invoice = invoice_service.create_invoice(db=db, transaction=transaction, user=user, settings=settings)
                 db.flush()
-
-                # Add audit logging
-                log_event(
-                    db=db,
-                    event="invoice.created",
-                    user_id=current_user_id(),
-                    tx_ref=transaction.tx_ref,
-                    ip_address=request.remote_addr,
-                    detail={
-                        "invoice_number": invoice.invoice_number,
-                        "amount": str(invoice.amount),
-                        "currency": invoice.currency,
-                    },
-                )
-
+                log_event(db=db, event="invoice.created", user_id=current_user_id(), tx_ref=transaction.tx_ref,
+                          ip_address=request.remote_addr,
+                          detail={"invoice_number": invoice.invoice_number, "amount": str(invoice.amount), "currency": invoice.currency})
             except Exception as e:
                 db.rollback()
-                logger.error(
-                    "Failed to create invoice | user_id=%s error=%s",
-                    current_user_id(),
-                    e,
-                )
+                logger.error("Failed to create invoice | user_id=%s error=%s", current_user_id(), e)
                 from core.exceptions import OnePayError
                 raise OnePayError("Unable to create invoice. Please try again later.", "INVOICE_CREATION_FAILED", 500)
 
-            # Optionally send email if auto_send_email enabled
-            auto_send_email = data.get("auto_send_email", False)
-            if (
-                auto_send_email
-                and settings
-                and settings.auto_send_email
-                and transaction.customer_email
-            ):
-                try:
-                    # Generate PDF
-                    base_url = request.host_url.rstrip("/")
-                    payment_url = f"{base_url}/pay/{transaction.tx_ref}"
-                    pdf_bytes = invoice_service.generate_invoice_pdf(
-                        invoice=invoice,
-                        transaction=transaction,
-                        payment_url=payment_url,
-                    )
+            _maybe_send_invoice_email_on_create(db, invoice, transaction, settings, data)
 
-                    # Send email
-                    from services.email import send_invoice_email
-
-                    email_sent = send_invoice_email(
-                        to_email=transaction.customer_email,
-                        invoice=invoice,
-                        pdf_bytes=pdf_bytes,
-                        payment_url=payment_url,
-                        qr_code_data_uri=transaction.qr_code_payment_url,
-                    )
-
-                    if email_sent:
-                        from models.invoice import InvoiceStatus
-                        from datetime import datetime, timezone
-
-                        invoice.status = InvoiceStatus.SENT
-                        invoice.sent_at = datetime.now(timezone.utc)
-                        db.flush()
-
-                        logger.info(
-                            "Invoice email sent | invoice=%s to=%s",
-                            invoice.invoice_number,
-                            transaction.customer_email,
-                        )
-                    else:
-                        logger.warning(
-                            "Invoice email failed | invoice=%s to=%s",
-                            invoice.invoice_number,
-                            transaction.customer_email,
-                        )
-                except Exception as e:
-                    logger.error(
-                        "Failed to send invoice email | invoice=%s error=%s",
-                        invoice.invoice_number,
-                        e,
-                    )
-                    # Don't fail the request - invoice was created successfully
-
-            # Return invoice details with download URL
-            return jsonify(
-                {
-                    "success": True,
-                    "invoice": {
-                        "invoice_number": invoice.invoice_number,
-                        "transaction_reference": transaction.tx_ref,
-                        "amount": str(invoice.amount),
-                        "currency": invoice.currency,
-                        "status": invoice.status.value
-                        if hasattr(invoice.status, "value")
-                        else str(invoice.status),
-                        "created_at": invoice.created_at_utc_iso(),
-                        "download_url": f"/api/invoices/{invoice.invoice_number}/download",
-                    },
-                }
-            ), 201
+            return jsonify({"success": True, "invoice": {
+                "invoice_number": invoice.invoice_number,
+                "transaction_reference": transaction.tx_ref,
+                "amount": str(invoice.amount),
+                "currency": invoice.currency,
+                "status": invoice.status.value if hasattr(invoice.status, "value") else str(invoice.status),
+                "created_at": invoice.created_at_utc_iso(),
+                "download_url": f"/api/invoices/{invoice.invoice_number}/download",
+            }}), 201
 
 
 # ── Invoice page (HTML) and API list ─────────────────────────────────────────
@@ -296,8 +205,8 @@ def list_invoices():
             )
 
         # Get invoice history using service
-        from services.invoice import invoice_service
         from core.audit import log_event
+        from services.invoice import invoice_service
 
         try:
             invoices, total_count = invoice_service.get_invoice_history(
@@ -393,8 +302,8 @@ def get_invoice(invoice_number):
             raise ValidationError("Invalid invoice number format")
 
         # Fetch invoice with ownership verification
-        from services.invoice import invoice_service
         from core.audit import log_event
+        from services.invoice import invoice_service
 
         invoice = invoice_service.get_invoice_by_number(
             db=db, invoice_number=invoice_number, user_id=current_user_id()
@@ -479,8 +388,8 @@ def download_invoice(invoice_number):
             raise ValidationError("Invalid invoice number format")
 
         # Fetch invoice with ownership verification
-        from services.invoice import invoice_service
         from core.audit import log_event
+        from services.invoice import invoice_service
 
         invoice = invoice_service.get_invoice_by_number(
             db=db, invoice_number=invoice_number, user_id=current_user_id()
@@ -597,8 +506,8 @@ def send_invoice(invoice_number):
             raise ValidationError("Invalid invoice number format")
 
         # Fetch invoice with ownership verification
-        from services.invoice import invoice_service
         from core.audit import log_event
+        from services.invoice import invoice_service
 
         invoice = invoice_service.get_invoice_by_number(
             db=db, invoice_number=invoice_number, user_id=current_user_id()
@@ -655,9 +564,10 @@ def send_invoice(invoice_number):
             )
 
             # Send email using email service
-            from services.email import send_invoice_email
-            from models.invoice import InvoiceStatus
             from datetime import datetime, timezone
+
+            from models.invoice import InvoiceStatus
+            from services.email import send_invoice_email
 
             email_sent = send_invoice_email(
                 to_email=recipient_email,
@@ -792,165 +702,132 @@ def get_invoice_settings():
 # ── Update invoice settings ────────────────────────────────────────────────────
 
 
+def _validate_logo_url(raw_logo_url: str, user_id: int) -> str:
+    """Validate logo URL with SSRF protection. Returns sanitized URL or raises ValidationError."""
+    import html as _html
+    from urllib.parse import urlparse
+
+    import requests
+
+    from services.url_validator import validate_url_for_ssrf
+
+    def _safe_str(val, maxlen=500):
+        if not val:
+            return None
+        s = str(val).strip()
+        s = "".join(c for c in s if c == "\n" or c == "\t" or (ord(c) >= 32 and ord(c) != 127))
+        return _html.escape(s)[:maxlen] if s else None
+
+    logo_url = _safe_str(raw_logo_url)
+    if not logo_url:
+        return None
+
+    is_valid, resolved_ip, error_msg = validate_url_for_ssrf(logo_url)
+    if not is_valid:
+        logger.warning(
+            "Logo URL SSRF validation failed | user_id=%d url=%s error=%s",
+            user_id, logo_url, error_msg,
+        )
+        raise ValidationError("The provided logo URL is not valid or accessible")
+
+    try:
+        parsed = urlparse(logo_url)
+        ip_url = f"{parsed.scheme}://{resolved_ip}{parsed.path}"
+        if parsed.query:
+            ip_url += f"?{parsed.query}"
+        response = requests.head(ip_url, headers={"Host": parsed.hostname}, timeout=5, allow_redirects=True)
+        if response.status_code != 200:
+            raise ValidationError(f"Logo URL is not accessible (HTTP {response.status_code})")
+        content_type = response.headers.get("Content-Type", "").lower()
+        if not any(ct in content_type for ct in ["image/png", "image/jpeg", "image/jpg", "image/svg+xml"]):
+            raise ValidationError("Logo URL must return a valid image format (PNG, JPG, or SVG)")
+        return logo_url
+    except requests.Timeout:
+        raise ValidationError("Logo URL request timed out - URL may be inaccessible")
+    except requests.RequestException as e:
+        logger.error("Logo URL validation failed | user_id=%d url=%s error=%s", user_id, logo_url, e)
+        raise ValidationError("Logo URL is not accessible")
+
+
+def _upsert_invoice_settings(db, settings, data: dict, fields: dict):
+    """Create or update InvoiceSettings record from validated field dict."""
+    from models.invoice import InvoiceSettings
+
+    if not settings:
+        settings = InvoiceSettings(
+            user_id=fields["user_id"],
+            business_name=fields.get("business_name"),
+            business_address=fields.get("business_address"),
+            business_tax_id=fields.get("business_tax_id"),
+            business_logo_url=fields.get("business_logo_url"),
+            default_payment_terms=fields.get("default_payment_terms") or "Payment due upon receipt",
+            auto_send_email=fields.get("auto_send_email") or False,
+        )
+        db.add(settings)
+    else:
+        for key in ("business_name", "business_address", "business_tax_id",
+                    "business_logo_url", "default_payment_terms", "auto_send_email"):
+            if fields.get(key) is not None:
+                setattr(settings, key, fields[key])
+    return settings
+
+
 @invoices_bp.route("/invoices/settings", methods=["POST"])
 def update_invoice_settings():
     """Update merchant invoice settings"""
     if not current_user_id():
         return unauthenticated()
 
-    # Validate Content-Type to prevent CSRF via form submission
     if request.content_type != "application/json":
         raise ValidationError("Content-Type must be application/json")
 
     with get_db() as db:
-        # Rate limit: 10 requests per minute
         if not check_rate_limit(
             db, f"invoice_settings_update:{current_user_id()}", limit=10, window_secs=60
         ):
             return rate_limited()
 
-        from models.invoice import InvoiceSettings
-        from core.audit import log_event
-        from services.url_validator import validate_url_for_ssrf
         import html
 
-        # Parse request data
+        from core.audit import log_event
+        from models.invoice import InvoiceSettings
+
         data = request.get_json(silent=True) or {}
 
-        # Sanitize text inputs using existing helper
         def _safe(val, maxlen=255):
-            """Strip, escape HTML, remove control characters, and truncate"""
             if not val:
                 return None
-            sanitized = str(val).strip()
-            sanitized = "".join(
-                c
-                for c in sanitized
-                if c == "\n" or c == "\t" or (ord(c) >= 32 and ord(c) != 127)
-            )
-            sanitized = html.escape(sanitized)
-            return sanitized[:maxlen] if sanitized else None
+            s = str(val).strip()
+            s = "".join(c for c in s if c == "\n" or c == "\t" or (ord(c) >= 32 and ord(c) != 127))
+            return html.escape(s)[:maxlen] if s else None
 
-        # Validate and sanitize fields
-        business_name = _safe(data.get("business_name"), 255)
-        business_address = _safe(data.get("business_address"), 1000)
-        business_tax_id = _safe(data.get("business_tax_id"), 100)
-        default_payment_terms = _safe(data.get("default_payment_terms"), 500)
-
-        # Validate logo URL if provided
-        business_logo_url = None
-        raw_logo_url = data.get("business_logo_url")
-        if raw_logo_url:
-            # Sanitize and validate URL format
-            logo_url = _safe(raw_logo_url, 500)
-            if logo_url:
-                # Use SSRF-protected URL validator (Requirement 3.1, 3.2, 3.3, 3.4)
-                is_valid, resolved_ip, error_msg = validate_url_for_ssrf(logo_url)
-                if not is_valid:
-                    logger.warning(
-                        "Logo URL validation failed (SSRF protection) | user_id=%d url=%s error=%s",
-                        current_user_id(),
-                        logo_url,
-                        error_msg,
-                    )
-                    raise ValidationError("The provided logo URL is not valid or accessible")
-
-                # Validate URL is accessible and returns an image
-                # Use resolved IP with Host header to prevent DNS rebinding (Requirement 3.3)
-                try:
-                    import requests
-                    from urllib.parse import urlparse
-
-                    parsed = urlparse(logo_url)
-                    # Construct URL using resolved IP
-                    ip_url = f"{parsed.scheme}://{resolved_ip}{parsed.path}"
-                    if parsed.query:
-                        ip_url += f"?{parsed.query}"
-
-                    # Make request with original hostname in Host header
-                    headers = {"Host": parsed.hostname}
-                    response = requests.head(
-                        ip_url, headers=headers, timeout=5, allow_redirects=True
-                    )
-
-                    # Check if URL is accessible
-                    if response.status_code != 200:
-                        raise ValidationError(
-                            f"Logo URL is not accessible (HTTP {response.status_code})"
-                        )
-
-                    # Check content type is an image
-                    content_type = response.headers.get("Content-Type", "").lower()
-                    valid_types = [
-                        "image/png",
-                        "image/jpeg",
-                        "image/jpg",
-                        "image/svg+xml",
-                    ]
-                    if not any(ct in content_type for ct in valid_types):
-                        raise ValidationError(
-                            "Logo URL must return a valid image format (PNG, JPG, or SVG)"
-                        )
-
-                    business_logo_url = logo_url  # Store original URL, not IP
-
-                except requests.Timeout:
-                    raise ValidationError("Logo URL request timed out - URL may be inaccessible")
-                except requests.RequestException as e:
-                    logger.error(
-                        "Logo URL validation failed | user_id=%d url=%s error=%s",
-                        current_user_id(),
-                        logo_url,
-                        e,
-                    )
-                    raise ValidationError("Logo URL is not accessible")
-
-        # Validate auto_send_email is boolean
         auto_send_email = data.get("auto_send_email")
         if auto_send_email is not None and not isinstance(auto_send_email, bool):
             raise ValidationError("auto_send_email must be a boolean value")
 
-        # Fetch or create settings record
+        business_logo_url = None
+        if data.get("business_logo_url"):
+            business_logo_url = _validate_logo_url(data["business_logo_url"], current_user_id())
+
+        fields = {
+            "user_id": current_user_id(),
+            "business_name": _safe(data.get("business_name"), 255),
+            "business_address": _safe(data.get("business_address"), 1000),
+            "business_tax_id": _safe(data.get("business_tax_id"), 100),
+            "business_logo_url": business_logo_url,
+            "default_payment_terms": _safe(data.get("default_payment_terms"), 500),
+            "auto_send_email": auto_send_email,
+        }
+
         settings = (
             db.query(InvoiceSettings)
             .filter(InvoiceSettings.user_id == current_user_id())
             .first()
         )
-
-        if not settings:
-            # Create new settings record
-            settings = InvoiceSettings(
-                user_id=current_user_id(),
-                business_name=business_name,
-                business_address=business_address,
-                business_tax_id=business_tax_id,
-                business_logo_url=business_logo_url,
-                default_payment_terms=default_payment_terms
-                or "Payment due upon receipt",
-                auto_send_email=auto_send_email
-                if auto_send_email is not None
-                else False,
-            )
-            db.add(settings)
-        else:
-            # Update existing settings
-            if business_name is not None:
-                settings.business_name = business_name
-            if business_address is not None:
-                settings.business_address = business_address
-            if business_tax_id is not None:
-                settings.business_tax_id = business_tax_id
-            if business_logo_url is not None:
-                settings.business_logo_url = business_logo_url
-            if default_payment_terms is not None:
-                settings.default_payment_terms = default_payment_terms
-            if auto_send_email is not None:
-                settings.auto_send_email = auto_send_email
+        settings = _upsert_invoice_settings(db, settings, data, fields)
 
         try:
             db.commit()
-
-            # Add audit logging
             log_event(
                 db=db,
                 event="invoice.settings_updated",
@@ -962,23 +839,14 @@ def update_invoice_settings():
                     "auto_send_email": settings.auto_send_email,
                 },
             )
-
             logger.info("Invoice settings updated | user_id=%d", current_user_id())
-
-            return jsonify(
-                {
-                    "success": True,
-                    "message": "Invoice settings updated successfully",
-                    "settings": settings.to_dict(),
-                }
-            ), 200
-
+            return jsonify({
+                "success": True,
+                "message": "Invoice settings updated successfully",
+                "settings": settings.to_dict(),
+            }), 200
         except Exception as e:
             db.rollback()
-            logger.error(
-                "Invoice settings update failed | user_id=%d error=%s",
-                current_user_id(),
-                e,
-            )
+            logger.error("Invoice settings update failed | user_id=%d error=%s", current_user_id(), e)
             from core.exceptions import OnePayError
             raise OnePayError("Unable to update settings. Please try again later.", "SETTINGS_ERROR", 500)

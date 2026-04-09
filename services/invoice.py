@@ -5,12 +5,12 @@ Handles invoice generation, PDF rendering, and invoice operations.
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional, List
 from decimal import Decimal
+from typing import Optional
 
-from sqlalchemy import select, func
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from models.invoice import Invoice, InvoiceSettings, InvoiceStatus
 from models.transaction import Transaction
@@ -223,7 +223,7 @@ class InvoiceService:
         page: int = 1,
         page_size: int = 20,
         sort: str = "created_desc",
-    ) -> tuple[List[Invoice], int]:
+    ) -> tuple[list[Invoice], int]:
         """
         Get paginated invoice history with optional status filter and sorting.
 
@@ -343,10 +343,11 @@ class InvoiceService:
         Raises:
             Exception: If template rendering fails
         """
-        from flask import render_template
         import base64
-        import requests
         from io import BytesIO
+
+        import requests
+        from flask import render_template
 
         try:
             # Prepare template context
@@ -450,8 +451,9 @@ class InvoiceService:
         Raises:
             Exception: If PDF generation fails
         """
-        from xhtml2pdf import pisa
         from io import BytesIO
+
+        from xhtml2pdf import pisa
 
         try:
             # Render HTML

@@ -8,8 +8,7 @@ import re
 import secrets
 from typing import Optional
 
-from flask import session, redirect, url_for
-
+from flask import redirect, session, url_for
 
 # ── CSRF ──────────────────────────────────────────────────────────────────────
 
@@ -36,52 +35,52 @@ def is_valid_csrf_token(submitted: Optional[str]) -> bool:
 def validate_csrf_with_origin() -> tuple[bool, Optional[str]]:
     """
     Validate CSRF token with additional Origin/Referer header check for defense-in-depth.
-    
+
     Returns:
         (is_valid, error_message)
     """
     from flask import request
-    
+
     # Check CSRF token first
     csrf_header = request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token")
     if not is_valid_csrf_token(csrf_header):
         return False, "CSRF validation failed"
-    
+
     # Additional Origin/Referer validation for JSON APIs
     if request.content_type == 'application/json':
         origin = request.headers.get("Origin")
         referer = request.headers.get("Referer")
-        
+
         # At least one must be present
         if not origin and not referer:
             return False, "Missing Origin or Referer header"
-        
+
         # Validate Origin if present
         if origin:
             from urllib.parse import urlparse
             try:
                 parsed_origin = urlparse(origin)
                 request_host = request.host
-                
+
                 # Allow same-origin requests
                 if parsed_origin.netloc != request_host:
                     return False, "Origin mismatch"
             except Exception:
                 return False, "Invalid Origin header"
-        
+
         # Validate Referer if Origin not present
         elif referer:
             from urllib.parse import urlparse
             try:
                 parsed_referer = urlparse(referer)
                 request_host = request.host
-                
+
                 # Allow same-origin requests
                 if parsed_referer.netloc != request_host:
                     return False, "Referer mismatch"
             except Exception:
                 return False, "Invalid Referer header"
-    
+
     return True, None
 
 
@@ -89,16 +88,16 @@ def validate_csrf_with_origin() -> tuple[bool, Optional[str]]:
 
 def current_user_id() -> Optional[int]:
     """Get user ID from session OR API key
-    
+
     Returns:
         Optional[int]: User ID if authenticated via session or API key, None otherwise
     """
     from flask import g
-    
+
     # Check API key first (stored in g.user_id by middleware)
     if hasattr(g, 'api_key_authenticated') and g.api_key_authenticated:
         return g.user_id
-    
+
     # Fall back to session
     return session.get("user_id")
 

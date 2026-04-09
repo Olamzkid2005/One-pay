@@ -1,3 +1,7 @@
+---
+inclusion: auto
+---
+
 # Database Operations Skill
 
 Manage database schema, migrations, and data.

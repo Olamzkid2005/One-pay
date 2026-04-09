@@ -54,7 +54,7 @@ def run_command(cmd: list[str], cwd: str = None, timeout: int = 300) -> tuple[in
             timeout=timeout
         )
         return result.returncode, result.stdout, result.stderr
-    except subprocess.TimeoutExpired as e:
+    except subprocess.TimeoutExpired:
         return -1, "", f"Command timed out after {timeout}s"
     except Exception as e:
         return -1, "", str(e)
@@ -281,7 +281,7 @@ def run_smoke_tests(config: DeploymentConfig) -> bool:
     ], timeout=30)
 
     if returncode != 0:
-        print(f"❌ Health check failed")
+        print("❌ Health check failed")
         return False
 
     print("✅ Health check passed")
@@ -296,7 +296,7 @@ def run_smoke_tests(config: DeploymentConfig) -> bool:
     ], timeout=30)
 
     if returncode != 0:
-        print(f"❌ Mock mode test failed")
+        print("❌ Mock mode test failed")
         return False
 
     print("✅ Mock mode test passed")

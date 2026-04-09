@@ -1,3 +1,7 @@
+---
+inclusion: auto
+---
+
 # Deployment Skill
 
 Deploy OnePay to production or staging environment.

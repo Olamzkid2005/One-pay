@@ -1,3 +1,7 @@
+---
+inclusion: auto
+---
+
 # Webhook Handler Skill
 
 Debug and test webhook integrations (KoraPay and VoicePay).

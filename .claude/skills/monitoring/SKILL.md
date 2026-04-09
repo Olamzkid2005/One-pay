@@ -1,3 +1,7 @@
+---
+inclusion: auto
+---
+
 # Monitoring Skill
 
 Monitor OnePay health, metrics, and SLA compliance.

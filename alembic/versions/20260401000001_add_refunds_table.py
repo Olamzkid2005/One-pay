@@ -5,9 +5,9 @@ Revises: 20260401000000
 Create Date: 2026-04-01 00:00:01
 
 """
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = '20260401000001'
@@ -35,7 +35,7 @@ def upgrade():
         sa.ForeignKeyConstraint(['transaction_id'], ['transactions.id'], ondelete='CASCADE'),
         sa.UniqueConstraint('refund_reference', name='uq_refunds_refund_reference')
     )
-    
+
     # Create indexes for common queries
     op.create_index('idx_refunds_transaction_id', 'refunds', ['transaction_id'], unique=False)
     op.create_index('idx_refunds_status', 'refunds', ['status'], unique=False)
