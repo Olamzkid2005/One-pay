@@ -640,8 +640,8 @@ def verify_2fa():
         ip_limiter_key = f"2fa:{client_ip()}"
         user_limiter_key = f"2fa_user:{pre_2fa_user_id}"
 
-        if not check_rate_limit(db, ip_limiter_key, limit=5, window_secs=60, critical=True) or not check_rate_limit(
-            db, user_limiter_key, limit=5, window_secs=60, critical=True
+        if not check_rate_limit(db, ip_limiter_key, limit=5, window_secs=60, critical=True, use_memory=False) or not check_rate_limit(
+            db, user_limiter_key, limit=5, window_secs=60, critical=True, use_memory=False
         ):
             flash("Too many attempts — please wait a minute.", "error")
             return render_template("verify_2fa.html", csrf_token=get_csrf_token())

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 # Try to import prometheus_client
 try:
-    from prometheus_client import Counter, Histogram, Gauge
+    from prometheus_client import Counter, Gauge, Histogram
 
     # Transaction metrics
     transaction_counter = Counter(
@@ -158,7 +158,7 @@ def timed_transaction(func: Callable) -> Callable:
             duration = time.time() - start_time
             track_transaction_duration(duration)
             return result
-        except Exception as e:
+        except Exception:
             duration = time.time() - start_time
             track_transaction_duration(duration)
             raise
@@ -182,7 +182,7 @@ def timed_api_request(endpoint: str, method: str) -> Callable:
                 duration = time.time() - start_time
                 track_api_request(endpoint, method, status, duration)
                 return result
-            except Exception as e:
+            except Exception:
                 duration = time.time() - start_time
                 track_api_request(endpoint, method, status, duration)
                 raise

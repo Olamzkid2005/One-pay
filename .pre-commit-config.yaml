@@ -32,13 +32,13 @@ repos:
       - id: python-safety-dependencies-check
         files: requirements.txt
 
-  # Optional: mypy type checking (uncomment to enable)
-  # - repo: local
-  #   hooks:
-  #     - id: mypy
-  #       name: mypy
-  #       entry: mypy
-  #       language: system
-  #       types: [python]
-  #       args: [--config-file=mypy.ini]
-  #       pass_filenames: false
+  # Type checking with mypy
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        types: [python]
+        args: [--config-file=mypy.ini]
+        pass_filenames: false

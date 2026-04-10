@@ -1,0 +1,16 @@
+[run]
+source = .
+omit = 
+    venv/*
+    tests/*
+    alembic/*
+    */__pycache__/*
+    */migrations/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise NotImplementedError
+    if TYPE_CHECKING
+    if __name__ == .__main__.:

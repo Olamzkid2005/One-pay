@@ -54,7 +54,7 @@ MIGRATIONS = [
 
 
 def get_existing_columns_sqlite(cur, table: str) -> set:
-    cur.execute("PRAGMA table_info(?)", (table,))
+    cur.execute(f"PRAGMA table_info({table})")
     return {row[1] for row in cur.fetchall()}
 
 

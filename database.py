@@ -58,12 +58,14 @@ if Config.DEBUG:
     @_sa_event.listens_for(engine, "connect")
     def on_connect(dbapi_conn, connection_record):
         pool = engine.pool
-        logger.debug(f"New DB connection created. Pool size: {pool.size()}, Checked out: {pool.checkedout()}")
+        checkedout = getattr(pool, 'checkedout', 0)
+        logger.debug(f"New DB connection created. Pool size: {pool.size}, Checked out: {checkedout}")
 
     @_sa_event.listens_for(engine, "close")
     def on_close(dbapi_conn, connection_record):
         pool = engine.pool
-        logger.debug(f"DB connection closed. Pool size: {pool.size()}, Checked out: {pool.checkedout()}")
+        checkedout = getattr(pool, 'checkedout', 0)
+        logger.debug(f"DB connection closed. Pool size: {pool.size}, Checked out: {checkedout}")
 
 # SQLite pragmas: WAL mode + foreign keys
 if "sqlite" in Config.DATABASE_URL:

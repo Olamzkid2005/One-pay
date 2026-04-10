@@ -58,7 +58,7 @@ def verify_backup():
             user_pass = db_url_parts[0].split(":")
             host_port_db = db_url_parts[1].split("/")
             host_port = host_port_db[0].split(":")
-            
+
             db_user = user_pass[0]
             db_pass = user_pass[1] if len(user_pass) > 1 else ""
             db_host = host_port[0]
@@ -131,11 +131,11 @@ def verify_backup():
             recent_tx = db.query(Transaction).order_by(
                 Transaction.created_at.desc()
             ).first()
-            
+
             if recent_tx:
                 age_hours = (datetime.now(recent_tx.created_at.tzinfo) - recent_tx.created_at).total_seconds() / 3600
                 logger.info(f"Most recent transaction: {age_hours:.2f} hours old")
-                
+
                 if age_hours > 48:  # Backup older than 48 hours
                     logger.warning(f"Backup appears stale: {age_hours:.2f} hours old")
 

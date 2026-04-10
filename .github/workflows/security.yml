@@ -42,7 +42,7 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: |
-          pip install bandit[toml]
+          pip install bandit[toml] radon
       - name: Run Bandit
         run: |
           bandit -r . -f json -o bandit-report.json || true
@@ -54,6 +54,9 @@ jobs:
       - name: Fail on high/critical issues
         run: |
           bandit -r . -f screen
+      - name: Check code complexity
+        run: |
+          radon cc . -a -s --min B
 
   container-scan:
     runs-on: ubuntu-latest
