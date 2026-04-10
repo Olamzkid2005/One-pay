@@ -2,6 +2,7 @@
 OnePay — Transaction database model
 """
 import enum
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -17,6 +18,8 @@ from sqlalchemy import (
     String,
     Text,
 )
+
+logger = logging.getLogger(__name__)
 
 from models.base import Base
 
@@ -182,9 +185,9 @@ def register_cache_listeners():
                 cache = get_cache()
                 if hasattr(cache, 'invalidate_user_cache'):
                     cache.invalidate_user_cache(target.user_id)
-            except Exception:
+            except Exception as e:
                 # Cache failures should not break database operations
-                pass
+                logger.debug(f"Cache invalidation failed for user {target.user_id}: {e}")
 
     @event.listens_for(Transaction, 'after_insert')
     def on_transaction_insert(mapper, connection, target):
@@ -194,6 +197,6 @@ def register_cache_listeners():
                 cache = get_cache()
                 if hasattr(cache, 'invalidate_user_cache'):
                     cache.invalidate_user_cache(target.user_id)
-            except Exception:
+            except Exception as e:
                 # Cache failures should not break database operations
-                pass
+                logger.debug(f"Cache invalidation failed for user {target.user_id}: {e}")
