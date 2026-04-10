@@ -14,7 +14,7 @@ import pytest
 class TestKoraPayConfigValidation:
     """Test KoraPay configuration validation in production."""
 
-    def test_valid_production_configuration_passes(self):
+    def test_valid_production_configuration_passes(self) -> None:
         """Test that valid production configuration passes validation."""
         with patch.dict(os.environ, {
             'APP_ENV': 'production',
@@ -38,7 +38,7 @@ class TestKoraPayConfigValidation:
             except SystemExit:
                 pytest.fail("Valid configuration should not abort startup")
 
-    def test_missing_korapay_secret_key_in_production_fails(self):
+    def test_missing_korapay_secret_key_in_production_fails(self) -> None:
         """Test that missing KORAPAY_SECRET_KEY in production fails validation."""
         with patch.dict(os.environ, {
             'APP_ENV': 'production',
@@ -57,7 +57,7 @@ class TestKoraPayConfigValidation:
             with pytest.raises(SystemExit):
                 config_module.Config.validate()
 
-    def test_short_korapay_secret_key_fails(self):
+    def test_short_korapay_secret_key_fails(self) -> None:
         """Test that KORAPAY_SECRET_KEY < 32 chars fails validation."""
         with patch.dict(os.environ, {
             'APP_ENV': 'production',
@@ -76,7 +76,7 @@ class TestKoraPayConfigValidation:
             with pytest.raises(SystemExit):
                 config_module.Config.validate()
 
-    def test_sk_test_key_in_production_fails(self):
+    def test_sk_test_key_in_production_fails(self) -> None:
         """Test that sk_test_ key in production fails validation."""
         with patch.dict(os.environ, {
             'APP_ENV': 'production',
@@ -95,7 +95,7 @@ class TestKoraPayConfigValidation:
             with pytest.raises(SystemExit):
                 config_module.Config.validate()
 
-    def test_duplicate_secrets_fail_validation(self):
+    def test_duplicate_secrets_fail_validation(self) -> None:
         """Test that duplicate secrets fail validation."""
         with patch.dict(os.environ, {
             'APP_ENV': 'production',
@@ -114,7 +114,7 @@ class TestKoraPayConfigValidation:
             with pytest.raises(SystemExit):
                 config_module.Config.validate()
 
-    def test_placeholder_values_fail_in_production(self):
+    def test_placeholder_values_fail_in_production(self) -> None:
         """Test that placeholder values fail in production."""
         with patch.dict(os.environ, {
             'APP_ENV': 'production',

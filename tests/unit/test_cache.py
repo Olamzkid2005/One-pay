@@ -34,7 +34,7 @@ class TestMemoryCache:
         yield
         reset_cache()
 
-    def test_get_returns_none_for_missing_key(self):
+    def test_get_returns_none_for_missing_key(self) -> None:
         """Test get returns None for missing key."""
         cache = MemoryCache()
 
@@ -42,7 +42,7 @@ class TestMemoryCache:
 
         assert result is None
 
-    def test_set_and_get(self):
+    def test_set_and_get(self) -> None:
         """Test set and get of value."""
         cache = MemoryCache()
 
@@ -51,7 +51,7 @@ class TestMemoryCache:
 
         assert result == "value1"
 
-    def test_get_returns_none_for_expired(self):
+    def test_get_returns_none_for_expired(self) -> None:
         """Test get returns None for expired key."""
         cache = MemoryCache()
 
@@ -62,7 +62,7 @@ class TestMemoryCache:
 
         assert result is None
 
-    def test_set_with_no_ttl(self):
+    def test_set_with_no_ttl(self) -> None:
         """Test set with no TTL (never expires)."""
         cache = MemoryCache()
 
@@ -73,7 +73,7 @@ class TestMemoryCache:
 
         assert result == "value1"
 
-    def test_delete(self):
+    def test_delete(self) -> None:
         """Test delete removes value."""
         cache = MemoryCache()
 
@@ -83,7 +83,7 @@ class TestMemoryCache:
         assert result is True
         assert cache.get("key1") is None
 
-    def test_delete_returns_false_for_missing(self):
+    def test_delete_returns_false_for_missing(self) -> None:
         """Test delete returns False for missing key."""
         cache = MemoryCache()
 
@@ -91,7 +91,7 @@ class TestMemoryCache:
 
         assert result is False
 
-    def test_clear(self):
+    def test_clear(self) -> None:
         """Test clear removes all values."""
         cache = MemoryCache()
 
@@ -102,7 +102,7 @@ class TestMemoryCache:
         assert cache.get("key1") is None
         assert cache.get("key2") is None
 
-    def test_lru_eviction(self):
+    def test_lru_eviction(self) -> None:
         """Test LRU eviction when at capacity."""
         cache = MemoryCache(max_size=3)
 
@@ -114,7 +114,7 @@ class TestMemoryCache:
         assert cache.get("key1") is None
         assert cache.get("key4") == "value4"
 
-    def test_lru_on_access(self):
+    def test_lru_on_access(self) -> None:
         """Test LRU updates on access."""
         cache = MemoryCache(max_size=3)
 
@@ -127,7 +127,7 @@ class TestMemoryCache:
         assert cache.get("key1") == "value1"
         assert cache.get("key2") is None
 
-    def test_clear_pattern(self):
+    def test_clear_pattern(self) -> None:
         """Test clear pattern removes matching keys."""
         cache = MemoryCache()
 
@@ -140,7 +140,7 @@ class TestMemoryCache:
         assert cache.get("user:2") is None
         assert cache.get("order:1") == "data3"
 
-    def test_clear_pattern_all(self):
+    def test_clear_pattern_all(self) -> None:
         """Test clear pattern with * clears all."""
         cache = MemoryCache()
 
@@ -151,7 +151,7 @@ class TestMemoryCache:
         assert cache.get("key1") is None
         assert cache.get("key2") is None
 
-    def test_get_stats(self):
+    def test_get_stats(self) -> None:
         """Test get stats returns hit/miss counts."""
         cache = MemoryCache()
 
@@ -166,7 +166,7 @@ class TestMemoryCache:
         assert stats["size"] == 1
         assert stats["hit_rate_percent"] == 50.0
 
-    def test_thread_safety(self):
+    def test_thread_safety(self) -> None:
         """Test thread-safe operations."""
         import threading
 
@@ -193,7 +193,7 @@ class TestMemoryCache:
 class TestCacheConfig:
     """Tests for CacheConfig."""
 
-    def test_default_config(self):
+    def test_default_config(self) -> None:
         """Test default cache config."""
         config = CacheConfig()
 
@@ -214,20 +214,20 @@ class TestGetCache:
         yield
         reset_cache()
 
-    def test_returns_memory_cache_by_default(self):
+    def test_returns_memory_cache_by_default(self) -> None:
         """Test get_cache returns MemoryCache by default."""
         cache = get_cache()
 
         assert isinstance(cache, MemoryCache)
 
-    def test_returns_same_instance(self):
+    def test_returns_same_instance(self) -> None:
         """Test get_cache returns singleton."""
         cache1 = get_cache()
         cache2 = get_cache()
 
         assert cache1 is cache2
 
-    def test_reset_cache_clears_and_returns_new(self):
+    def test_reset_cache_clears_and_returns_new(self) -> None:
         """Test reset_cache clears singleton."""
         cache1 = get_cache()
         cache1.set("key", "value")
@@ -248,14 +248,14 @@ class TestCacheFunctions:
         yield
         reset_cache()
 
-    def test_cache_set_and_get(self):
+    def test_cache_set_and_get(self) -> None:
         """Test cache_set and cache_get functions."""
         cache_set("key1", "value1")
         result = cache_get("key1")
 
         assert result == "value1"
 
-    def test_cache_delete(self):
+    def test_cache_delete(self) -> None:
         """Test cache_delete function."""
         cache_set("key1", "value1")
         result = cache_delete("key1")
@@ -263,7 +263,7 @@ class TestCacheFunctions:
         assert result is True
         assert cache_get("key1") is None
 
-    def test_cache_clear(self):
+    def test_cache_clear(self) -> None:
         """Test cache_clear function."""
         cache_set("key1", "value1")
         cache_set("key2", "value2")
@@ -272,7 +272,7 @@ class TestCacheFunctions:
         assert cache_get("key1") is None
         assert cache_get("key2") is None
 
-    def test_cache_clear_pattern(self):
+    def test_cache_clear_pattern(self) -> None:
         """Test cache_clear_pattern function."""
         cache_set("user:1", "data1")
         cache_set("user:2", "data2")
@@ -287,7 +287,7 @@ class TestRedisCache:
     """Tests for RedisCache class."""
 
     @pytest.mark.skip(reason="Redis library not installed, RedisCache uses fallback")
-    def test_redis_cache_fallback_to_memory(self):
+    def test_redis_cache_fallback_to_memory(self) -> None:
         """Test RedisCache falls back to memory on connection failure."""
         with patch("services.cache.redis") as mock_redis:
             mock_redis.from_url.side_effect = Exception("Connection failed")
@@ -299,7 +299,7 @@ class TestRedisCache:
             assert cache.get("key1") == "value1"
 
     @pytest.mark.skip(reason="Redis library not installed, RedisCache uses fallback")
-    def test_redis_cache_handles_connection_error_on_get(self):
+    def test_redis_cache_handles_connection_error_on_get(self) -> None:
         """Test RedisCache handles connection error on get."""
         with patch("services.cache.redis") as mock_redis:
             mock_redis.from_url.return_value.ping.side_effect = Exception("Connection failed")
@@ -311,7 +311,7 @@ class TestRedisCache:
             assert cache.get("key1") is None
 
     @pytest.mark.skip(reason="Redis library not installed, RedisCache uses fallback")
-    def test_redis_cache_handles_connection_error_on_set(self):
+    def test_redis_cache_handles_connection_error_on_set(self) -> None:
         """Test RedisCache handles connection error on set."""
         with patch("services.cache.redis") as mock_redis:
             mock_redis.from_url.return_value.ping.side_effect = Exception("Connection failed")

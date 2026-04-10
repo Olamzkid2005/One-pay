@@ -68,7 +68,7 @@ class TestRefundRoutes:
 
         return mock_db
 
-    def test_initiate_refund_requires_authentication(self, client):
+    def test_initiate_refund_requires_authentication(self, client) -> None:
         """
         Test that initiate_refund returns 401 when not authenticated.
         """
@@ -76,7 +76,7 @@ class TestRefundRoutes:
             response = client.post("/api/v1/payments/refund/ONEPAY-TEST-123", json={})
             assert response.status_code == 401
 
-    def test_initiate_refund_validates_transaction_is_verified(self, client):
+    def test_initiate_refund_validates_transaction_is_verified(self, client) -> None:
         """
         Test that initiate_refund returns 400 for non-verified transactions.
         """
@@ -100,7 +100,7 @@ class TestRefundRoutes:
 
                 assert response.status_code == 400
 
-    def test_initiate_refund_calls_korapay_service(self, client):
+    def test_initiate_refund_calls_korapay_service(self, client) -> None:
         """
         Test that initiate_refund calls korapay.initiate_refund.
         """
@@ -126,7 +126,7 @@ class TestRefundRoutes:
                     assert response.status_code == 200
                     mock_korapay.initiate_refund.assert_called_once()
 
-    def test_initiate_refund_creates_refund_record(self, client):
+    def test_initiate_refund_creates_refund_record(self, client) -> None:
         """
         Test that initiate_refund creates a refund record in the database.
         """
@@ -153,7 +153,7 @@ class TestRefundRoutes:
                     add_calls = mock_db.add.call_args_list
                     assert len(add_calls) >= 1
 
-    def test_initiate_refund_logs_audit_event(self, client):
+    def test_initiate_refund_logs_audit_event(self, client) -> None:
         """
         Test that initiate_refund logs an audit event.
         """
@@ -180,7 +180,7 @@ class TestRefundRoutes:
                         assert response.status_code == 200
                         mock_log.assert_called_once()
 
-    def test_initiate_refund_handles_korapay_error(self, client):
+    def test_initiate_refund_handles_korapay_error(self, client) -> None:
         """
         Test that initiate_refund handles KoraPay errors gracefully.
         """
@@ -201,7 +201,7 @@ class TestRefundRoutes:
 
                     assert response.status_code == 502
 
-    def test_initiate_refund_returns_success_response(self, client):
+    def test_initiate_refund_returns_success_response(self, client) -> None:
         """
         Test that initiate_refund returns proper success response.
         """

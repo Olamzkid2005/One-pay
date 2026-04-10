@@ -26,6 +26,7 @@ from flask import Flask, g, jsonify, redirect, render_template, request, session
 from blueprints.api_keys import api_keys_bp
 from blueprints.auth import auth_bp
 from blueprints.invoices import invoices_bp
+from blueprints.payment_actions import payment_actions_bp
 from blueprints.payments import payments_bp
 from blueprints.public import public_bp
 from blueprints.webhooks import webhooks_bp
@@ -112,11 +113,56 @@ logger = logging.getLogger(__name__)
 # ── App factory ────────────────────────────────────────────────────────────────
 
 
+def _setup_talisman(app: Flask) -> None:
+    """Configure Flask-Talisman security headers for production."""
+    if Config.TESTING or Config.DEBUG:
+        return
+    from flask_talisman import Talisman
+    csp = {
+        "default-src": ["'self'"],
+        "script-src": ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://cdn.jsdelivr.net"],
+        "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.tailwindcss.com"],
+        "font-src": ["'self'", "https://fonts.gstatic.com", "https://fonts.googleapis.com"],
+        "img-src": ["'self'", "data:", "https://lh3.googleusercontent.com"],
+        "connect-src": ["'self'"],
+        "frame-ancestors": ["'none'"],
+        "base-uri": ["'self'"],
+        "form-action": ["'self'"],
+    }
+    Talisman(app, force_https=Config.ENFORCE_HTTPS, strict_transport_security=Config.ENFORCE_HTTPS,
+             strict_transport_security_max_age=31536000, strict_transport_security_include_subdomains=True,
+             strict_transport_security_preload=True, content_security_policy=csp,
+             referrer_policy="strict-origin-when-cross-origin")
+
+
+def _setup_debug_query_monitoring(app: Flask) -> None:
+    """Register SQLAlchemy query counter for development."""
+    if not Config.DEBUG:
+        return
+    from sqlalchemy import event as _sa_event
+
+    from database import engine as _engine
+
+    @_sa_event.listens_for(_engine, "before_cursor_execute")
+    def _count_queries(conn, cursor, statement, parameters, context, executemany):
+        if not hasattr(g, "_query_count"):
+            g._query_count = 0
+        g._query_count += 1
+
+    @app.after_request
+    def _log_query_count(response):
+        count = getattr(g, "_query_count", 0)
+        if count > Config.QUERY_COUNT_WARN_THRESHOLD:
+            logger.warning("High query count | endpoint=%s count=%d threshold=%d",
+                           request.endpoint, count, Config.QUERY_COUNT_WARN_THRESHOLD)
+        return response
+
+
 def create_app() -> Flask:
     app = Flask(__name__)
     app.config["SECRET_KEY"] = Config.SECRET_KEY
     app.config["DEBUG"] = Config.DEBUG
-    app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # 1MB max request size
+    app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024
     app.config.update(
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
@@ -127,82 +173,29 @@ def create_app() -> Flask:
         SESSION_TIMEOUT_AUTHENTICATED=Config.SESSION_TIMEOUT_AUTHENTICATED,
         SESSION_TIMEOUT_UNAUTHENTICATED=Config.SESSION_TIMEOUT_UNAUTHENTICATED,
     )
-
     Config.validate()
-
     app.config["BOOT_TIME"] = datetime.now(timezone.utc).isoformat()
 
-    # ── Middleware, error handlers ─────────────────────────────────────────────
     from core.error_handlers import register_error_handlers
     from core.middleware import register_middleware
-
     register_middleware(app)
     register_error_handlers(app)
 
-    # ── Blueprints ─────────────────────────────────────────────────────────────
     app.register_blueprint(public_bp)
     app.register_blueprint(auth_bp, url_prefix="/api/v1")
     app.register_blueprint(payments_bp, url_prefix="/api/v1")
+    app.register_blueprint(payment_actions_bp, url_prefix="/api/v1")
     app.register_blueprint(invoices_bp, url_prefix="/api/v1")
     app.register_blueprint(api_keys_bp, url_prefix="/api/v1")
     app.register_blueprint(webhooks_bp, url_prefix="/api/v1")
 
-    # ── Security headers (Talisman) ────────────────────────────────────────────
-    if not Config.TESTING and not Config.DEBUG:
-        from flask_talisman import Talisman
-
-        csp = {
-            "default-src": ["'self'"],
-            "script-src": ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://cdn.jsdelivr.net"],
-            "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.tailwindcss.com"],
-            "font-src": ["'self'", "https://fonts.gstatic.com", "https://fonts.googleapis.com"],
-            "img-src": ["'self'", "data:", "https://lh3.googleusercontent.com"],
-            "connect-src": ["'self'"],
-            "frame-ancestors": ["'none'"],
-            "base-uri": ["'self'"],
-            "form-action": ["'self'"],
-        }
-        Talisman(
-            app,
-            force_https=Config.ENFORCE_HTTPS,
-            strict_transport_security=Config.ENFORCE_HTTPS,
-            strict_transport_security_max_age=31536000,
-            strict_transport_security_include_subdomains=True,
-            strict_transport_security_preload=True,
-            content_security_policy=csp,
-            referrer_policy="strict-origin-when-cross-origin",
-        )
-
-    # ── Database ───────────────────────────────────────────────────────────────
+    _setup_talisman(app)
     init_db()
+    _setup_debug_query_monitoring(app)
 
-    # ── Development query count monitoring ────────────────────────────────────
-    if Config.DEBUG:
-        from sqlalchemy import event as _sa_event
-
-        from database import engine as _engine
-
-        @_sa_event.listens_for(_engine, "before_cursor_execute")
-        def _count_queries(conn, cursor, statement, parameters, context, executemany):
-            if not hasattr(g, "_query_count"):
-                g._query_count = 0
-            g._query_count += 1
-
-        @app.after_request
-        def _log_query_count(response):
-            count = getattr(g, "_query_count", 0)
-            if count > Config.QUERY_COUNT_WARN_THRESHOLD:
-                logger.warning(
-                    "High query count | endpoint=%s count=%d threshold=%d",
-                    request.endpoint, count, Config.QUERY_COUNT_WARN_THRESHOLD,
-                )
-            return response
-
-    # ── Background threads ─────────────────────────────────────────────────────
     import threading
 
     from core.background import start_background_threads
-
     _shutdown_event = threading.Event()
     app._shutdown_event = _shutdown_event
     start_background_threads(_shutdown_event)

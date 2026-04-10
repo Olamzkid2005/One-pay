@@ -103,7 +103,7 @@ def client(db_session, monkeypatch):
     return client
 
 
-def test_api_rate_limit_higher_than_web(client, db_session, auth_user, monkeypatch):
+def test_api_rate_limit_higher_than_web(client, db_session, auth_user, monkeypatch) -> None:
     """API clients should have higher rate limits than web clients"""
     from contextlib import contextmanager
 

@@ -15,11 +15,11 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     op.add_column('users', sa.Column('failed_2fa_attempts', sa.Integer(), server_default='0', nullable=True))
     op.add_column('users', sa.Column('twofa_locked_until', sa.DateTime(timezone=True), nullable=True))
 
 
-def downgrade():
+def downgrade() -> None:
     op.drop_column('users', 'twofa_locked_until')
     op.drop_column('users', 'failed_2fa_attempts')

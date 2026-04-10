@@ -37,7 +37,7 @@ class TestPaymentLinkCreation:
         with app.test_client() as client:
             yield client
 
-    def test_create_payment_link_calls_korapay_create_virtual_account(self, client):
+    def test_create_payment_link_calls_korapay_create_virtual_account(self, client) -> None:
         """
         Test that create_payment_link calls korapay.create_virtual_account.
         Requirement 6.1: Integration with KoraPay service
@@ -105,7 +105,7 @@ class TestTransferStatusPolling:
         with app.test_client() as client:
             yield client
 
-    def test_transfer_status_calls_korapay_confirm_transfer(self, client):
+    def test_transfer_status_calls_korapay_confirm_transfer(self, client) -> None:
         """
         Test that transfer_status calls korapay.confirm_transfer.
         Requirement 7.1: Integration with KoraPay service
@@ -136,7 +136,7 @@ class TestTransferStatusPolling:
                         assert response.status_code == 200
                         mock_korapay.confirm_transfer.assert_called_once_with('ONEPAY-TEST-123')
 
-    def test_updates_transaction_on_confirmed_response(self, client):
+    def test_updates_transaction_on_confirmed_response(self, client) -> None:
         """
         Test that transaction is updated on "00" (confirmed) response.
         Requirements 7.2, 7.3: Update transaction status
@@ -171,7 +171,7 @@ class TestTransferStatusPolling:
                             assert data['status'] == 'confirmed'
                             assert mock_tx.transfer_confirmed is True
 
-    def test_returns_pending_on_z0_response(self, client):
+    def test_returns_pending_on_z0_response(self, client) -> None:
         """
         Test that pending status is returned on "Z0" response.
         Requirement 7.12: Status mapping
@@ -203,7 +203,7 @@ class TestTransferStatusPolling:
                         data = json.loads(response.data)
                         assert data['status'] == 'pending'
 
-    def test_handles_korapay_error_gracefully(self, client):
+    def test_handles_korapay_error_gracefully(self, client) -> None:
         """
         Test that KoraPayError is handled gracefully.
         Requirement 7.4: Error handling
@@ -233,7 +233,7 @@ class TestTransferStatusPolling:
                         data = json.loads(response.data)
                         assert data['success'] is False
 
-    def test_fast_path_already_confirmed_skips_api_call(self, client):
+    def test_fast_path_already_confirmed_skips_api_call(self, client) -> None:
         """
         Test that fast path (already confirmed) skips API call.
         Requirement 7.5: Performance optimization
@@ -259,7 +259,7 @@ class TestTransferStatusPolling:
                         assert data['status'] == 'confirmed'
                         mock_korapay.confirm_transfer.assert_not_called()
 
-    def test_optimistic_locking_prevents_race_conditions(self, client):
+    def test_optimistic_locking_prevents_race_conditions(self, client) -> None:
         """
         Test that optimistic locking with with_for_update() prevents race conditions.
         Requirements 7.16, 7.17, 7.23, 7.24, 7.25: Concurrency safety
@@ -292,7 +292,7 @@ class TestTransferStatusPolling:
                             assert response.status_code == 200
                             mock_db.query().filter().with_for_update.assert_called()
 
-    def test_double_check_after_lock_acquisition(self, client):
+    def test_double_check_after_lock_acquisition(self, client) -> None:
         """
         Test that double-check is performed after lock acquisition.
         Requirement 7.18: Double-check pattern
@@ -356,7 +356,7 @@ class TestConcurrentConfirmationSafety:
         with app.test_client() as client:
             yield client
 
-    def test_concurrent_confirmation_code_structure(self, client):
+    def test_concurrent_confirmation_code_structure(self, client) -> None:
         """
         Test that the code structure supports concurrent confirmation safety.
 
@@ -433,7 +433,7 @@ class TestSessionAccessControl:
         with app.test_client() as client:
             yield client
 
-    def test_status_polling_without_session_token_returns_403(self, client):
+    def test_status_polling_without_session_token_returns_403(self, client) -> None:
         """
         Test that status polling without session token returns 403.
         Requirement 7.29: Session token required for status access
@@ -447,7 +447,7 @@ class TestSessionAccessControl:
 
             assert response.status_code == 403
 
-    def test_status_polling_without_pay_access_returns_403(self, client):
+    def test_status_polling_without_pay_access_returns_403(self, client) -> None:
         """
         Test that status polling without pay_access session returns 403.
         Requirement 7.29: Pay access token required for status access
@@ -468,7 +468,7 @@ class TestSessionAccessControl:
 
                 assert response.status_code == 403
 
-    def test_status_polling_with_valid_session_token_succeeds(self, client):
+    def test_status_polling_with_valid_session_token_succeeds(self, client) -> None:
         """
         Test that status polling with valid pay_access session token succeeds.
         Requirement 7.30: Valid session token allows access
@@ -521,7 +521,7 @@ class TestIdempotency:
         with app.test_client() as client:
             yield client
 
-    def test_duplicate_webhook_processing_is_idempotent(self, client):
+    def test_duplicate_webhook_processing_is_idempotent(self, client) -> None:
         """
         Test that duplicate webhook processing is idempotent.
         Requirement 9.30, 9.31: Idempotent webhook handling
@@ -566,7 +566,7 @@ class TestIdempotency:
                             assert mock_korapay.create_virtual_account.call_count == 1
 
     @pytest.mark.skip(reason="Idempotency key feature not yet implemented in payments.py")
-    def test_idempotency_key_prevents_duplicate_account_creation(self, client):
+    def test_idempotency_key_prevents_duplicate_account_creation(self, client) -> None:
         """
         Test that idempotency_key prevents duplicate virtual account creation.
         Requirement 6.23, 6.24: Idempotency key support
@@ -652,7 +652,7 @@ class TestCompleteFlowMockMode:
         with app.test_client() as client:
             yield client
 
-    def test_complete_payment_flow_mock_mode(self, client):
+    def test_complete_payment_flow_mock_mode(self, client) -> None:
         """
         Test complete payment flow in mock mode:
         1. Merchant creates payment link
@@ -793,7 +793,7 @@ class TestBackwardCompatibility:
         with app.test_client() as client:
             yield client
 
-    def test_payment_link_response_format_unchanged(self, client):
+    def test_payment_link_response_format_unchanged(self, client) -> None:
         """
         Test that payment link response format matches expected API contract.
         Requirements: 15.1, 15.2
@@ -843,7 +843,7 @@ class TestBackwardCompatibility:
                             assert 'virtual_bank_name' in data
                             assert 'qr_code_payment_url' in data
 
-    def test_transfer_status_response_format_unchanged(self, client):
+    def test_transfer_status_response_format_unchanged(self, client) -> None:
         """
         Test that transfer status response format matches expected API contract.
         Requirements: 15.3, 15.4
@@ -887,7 +887,7 @@ class TestConfigurationValidation:
     Tests Requirements: 5.9, 5.10, 5.11, 5.13, 5.14, 5.15, 5.16, 5.17, 5.18, 31.16-31.30
     """
 
-    def test_config_validation_detects_empty_secret_key(self, monkeypatch):
+    def test_config_validation_detects_empty_secret_key(self, monkeypatch) -> None:
         """Test that config validation detects empty secret key."""
         import importlib
 
@@ -899,7 +899,7 @@ class TestConfigurationValidation:
         # Validation happens at startup, so we check the value
         assert config.BaseConfig.KORAPAY_SECRET_KEY == ''
 
-    def test_config_validation_detects_short_secret_key(self, monkeypatch):
+    def test_config_validation_detects_short_secret_key(self, monkeypatch) -> None:
         """Test that config validation detects short secret key."""
         import importlib
 
@@ -912,7 +912,7 @@ class TestConfigurationValidation:
         is_valid = len(config.BaseConfig.KORAPAY_SECRET_KEY) >= 40 if config.BaseConfig.KORAPAY_SECRET_KEY else False
         assert is_valid is False
 
-    def test_config_validation_detects_test_key_in_production(self, monkeypatch):
+    def test_config_validation_detects_test_key_in_production(self, monkeypatch) -> None:
         """Test that config validation detects sk_test_ in production env."""
         monkeypatch.setenv('KORAPAY_SECRET_KEY', 'sk_test_abcdefghijklmnopqrstuvwxyz12345678')
         monkeypatch.setenv('APP_ENV', 'production')
@@ -930,7 +930,7 @@ class TestConfigurationValidation:
         if is_production:
             assert is_live_key, "Production should use sk_live_ keys"
 
-    def test_config_validation_detects_duplicate_secrets(self):
+    def test_config_validation_detects_duplicate_secrets(self) -> None:
         """Test that duplicate secrets are detected."""
         import os
         os.environ['KORAPAY_SECRET_KEY'] = 'a' * 64
@@ -940,7 +940,7 @@ class TestConfigurationValidation:
         # Secrets should be different
         assert Config.KORAPAY_SECRET_KEY != Config.HMAC_SECRET
 
-    def test_config_validation_detects_sandbox_mode_in_production(self):
+    def test_config_validation_detects_sandbox_mode_in_production(self) -> None:
         """Test that sandbox mode is detected in production."""
         import os
         os.environ['KORAPAY_USE_SANDBOX'] = 'true'

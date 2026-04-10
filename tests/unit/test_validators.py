@@ -18,7 +18,7 @@ from services.validators import validate_email, validate_phone
 class TestEmailValidation:
     """Test email validation and normalization."""
 
-    def test_valid_email_returns_normalized_lowercase(self):
+    def test_valid_email_returns_normalized_lowercase(self) -> None:
         """
         Test that valid email is normalized to lowercase.
 
@@ -34,7 +34,7 @@ class TestEmailValidation:
         # Assert
         assert result == "user@example.com"
 
-    def test_valid_email_with_plus_sign(self):
+    def test_valid_email_with_plus_sign(self) -> None:
         """
         Test that email with plus sign is accepted.
 
@@ -49,7 +49,7 @@ class TestEmailValidation:
         # Assert
         assert result == "user+tag@example.com"
 
-    def test_valid_email_with_dots(self):
+    def test_valid_email_with_dots(self) -> None:
         """
         Test that email with dots in local part is accepted.
 
@@ -64,7 +64,7 @@ class TestEmailValidation:
         # Assert
         assert result == "first.last@example.com"
 
-    def test_valid_email_with_numbers(self):
+    def test_valid_email_with_numbers(self) -> None:
         """
         Test that email with numbers is accepted.
 
@@ -79,7 +79,7 @@ class TestEmailValidation:
         # Assert
         assert result == "user123@example456.com"
 
-    def test_valid_email_with_subdomain(self):
+    def test_valid_email_with_subdomain(self) -> None:
         """
         Test that email with subdomain is accepted.
 
@@ -94,7 +94,7 @@ class TestEmailValidation:
         # Assert
         assert result == "user@mail.example.com"
 
-    def test_valid_email_with_hyphen_in_domain(self):
+    def test_valid_email_with_hyphen_in_domain(self) -> None:
         """
         Test that email with hyphen in domain is accepted.
 
@@ -109,7 +109,7 @@ class TestEmailValidation:
         # Assert
         assert result == "user@my-domain.com"
 
-    def test_valid_email_strips_whitespace(self):
+    def test_valid_email_strips_whitespace(self) -> None:
         """
         Test that whitespace is stripped from email.
 
@@ -124,7 +124,7 @@ class TestEmailValidation:
         # Assert
         assert result == "user@example.com"
 
-    def test_invalid_email_missing_at_symbol(self):
+    def test_invalid_email_missing_at_symbol(self) -> None:
         """
         Test that email without @ symbol is rejected.
 
@@ -140,7 +140,7 @@ class TestEmailValidation:
         # Assert
         assert result is None
 
-    def test_invalid_email_missing_domain(self):
+    def test_invalid_email_missing_domain(self) -> None:
         """
         Test that email without domain is rejected.
 
@@ -155,7 +155,7 @@ class TestEmailValidation:
         # Assert
         assert result is None
 
-    def test_invalid_email_missing_local_part(self):
+    def test_invalid_email_missing_local_part(self) -> None:
         """
         Test that email without local part is rejected.
 
@@ -170,7 +170,7 @@ class TestEmailValidation:
         # Assert
         assert result is None
 
-    def test_invalid_email_missing_tld(self):
+    def test_invalid_email_missing_tld(self) -> None:
         """
         Test that email without TLD is rejected.
 
@@ -185,7 +185,7 @@ class TestEmailValidation:
         # Assert
         assert result is None
 
-    def test_invalid_email_tld_too_short(self):
+    def test_invalid_email_tld_too_short(self) -> None:
         """
         Test that email with single-character TLD is rejected.
 
@@ -200,7 +200,7 @@ class TestEmailValidation:
         # Assert
         assert result is None
 
-    def test_invalid_email_with_spaces(self):
+    def test_invalid_email_with_spaces(self) -> None:
         """
         Test that email with spaces in the middle is rejected.
 
@@ -215,7 +215,7 @@ class TestEmailValidation:
         # Assert
         assert result is None
 
-    def test_invalid_email_multiple_at_symbols(self):
+    def test_invalid_email_multiple_at_symbols(self) -> None:
         """
         Test that email with multiple @ symbols is rejected.
 
@@ -230,7 +230,7 @@ class TestEmailValidation:
         # Assert
         assert result is None
 
-    def test_invalid_email_special_chars(self):
+    def test_invalid_email_special_chars(self) -> None:
         """
         Test that email with invalid special characters is rejected.
 
@@ -249,7 +249,7 @@ class TestEmailValidation:
 class TestEmailEdgeCases:
     """Test email validation edge cases."""
 
-    def test_empty_email_returns_none(self):
+    def test_empty_email_returns_none(self) -> None:
         """
         Test that empty email returns None.
 
@@ -264,7 +264,7 @@ class TestEmailEdgeCases:
         # Assert
         assert result is None
 
-    def test_whitespace_only_email_returns_none(self):
+    def test_whitespace_only_email_returns_none(self) -> None:
         """
         Test that whitespace-only email returns None.
 
@@ -279,7 +279,7 @@ class TestEmailEdgeCases:
         # Assert
         assert result is None
 
-    def test_email_too_long_returns_none(self):
+    def test_email_too_long_returns_none(self) -> None:
         """
         Test that email longer than 255 characters is rejected.
 
@@ -296,7 +296,7 @@ class TestEmailEdgeCases:
         # Assert
         assert result is None
 
-    def test_email_exactly_255_chars_is_accepted(self):
+    def test_email_exactly_255_chars_is_accepted(self) -> None:
         """
         Test that email with exactly 255 characters is accepted.
 
@@ -314,7 +314,7 @@ class TestEmailEdgeCases:
         assert result is not None
         assert len(result) == 255
 
-    def test_email_with_consecutive_dots(self):
+    def test_email_with_consecutive_dots(self) -> None:
         """
         Test that email with consecutive dots is accepted by basic validator.
 
@@ -331,7 +331,7 @@ class TestEmailEdgeCases:
         # Basic validator accepts this pattern
         assert result == "user..name@example.com"
 
-    def test_email_starting_with_dot(self):
+    def test_email_starting_with_dot(self) -> None:
         """
         Test that email starting with dot is accepted by basic validator.
 
@@ -348,7 +348,7 @@ class TestEmailEdgeCases:
         # Basic validator accepts this pattern
         assert result == ".user@example.com"
 
-    def test_email_ending_with_dot(self):
+    def test_email_ending_with_dot(self) -> None:
         """
         Test that email ending with dot before @ is accepted by basic validator.
 
@@ -369,7 +369,7 @@ class TestEmailEdgeCases:
 class TestPhoneValidation:
     """Test phone validation and normalization."""
 
-    def test_valid_phone_with_country_code(self):
+    def test_valid_phone_with_country_code(self) -> None:
         """
         Test that valid phone with country code is accepted.
 
@@ -385,7 +385,7 @@ class TestPhoneValidation:
         # Assert
         assert result == "+1234567890"
 
-    def test_valid_phone_without_country_code(self):
+    def test_valid_phone_without_country_code(self) -> None:
         """
         Test that valid phone without + prefix is accepted.
 
@@ -400,7 +400,7 @@ class TestPhoneValidation:
         # Assert
         assert result == "1234567890"
 
-    def test_valid_phone_removes_spaces(self):
+    def test_valid_phone_removes_spaces(self) -> None:
         """
         Test that spaces are removed from phone number.
 
@@ -415,7 +415,7 @@ class TestPhoneValidation:
         # Assert
         assert result == "+12345678900"
 
-    def test_valid_phone_removes_dashes(self):
+    def test_valid_phone_removes_dashes(self) -> None:
         """
         Test that dashes are removed from phone number.
 
@@ -430,7 +430,7 @@ class TestPhoneValidation:
         # Assert
         assert result == "+12345678900"
 
-    def test_valid_phone_removes_parentheses(self):
+    def test_valid_phone_removes_parentheses(self) -> None:
         """
         Test that parentheses are removed from phone number.
 
@@ -445,7 +445,7 @@ class TestPhoneValidation:
         # Assert
         assert result == "+12345678900"
 
-    def test_valid_phone_strips_whitespace(self):
+    def test_valid_phone_strips_whitespace(self) -> None:
         """
         Test that leading/trailing whitespace is stripped.
 
@@ -460,7 +460,7 @@ class TestPhoneValidation:
         # Assert
         assert result == "+1234567890"
 
-    def test_valid_phone_minimum_length(self):
+    def test_valid_phone_minimum_length(self) -> None:
         """
         Test that phone with minimum length (7 digits) is accepted.
 
@@ -475,7 +475,7 @@ class TestPhoneValidation:
         # Assert
         assert result == "1234567"
 
-    def test_valid_phone_maximum_length(self):
+    def test_valid_phone_maximum_length(self) -> None:
         """
         Test that phone with maximum length (15 digits) is accepted.
 
@@ -490,7 +490,7 @@ class TestPhoneValidation:
         # Assert
         assert result == "+123456789012345"
 
-    def test_invalid_phone_too_short(self):
+    def test_invalid_phone_too_short(self) -> None:
         """
         Test that phone with less than 7 digits is rejected.
 
@@ -506,7 +506,7 @@ class TestPhoneValidation:
         # Assert
         assert result is None
 
-    def test_invalid_phone_too_long(self):
+    def test_invalid_phone_too_long(self) -> None:
         """
         Test that phone with more than 15 digits is rejected.
 
@@ -521,7 +521,7 @@ class TestPhoneValidation:
         # Assert
         assert result is None
 
-    def test_invalid_phone_starts_with_zero(self):
+    def test_invalid_phone_starts_with_zero(self) -> None:
         """
         Test that phone starting with 0 is rejected.
 
@@ -536,7 +536,7 @@ class TestPhoneValidation:
         # Assert
         assert result is None
 
-    def test_invalid_phone_with_letters(self):
+    def test_invalid_phone_with_letters(self) -> None:
         """
         Test that phone with letters is rejected.
 
@@ -551,7 +551,7 @@ class TestPhoneValidation:
         # Assert
         assert result is None
 
-    def test_invalid_phone_with_special_chars(self):
+    def test_invalid_phone_with_special_chars(self) -> None:
         """
         Test that phone with invalid special characters is rejected.
 
@@ -566,7 +566,7 @@ class TestPhoneValidation:
         # Assert
         assert result is None
 
-    def test_invalid_phone_only_plus_sign(self):
+    def test_invalid_phone_only_plus_sign(self) -> None:
         """
         Test that phone with only + sign is rejected.
 
@@ -581,7 +581,7 @@ class TestPhoneValidation:
         # Assert
         assert result is None
 
-    def test_invalid_phone_multiple_plus_signs(self):
+    def test_invalid_phone_multiple_plus_signs(self) -> None:
         """
         Test that phone with multiple + signs is rejected.
 
@@ -600,7 +600,7 @@ class TestPhoneValidation:
 class TestPhoneEdgeCases:
     """Test phone validation edge cases."""
 
-    def test_empty_phone_returns_none(self):
+    def test_empty_phone_returns_none(self) -> None:
         """
         Test that empty phone returns None.
 
@@ -615,7 +615,7 @@ class TestPhoneEdgeCases:
         # Assert
         assert result is None
 
-    def test_whitespace_only_phone_returns_none(self):
+    def test_whitespace_only_phone_returns_none(self) -> None:
         """
         Test that whitespace-only phone returns None.
 
@@ -630,7 +630,7 @@ class TestPhoneEdgeCases:
         # Assert
         assert result is None
 
-    def test_phone_too_long_raw_input_returns_none(self):
+    def test_phone_too_long_raw_input_returns_none(self) -> None:
         """
         Test that phone longer than 20 characters (raw input) is rejected.
 
@@ -645,7 +645,7 @@ class TestPhoneEdgeCases:
         # Assert
         assert result is None
 
-    def test_phone_with_only_formatting_chars(self):
+    def test_phone_with_only_formatting_chars(self) -> None:
         """
         Test that phone with only formatting characters is rejected.
 
@@ -660,7 +660,7 @@ class TestPhoneEdgeCases:
         # Assert
         assert result is None
 
-    def test_phone_with_dots_instead_of_dashes(self):
+    def test_phone_with_dots_instead_of_dashes(self) -> None:
         """
         Test that phone with dots is rejected (dots not in allowed format).
 
@@ -675,7 +675,7 @@ class TestPhoneEdgeCases:
         # Assert
         assert result is None
 
-    def test_phone_exactly_20_chars_with_formatting(self):
+    def test_phone_exactly_20_chars_with_formatting(self) -> None:
         """
         Test that phone with exactly 20 characters (with formatting) is accepted.
 
@@ -691,7 +691,7 @@ class TestPhoneEdgeCases:
         # After normalization, should be valid
         assert result is not None or result is None  # Depends on digit count
 
-    def test_phone_with_extension(self):
+    def test_phone_with_extension(self) -> None:
         """
         Test that phone with extension is rejected (not supported).
 
@@ -710,7 +710,7 @@ class TestPhoneEdgeCases:
 class TestValidatorIntegration:
     """Test validators work correctly together."""
 
-    def test_email_and_phone_validators_are_independent(self):
+    def test_email_and_phone_validators_are_independent(self) -> None:
         """
         Test that email and phone validators don't interfere with each other.
 
@@ -729,7 +729,7 @@ class TestValidatorIntegration:
         assert email_result == "user@example.com"
         assert phone_result == "+1234567890"
 
-    def test_validators_handle_none_input_gracefully(self):
+    def test_validators_handle_none_input_gracefully(self) -> None:
         """
         Test that validators handle None input without crashing.
 
@@ -743,7 +743,7 @@ class TestValidatorIntegration:
         # the validators to check for None explicitly
         pass  # Documented behavior
 
-    def test_validators_are_reusable(self):
+    def test_validators_are_reusable(self) -> None:
         """
         Test that validators can be called multiple times.
 

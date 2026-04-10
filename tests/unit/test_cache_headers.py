@@ -88,19 +88,19 @@ def static_file(tmp_path):
 class TestVersionedAssetCacheControl:
     """Cache-Control: public, max-age=31536000 for versioned assets (Req 23.1)."""
 
-    def test_versioned_asset_gets_one_year_cache(self, client, versioned_file):
+    def test_versioned_asset_gets_one_year_cache(self, client, versioned_file) -> None:
         """Versioned asset (8-char hash extension) receives max-age=31536000."""
         response = client.get(f"/static/{versioned_file}")
         assert response.status_code == 200
         assert response.headers.get("Cache-Control") == "public, max-age=31536000"
 
-    def test_versioned_asset_cache_control_is_public(self, client, versioned_file):
+    def test_versioned_asset_cache_control_is_public(self, client, versioned_file) -> None:
         """Cache-Control for versioned assets includes 'public' directive."""
         response = client.get(f"/static/{versioned_file}")
         cache_control = response.headers.get("Cache-Control", "")
         assert "public" in cache_control
 
-    def test_versioned_asset_max_age_is_one_year(self, client, versioned_file):
+    def test_versioned_asset_max_age_is_one_year(self, client, versioned_file) -> None:
         """Cache-Control max-age for versioned assets is exactly 31536000 seconds."""
         response = client.get(f"/static/{versioned_file}")
         cache_control = response.headers.get("Cache-Control", "")
@@ -114,25 +114,25 @@ class TestVersionedAssetCacheControl:
 class TestNonVersionedAssetCacheControl:
     """Cache-Control: public, max-age=3600 for non-versioned static assets (Req 23.2)."""
 
-    def test_non_versioned_asset_gets_one_hour_cache(self, client, static_file):
+    def test_non_versioned_asset_gets_one_hour_cache(self, client, static_file) -> None:
         """Non-versioned asset (.css) receives max-age=3600."""
         response = client.get(f"/static/{static_file}")
         assert response.status_code == 200
         assert response.headers.get("Cache-Control") == "public, max-age=3600"
 
-    def test_non_versioned_asset_cache_control_is_public(self, client, static_file):
+    def test_non_versioned_asset_cache_control_is_public(self, client, static_file) -> None:
         """Cache-Control for non-versioned assets includes 'public' directive."""
         response = client.get(f"/static/{static_file}")
         cache_control = response.headers.get("Cache-Control", "")
         assert "public" in cache_control
 
-    def test_non_versioned_asset_max_age_is_one_hour(self, client, static_file):
+    def test_non_versioned_asset_max_age_is_one_hour(self, client, static_file) -> None:
         """Cache-Control max-age for non-versioned assets is exactly 3600 seconds."""
         response = client.get(f"/static/{static_file}")
         cache_control = response.headers.get("Cache-Control", "")
         assert "max-age=3600" in cache_control
 
-    def test_js_file_gets_one_hour_cache(self, tmp_path, app):
+    def test_js_file_gets_one_hour_cache(self, tmp_path, app) -> None:
         """JavaScript files (non-versioned) also receive max-age=3600."""
         (tmp_path / "app.js").write_bytes(b"console.log('hello');")
         response = app.test_client().get("/static/app.js")
@@ -146,17 +146,17 @@ class TestNonVersionedAssetCacheControl:
 class TestETagPresence:
     """ETag header is present on static asset responses (Req 23.3)."""
 
-    def test_etag_present_on_versioned_asset(self, client, versioned_file):
+    def test_etag_present_on_versioned_asset(self, client, versioned_file) -> None:
         """Versioned static assets include an ETag header."""
         response = client.get(f"/static/{versioned_file}")
         assert "ETag" in response.headers
 
-    def test_etag_present_on_non_versioned_asset(self, client, static_file):
+    def test_etag_present_on_non_versioned_asset(self, client, static_file) -> None:
         """Non-versioned static assets include an ETag header."""
         response = client.get(f"/static/{static_file}")
         assert "ETag" in response.headers
 
-    def test_etag_is_quoted(self, client, static_file):
+    def test_etag_is_quoted(self, client, static_file) -> None:
         """ETag value is quoted per HTTP spec (RFC 7232)."""
         response = client.get(f"/static/{static_file}")
         etag = response.headers.get("ETag")
@@ -171,12 +171,12 @@ class TestETagPresence:
 class TestNonStaticPathsHaveNoCacheHeaders:
     """Non-static paths must not receive Cache-Control or ETag headers."""
 
-    def test_non_static_path_has_no_cache_control(self, client):
+    def test_non_static_path_has_no_cache_control(self, client) -> None:
         """API/non-static routes do not get Cache-Control headers."""
         response = client.get("/ping")
         assert "Cache-Control" not in response.headers
 
-    def test_non_static_path_has_no_etag(self, client):
+    def test_non_static_path_has_no_etag(self, client) -> None:
         """API/non-static routes do not get ETag headers."""
         response = client.get("/ping")
         assert "ETag" not in response.headers
@@ -189,7 +189,7 @@ class TestNonStaticPathsHaveNoCacheHeaders:
 class TestConditionalRequests:
     """Conditional requests via If-None-Match return 304 when ETag matches."""
 
-    def test_matching_etag_returns_304(self, client, static_file):
+    def test_matching_etag_returns_304(self, client, static_file) -> None:
         """If-None-Match with matching ETag returns 304 Not Modified."""
         r1 = client.get(f"/static/{static_file}")
         assert r1.status_code == 200
@@ -199,7 +199,7 @@ class TestConditionalRequests:
         r2 = client.get(f"/static/{static_file}", headers={"If-None-Match": etag})
         assert r2.status_code == 304
 
-    def test_304_includes_etag_header(self, client, static_file):
+    def test_304_includes_etag_header(self, client, static_file) -> None:
         """304 Not Modified response still carries the ETag header."""
         r1 = client.get(f"/static/{static_file}")
         etag = r1.headers.get("ETag")
@@ -208,7 +208,7 @@ class TestConditionalRequests:
         assert r2.status_code == 304
         assert r2.headers.get("ETag") == etag
 
-    def test_stale_etag_returns_200(self, client, static_file):
+    def test_stale_etag_returns_200(self, client, static_file) -> None:
         """If-None-Match with a stale ETag returns full 200 response."""
         response = client.get(
             f"/static/{static_file}",

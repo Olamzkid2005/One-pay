@@ -28,7 +28,7 @@ class TestDeliverWebhookTask:
     """Tests for webhook delivery task (Requirement 10.2)"""
 
     @patch('services.webhook.deliver_webhook_from_dict')
-    def test_webhook_task_success(self, mock_deliver):
+    def test_webhook_task_success(self, mock_deliver) -> None:
         """Test successful webhook delivery via task queue"""
         mock_deliver.return_value = True
 
@@ -48,7 +48,7 @@ class TestDeliverWebhookTask:
         mock_deliver.assert_called_once_with(webhook_data)
 
     @patch('services.webhook.deliver_webhook_from_dict')
-    def test_webhook_task_failure_raises_exception(self, mock_deliver):
+    def test_webhook_task_failure_raises_exception(self, mock_deliver) -> None:
         """Test that failed webhook delivery raises exception for retry"""
         mock_deliver.return_value = False
 
@@ -64,7 +64,7 @@ class TestDeliverWebhookTask:
             deliver_webhook_task.call_local(webhook_data)
 
     @patch('services.webhook.deliver_webhook_from_dict')
-    def test_webhook_task_logs_success(self, mock_deliver, caplog):
+    def test_webhook_task_logs_success(self, mock_deliver, caplog) -> None:
         """Test successful delivery logs appropriate message"""
         import logging
         mock_deliver.return_value = True
@@ -87,7 +87,7 @@ class TestQueueWebhookDelivery:
 
     @patch('services.task_queue.huey')
     @patch('services.task_queue.deliver_webhook_task')
-    def test_queue_uses_huey_when_available(self, mock_task, mock_huey):
+    def test_queue_uses_huey_when_available(self, mock_task, mock_huey) -> None:
         """Test that Huey is used when available"""
         mock_huey.immediate = False
         mock_result = MagicMock()
@@ -102,7 +102,7 @@ class TestQueueWebhookDelivery:
 
     @patch('services.task_queue.huey')
     @patch('services.task_queue.deliver_webhook_task')
-    def test_queue_immediate_mode_direct_delivery(self, mock_task, mock_huey):
+    def test_queue_immediate_mode_direct_delivery(self, mock_task, mock_huey) -> None:
         """Test immediate mode delivers directly (for testing)"""
         mock_huey.immediate = True
         mock_result = MagicMock()
@@ -115,7 +115,7 @@ class TestQueueWebhookDelivery:
         assert result is True
         mock_task.assert_called_once_with(webhook_data)
 
-    def test_queue_fallback_to_thread(self):
+    def test_queue_fallback_to_thread(self) -> None:
         """Test fallback to thread-based delivery when Huey unavailable"""
         import threading as threading_module
 
@@ -138,7 +138,7 @@ class TestQueueWebhookDelivery:
 class TestPeriodicCleanupTasks:
     """Tests for periodic cleanup tasks (Requirement 10.3)"""
 
-    def test_cleanup_webhook_idempotency_deletes_old_records(self):
+    def test_cleanup_webhook_idempotency_deletes_old_records(self) -> None:
         """Test webhook idempotency cleanup removes records older than 24 hours"""
         from unittest.mock import MagicMock
 
@@ -155,15 +155,15 @@ class TestPeriodicCleanupTasks:
         assert deleted == 1
         mock_db.commit.assert_called_once()
 
-    def test_cleanup_rate_limits_is_callable(self):
+    def test_cleanup_rate_limits_is_callable(self) -> None:
         """Test cleanup_rate_limits task is callable"""
         assert callable(cleanup_rate_limits)
 
-    def test_cleanup_audit_logs_is_callable(self):
+    def test_cleanup_audit_logs_is_callable(self) -> None:
         """Test cleanup_audit_logs task is callable"""
         assert callable(cleanup_audit_logs)
 
-    def test_cleanup_webhook_idempotency_task_is_callable(self):
+    def test_cleanup_webhook_idempotency_task_is_callable(self) -> None:
         """Test cleanup_webhook_idempotency_task is callable"""
         assert callable(cleanup_webhook_idempotency_task)
 
@@ -171,14 +171,14 @@ class TestPeriodicCleanupTasks:
 class TestHueyConfiguration:
     """Tests for Huey task queue configuration (Requirement 10.1)"""
 
-    def test_huey_uses_sqlite_storage(self):
+    def test_huey_uses_sqlite_storage(self) -> None:
         """Test Huey is configured with SQLite storage"""
         # Check that huey is configured
         assert huey is not None
         # In immediate mode for testing
         assert hasattr(huey, 'immediate')
 
-    def test_huey_task_has_retries_configured(self):
+    def test_huey_task_has_retries_configured(self) -> None:
         """Test webhook task has retry configuration"""
         # Verify the task wrapper has retry settings configured
         settings = deliver_webhook_task.settings
@@ -189,13 +189,13 @@ class TestHueyConfiguration:
 class TestBackwardCompatibility:
     """Tests for backward compatibility (Requirement 10.5)"""
 
-    def test_deliver_webhook_from_dict_still_works(self):
+    def test_deliver_webhook_from_dict_still_works(self) -> None:
         """Test original deliver_webhook_from_dict still functions"""
         # This tests that the original function still exists and is callable
         assert callable(deliver_webhook_from_dict)
 
     @patch('services.webhook._send_with_retries')
-    def test_deliver_webhook_from_dict_calls_send(self, mock_send):
+    def test_deliver_webhook_from_dict_calls_send(self, mock_send) -> None:
         """Test deliver_webhook_from_dict uses _send_with_retries"""
         mock_send.return_value = True
 
@@ -217,7 +217,7 @@ class TestTaskQueueIntegration:
 
     @pytest.mark.integration
     @patch('services.webhook.deliver_webhook_from_dict')
-    def test_full_webhook_delivery_flow(self, mock_deliver, caplog):
+    def test_full_webhook_delivery_flow(self, mock_deliver, caplog) -> None:
         """Test complete webhook delivery flow from queue to delivery"""
         import logging
         mock_deliver.return_value = True

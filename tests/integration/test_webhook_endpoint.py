@@ -47,7 +47,7 @@ class TestWebhookEndpoint:
         data_bytes = json.dumps(data, separators=(",", ":")).encode("utf-8")
         return hmac.new(secret.encode("utf-8"), data_bytes, hashlib.sha256).hexdigest()
 
-    def test_webhook_with_valid_signature_processes_payment(self, client):
+    def test_webhook_with_valid_signature_processes_payment(self, client) -> None:
         """
         Test that webhook with valid signature processes payment.
         Requirements 9.1, 9.2, 9.7: Valid webhook processing
@@ -87,7 +87,7 @@ class TestWebhookEndpoint:
                         data = json.loads(response.data)
                         assert data["success"] is True
 
-    def test_webhook_with_invalid_signature_returns_401(self, client):
+    def test_webhook_with_invalid_signature_returns_401(self, client) -> None:
         """
         Test that webhook with invalid signature returns 401.
         Requirements 9.8, 9.9: Signature validation
@@ -114,7 +114,7 @@ class TestWebhookEndpoint:
 
                 assert response.status_code == 401
 
-    def test_webhook_with_missing_signature_returns_401(self, client):
+    def test_webhook_with_missing_signature_returns_401(self, client) -> None:
         """
         Test that webhook with missing signature returns 401.
         Requirement 9.10: Missing signature handling
@@ -137,7 +137,7 @@ class TestWebhookEndpoint:
 
                 assert response.status_code == 401
 
-    def test_webhook_with_invalid_json_returns_400(self, client):
+    def test_webhook_with_invalid_json_returns_400(self, client) -> None:
         """
         Test that webhook with invalid JSON returns 400.
         Requirement 9.11: Invalid JSON handling
@@ -156,7 +156,7 @@ class TestWebhookEndpoint:
 
                 assert response.status_code == 400
 
-    def test_webhook_with_missing_data_object_returns_400(self, client):
+    def test_webhook_with_missing_data_object_returns_400(self, client) -> None:
         """
         Test that webhook with missing data object returns 400.
         Requirement 9.12: Missing data object handling
@@ -180,7 +180,7 @@ class TestWebhookEndpoint:
 
                 assert response.status_code == 400
 
-    def test_webhook_for_already_confirmed_transaction_is_idempotent(self, client):
+    def test_webhook_for_already_confirmed_transaction_is_idempotent(self, client) -> None:
         """
         Test that webhook for already confirmed transaction is idempotent.
         Requirements 9.30, 9.31: Idempotency
@@ -221,7 +221,7 @@ class TestWebhookEndpoint:
                     # Verify transaction status wasn't changed again
                     assert mock_tx.transfer_confirmed is True
 
-    def test_webhook_logs_audit_event_on_signature_failure(self, client):
+    def test_webhook_logs_audit_event_on_signature_failure(self, client) -> None:
         """
         Test that webhook logs audit event on signature failure.
         Requirement 9.23: Audit logging
@@ -254,7 +254,7 @@ class TestWebhookEndpoint:
                     call_args = mock_log_event.call_args
                     assert "webhook.signature_failed" in str(call_args)
 
-    def test_webhook_rate_limiting(self, client):
+    def test_webhook_rate_limiting(self, client) -> None:
         """
         Test that webhook endpoint enforces rate limiting (100 requests/min).
         Requirement 9.44: Rate limiting
@@ -281,7 +281,7 @@ class TestWebhookEndpoint:
 
                 assert response.status_code == 429
 
-    def test_webhook_validates_amount_matches(self, client):
+    def test_webhook_validates_amount_matches(self, client) -> None:
         """
         Test that webhook validates amount matches transaction.
         Requirement 9.13: Amount validation
@@ -320,7 +320,7 @@ class TestWebhookEndpoint:
 
                     assert response.status_code == 400
 
-    def test_webhook_updates_transaction_status(self, client):
+    def test_webhook_updates_transaction_status(self, client) -> None:
         """
         Test that webhook updates transaction status if not confirmed.
         Requirements 9.14, 9.15: Transaction update
@@ -362,7 +362,7 @@ class TestWebhookEndpoint:
                         assert mock_tx.transfer_confirmed is True
                         assert mock_tx.status == TransactionStatus.VERIFIED
 
-    def test_webhook_syncs_invoice_status(self, client):
+    def test_webhook_syncs_invoice_status(self, client) -> None:
         """
         Test that webhook syncs invoice status.
         Requirement 9.16: Invoice sync
@@ -403,7 +403,7 @@ class TestWebhookEndpoint:
                         # Verify invoice sync was called
                         mock_sync.assert_called_once()
 
-    def test_webhook_logs_audit_event_on_success(self, client):
+    def test_webhook_logs_audit_event_on_success(self, client) -> None:
         """
         Test that webhook logs audit event on successful payment confirmation.
         Requirement 9.17: Audit logging
@@ -481,7 +481,7 @@ class TestWebhookIdempotencyProperty:
         data_bytes = json.dumps(data, separators=(",", ":")).encode("utf-8")
         return hmac.new(secret.encode("utf-8"), data_bytes, hashlib.sha256).hexdigest()
 
-    def test_webhook_idempotency_multiple_deliveries(self, client):
+    def test_webhook_idempotency_multiple_deliveries(self, client) -> None:
         """
         Test that processing webhook N times produces same state as once.
 
@@ -538,7 +538,7 @@ class TestWebhookIdempotencyProperty:
                         # This is verified by the fact that all assertions pass
                         # for all values of n_deliveries
 
-    def test_webhook_idempotency_no_duplicate_webhooks_delivered(self, client):
+    def test_webhook_idempotency_no_duplicate_webhooks_delivered(self, client) -> None:
         """
         Test that duplicate webhook deliveries don't trigger duplicate outbound webhooks.
 
@@ -596,7 +596,7 @@ class TestWebhookIdempotencyProperty:
                         # Verify outbound webhook was only delivered once
                         assert mock_deliver.call_count == 1
 
-    def test_webhook_idempotency_no_duplicate_emails(self, client):
+    def test_webhook_idempotency_no_duplicate_emails(self, client) -> None:
         """
         Test that duplicate webhook deliveries don't trigger duplicate emails.
 

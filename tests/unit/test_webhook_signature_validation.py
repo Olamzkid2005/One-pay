@@ -24,7 +24,7 @@ from flask import Flask
 class TestWebhookSecretConfigValidation:
     """Test webhook secret configuration validation at startup."""
 
-    def test_empty_inbound_webhook_secret_fails_validation(self, monkeypatch):
+    def test_empty_inbound_webhook_secret_fails_validation(self, monkeypatch) -> None:
         """
         Test that empty INBOUND_WEBHOOK_SECRET fails validation.
 
@@ -47,7 +47,7 @@ class TestWebhookSecretConfigValidation:
         with pytest.raises(SystemExit):
             ProductionConfig.validate()
 
-    def test_production_requires_32_char_inbound_webhook_secret(self, monkeypatch):
+    def test_production_requires_32_char_inbound_webhook_secret(self, monkeypatch) -> None:
         """
         Test that production requires INBOUND_WEBHOOK_SECRET >= 32 characters.
 
@@ -69,7 +69,7 @@ class TestWebhookSecretConfigValidation:
         with pytest.raises(SystemExit):
             ProductionConfig.validate()
 
-    def test_valid_inbound_webhook_secret_passes_validation(self, monkeypatch):
+    def test_valid_inbound_webhook_secret_passes_validation(self, monkeypatch) -> None:
         """
         Test that valid INBOUND_WEBHOOK_SECRET passes validation.
         """
@@ -103,7 +103,7 @@ class TestWebhookSecretConfigValidation:
 class TestWebhookSignatureVerification:
     """Test HMAC-SHA256 signature verification for inbound webhooks."""
 
-    def test_valid_signature_returns_true(self):
+    def test_valid_signature_returns_true(self) -> None:
         """
         Test that valid HMAC-SHA256 signature returns True.
 
@@ -132,7 +132,7 @@ class TestWebhookSignatureVerification:
         # Assert
         assert result is True
 
-    def test_invalid_signature_returns_false(self):
+    def test_invalid_signature_returns_false(self) -> None:
         """
         Test that invalid signature returns False.
 
@@ -154,7 +154,7 @@ class TestWebhookSignatureVerification:
         # Assert
         assert result is False
 
-    def test_missing_signature_returns_false(self):
+    def test_missing_signature_returns_false(self) -> None:
         """
         Test that missing signature (None or empty) returns False.
         """
@@ -172,7 +172,7 @@ class TestWebhookSignatureVerification:
             # Empty string signature
             assert verify_inbound_webhook_signature(payload, "") is False
 
-    def test_signature_without_sha256_prefix_returns_false(self):
+    def test_signature_without_sha256_prefix_returns_false(self) -> None:
         """
         Test that signature without 'sha256=' prefix returns False.
         """
@@ -196,7 +196,7 @@ class TestWebhookSignatureVerification:
         # Assert
         assert result is False
 
-    def test_missing_secret_returns_false(self):
+    def test_missing_secret_returns_false(self) -> None:
         """
         Test that missing INBOUND_WEBHOOK_SECRET returns False.
         """
@@ -213,7 +213,7 @@ class TestWebhookSignatureVerification:
         # Assert
         assert result is False
 
-    def test_signature_changes_with_different_payload(self):
+    def test_signature_changes_with_different_payload(self) -> None:
         """
         Test that signature verification fails when payload changes.
         """
@@ -240,7 +240,7 @@ class TestWebhookSignatureVerification:
             # Signature1 should NOT work for payload2 (different payload)
             assert verify_inbound_webhook_signature(payload2, signature1) is False
 
-    def test_uses_constant_time_comparison(self):
+    def test_uses_constant_time_comparison(self) -> None:
         """
         Test that hmac.compare_digest is used for timing-safe comparison.
 
@@ -286,7 +286,7 @@ class TestWebhookSignatureVerification:
 class TestWebhookSignatureEdgeCases:
     """Test edge cases for webhook signature validation."""
 
-    def test_signature_verification_with_empty_payload(self):
+    def test_signature_verification_with_empty_payload(self) -> None:
         """Test signature verification with empty payload."""
         from services.webhook import verify_inbound_webhook_signature
 
@@ -309,7 +309,7 @@ class TestWebhookSignatureEdgeCases:
         # Assert
         assert result is True
 
-    def test_signature_verification_with_special_characters(self):
+    def test_signature_verification_with_special_characters(self) -> None:
         """Test signature verification with special characters in payload."""
         from services.webhook import verify_inbound_webhook_signature
 
@@ -332,7 +332,7 @@ class TestWebhookSignatureEdgeCases:
         # Assert
         assert result is True
 
-    def test_signature_with_wrong_prefix_format(self):
+    def test_signature_with_wrong_prefix_format(self) -> None:
         """Test that signature with wrong prefix format returns False."""
         from services.webhook import verify_inbound_webhook_signature
 
@@ -354,7 +354,7 @@ class TestWebhookSignatureEdgeCases:
             assert verify_inbound_webhook_signature(payload, f"md5={computed_sig}") is False
             assert verify_inbound_webhook_signature(payload, f"SHA256={computed_sig}") is False
 
-    def test_signature_verification_with_large_payload(self):
+    def test_signature_verification_with_large_payload(self) -> None:
         """Test signature verification with large payload."""
         from services.webhook import verify_inbound_webhook_signature
 

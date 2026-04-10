@@ -13,7 +13,7 @@ from decimal import Decimal
 import pytest
 
 
-def test_generate_voicepay_signature():
+def test_generate_voicepay_signature() -> None:
     """Test HMAC-SHA256 signature generation for VoicePay webhooks"""
     from services.voicepay_webhook import generate_voicepay_signature
 
@@ -40,7 +40,7 @@ def test_generate_voicepay_signature():
     assert signature == expected
 
 
-def test_generate_voicepay_signature_deterministic():
+def test_generate_voicepay_signature_deterministic() -> None:
     """Test that signature generation is deterministic"""
     from services.voicepay_webhook import generate_voicepay_signature
 
@@ -53,7 +53,7 @@ def test_generate_voicepay_signature_deterministic():
     assert sig1 == sig2
 
 
-def test_generate_voicepay_signature_different_payloads():
+def test_generate_voicepay_signature_different_payloads() -> None:
     """Test that different payloads produce different signatures"""
     from services.voicepay_webhook import generate_voicepay_signature
 
@@ -65,7 +65,7 @@ def test_generate_voicepay_signature_different_payloads():
     assert sig1 != sig2
 
 
-def test_generate_voicepay_signature_key_order_independent():
+def test_generate_voicepay_signature_key_order_independent() -> None:
     """Test that signature is same regardless of key order in dict"""
     from services.voicepay_webhook import generate_voicepay_signature
 
@@ -82,7 +82,7 @@ def test_generate_voicepay_signature_key_order_independent():
     assert sig1 == sig2 == sig3
 
 
-def test_generate_voicepay_signature_with_unicode():
+def test_generate_voicepay_signature_with_unicode() -> None:
     """Test signature generation with Unicode characters"""
     from services.voicepay_webhook import generate_voicepay_signature
 
@@ -97,7 +97,7 @@ def test_generate_voicepay_signature_with_unicode():
     assert len(sig) == 64
 
 
-def test_generate_voicepay_signature_with_nested_objects():
+def test_generate_voicepay_signature_with_nested_objects() -> None:
     """Test signature generation with nested metadata"""
     from services.voicepay_webhook import generate_voicepay_signature
 
@@ -121,7 +121,7 @@ def test_generate_voicepay_signature_with_nested_objects():
 
 
 
-def test_build_voicepay_payload():
+def test_build_voicepay_payload() -> None:
     """Test building VoicePay webhook payload from transaction"""
     from datetime import timedelta, timezone
 
@@ -154,7 +154,7 @@ def test_build_voicepay_payload():
     assert "verified_at" in payload
 
 
-def test_build_voicepay_payload_with_null_paid_at():
+def test_build_voicepay_payload_with_null_paid_at() -> None:
     """Test building payload when verified_at is None"""
     from datetime import timedelta, timezone
 
@@ -179,7 +179,7 @@ def test_build_voicepay_payload_with_null_paid_at():
     assert payload["status"] == "pending"
 
 
-def test_build_voicepay_payload_with_empty_metadata():
+def test_build_voicepay_payload_with_empty_metadata() -> None:
     """Test building payload - metadata field removed from payload"""
     from datetime import timedelta, timezone
 
@@ -205,7 +205,7 @@ def test_build_voicepay_payload_with_empty_metadata():
     assert payload["event"] == "payment.verified"
 
 
-def test_build_voicepay_payload_decimal_to_float_conversion():
+def test_build_voicepay_payload_decimal_to_float_conversion() -> None:
     """Test that Decimal amounts are converted to float"""
     from datetime import timedelta, timezone
 
@@ -232,7 +232,7 @@ def test_build_voicepay_payload_decimal_to_float_conversion():
 
 
 # Webhook delivery tests using monkeypatch
-def test_send_voicepay_webhook_success(monkeypatch):
+def test_send_voicepay_webhook_success(monkeypatch) -> None:
     """Test successful webhook delivery to VoicePay"""
     from services.voicepay_webhook import send_voicepay_webhook
 
@@ -266,7 +266,7 @@ def test_send_voicepay_webhook_success(monkeypatch):
     assert result["tx_ref"] == "VP-123"
 
 
-def test_send_voicepay_webhook_failure(monkeypatch):
+def test_send_voicepay_webhook_failure(monkeypatch) -> None:
     """Test webhook delivery failure handling"""
     from services.voicepay_webhook import send_voicepay_webhook
 
@@ -296,7 +296,7 @@ def test_send_voicepay_webhook_failure(monkeypatch):
     assert result["status_code"] == 500
 
 
-def test_send_voicepay_webhook_includes_signature(monkeypatch):
+def test_send_voicepay_webhook_includes_signature(monkeypatch) -> None:
     """Test that webhook includes HMAC signature in header"""
     from services.voicepay_webhook import generate_voicepay_signature, send_voicepay_webhook
 
@@ -332,7 +332,7 @@ def test_send_voicepay_webhook_includes_signature(monkeypatch):
     assert captured_headers["X-OnePay-Signature"] == expected_sig
 
 
-def test_send_voicepay_webhook_timeout(monkeypatch):
+def test_send_voicepay_webhook_timeout(monkeypatch) -> None:
     """Test webhook timeout handling"""
     import requests
 
@@ -357,7 +357,7 @@ def test_send_voicepay_webhook_timeout(monkeypatch):
     assert "error" in result
 
 
-def test_send_voicepay_webhook_connection_error(monkeypatch):
+def test_send_voicepay_webhook_connection_error(monkeypatch) -> None:
     """Test webhook connection error handling"""
     import requests
 

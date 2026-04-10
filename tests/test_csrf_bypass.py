@@ -36,7 +36,7 @@ def db_session():
     session.close()
 
 
-def test_current_user_id_from_api_key(db_session, monkeypatch):
+def test_current_user_id_from_api_key(db_session, monkeypatch) -> None:
     """Test that current_user_id returns user from API key"""
     from flask import Flask, g
 
@@ -67,7 +67,7 @@ def test_current_user_id_from_api_key(db_session, monkeypatch):
         assert user_id == 1
 
 
-def test_current_user_id_from_session():
+def test_current_user_id_from_session() -> None:
     """Test that current_user_id returns user from session"""
     from flask import Flask, session
 
@@ -84,7 +84,7 @@ def test_current_user_id_from_session():
         assert user_id == 99
 
 
-def test_current_user_id_no_auth():
+def test_current_user_id_no_auth() -> None:
     """Test that current_user_id returns None when not authenticated"""
     from flask import Flask
 

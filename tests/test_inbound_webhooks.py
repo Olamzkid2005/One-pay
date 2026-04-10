@@ -63,7 +63,7 @@ def client(db_session, monkeypatch):
     return app.test_client()
 
 
-def test_verify_webhook_signature_valid():
+def test_verify_webhook_signature_valid() -> None:
     """Test HMAC signature verification with valid signature"""
     from blueprints.webhooks import verify_webhook_signature
 
@@ -77,7 +77,7 @@ def test_verify_webhook_signature_valid():
     assert verify_webhook_signature(payload, f"sha256={sig}", secret) is True
 
 
-def test_verify_webhook_signature_invalid():
+def test_verify_webhook_signature_invalid() -> None:
     """Test HMAC signature verification with invalid signature"""
     from blueprints.webhooks import verify_webhook_signature
 
@@ -88,7 +88,7 @@ def test_verify_webhook_signature_invalid():
     assert verify_webhook_signature(payload, "sha256=invalid", secret) is False
 
 
-def test_verify_webhook_signature_wrong_format():
+def test_verify_webhook_signature_wrong_format() -> None:
     """Test HMAC signature verification with wrong format"""
     from blueprints.webhooks import verify_webhook_signature
 
@@ -99,7 +99,7 @@ def test_verify_webhook_signature_wrong_format():
     assert verify_webhook_signature(payload, "abc123", secret) is False
 
 
-def test_receive_payment_status_webhook(client, db_session):
+def test_receive_payment_status_webhook(client, db_session) -> None:
     """Test webhook receiver endpoint with valid signature"""
     from models.transaction import Transaction
     from models.user import User

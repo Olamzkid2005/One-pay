@@ -20,7 +20,7 @@ from core.exceptions import AuthenticationError, AuthorizationError, OnePayError
 class TestOnePayErrorBase:
     """Test base OnePayError exception class."""
 
-    def test_onepay_error_has_required_attributes(self):
+    def test_onepay_error_has_required_attributes(self) -> None:
         """
         Test that OnePayError has message, error_code, and status_code.
 
@@ -40,7 +40,7 @@ class TestOnePayErrorBase:
         assert error.error_code == "TEST_ERROR"
         assert error.status_code == 500
 
-    def test_onepay_error_default_status_code(self):
+    def test_onepay_error_default_status_code(self) -> None:
         """
         Test that OnePayError defaults to 500 status code.
 
@@ -55,7 +55,7 @@ class TestOnePayErrorBase:
         # Assert
         assert error.status_code == 500
 
-    def test_onepay_error_is_exception(self):
+    def test_onepay_error_is_exception(self) -> None:
         """
         Test that OnePayError inherits from Exception.
 
@@ -70,7 +70,7 @@ class TestOnePayErrorBase:
         # Assert
         assert isinstance(error, Exception)
 
-    def test_onepay_error_str_representation(self):
+    def test_onepay_error_str_representation(self) -> None:
         """
         Test that OnePayError has proper string representation.
 
@@ -85,7 +85,7 @@ class TestOnePayErrorBase:
         # Assert
         assert str(error) == "Test error message"
 
-    def test_onepay_error_can_be_raised(self):
+    def test_onepay_error_can_be_raised(self) -> None:
         """
         Test that OnePayError can be raised and caught.
 
@@ -104,7 +104,7 @@ class TestOnePayErrorBase:
         assert exc_info.value.message == "Test error"
         assert exc_info.value.error_code == "TEST_ERROR"
 
-    def test_onepay_error_with_custom_status_code(self):
+    def test_onepay_error_with_custom_status_code(self) -> None:
         """
         Test that OnePayError accepts custom status codes.
 
@@ -124,7 +124,7 @@ class TestOnePayErrorBase:
 class TestValidationError:
     """Test ValidationError exception class."""
 
-    def test_validation_error_has_correct_error_code(self):
+    def test_validation_error_has_correct_error_code(self) -> None:
         """
         Test that ValidationError has VALIDATION_ERROR code.
 
@@ -137,7 +137,7 @@ class TestValidationError:
         # Assert
         assert error.error_code == "VALIDATION_ERROR"
 
-    def test_validation_error_has_correct_status_code(self):
+    def test_validation_error_has_correct_status_code(self) -> None:
         """
         Test that ValidationError has 400 status code.
 
@@ -149,7 +149,7 @@ class TestValidationError:
         # Assert
         assert error.status_code == 400
 
-    def test_validation_error_with_field(self):
+    def test_validation_error_with_field(self) -> None:
         """
         Test that ValidationError can include field name.
 
@@ -162,7 +162,7 @@ class TestValidationError:
         assert error.field == "email"
         assert error.message == "Invalid email format"
 
-    def test_validation_error_without_field(self):
+    def test_validation_error_without_field(self) -> None:
         """
         Test that ValidationError works without field name.
 
@@ -174,7 +174,7 @@ class TestValidationError:
         # Assert
         assert error.field is None
 
-    def test_validation_error_inherits_from_onepay_error(self):
+    def test_validation_error_inherits_from_onepay_error(self) -> None:
         """
         Test that ValidationError inherits from OnePayError.
 
@@ -187,7 +187,7 @@ class TestValidationError:
         assert isinstance(error, OnePayError)
         assert isinstance(error, Exception)
 
-    def test_validation_error_can_be_caught_as_onepay_error(self):
+    def test_validation_error_can_be_caught_as_onepay_error(self) -> None:
         """
         Test that ValidationError can be caught as OnePayError.
 
@@ -200,7 +200,7 @@ class TestValidationError:
         assert exc_info.value.error_code == "VALIDATION_ERROR"
         assert exc_info.value.status_code == 400
 
-    def test_validation_error_examples(self):
+    def test_validation_error_examples(self) -> None:
         """
         Test common validation error scenarios.
 
@@ -223,7 +223,7 @@ class TestValidationError:
 class TestProviderError:
     """Test ProviderError exception class."""
 
-    def test_provider_error_has_correct_error_code(self):
+    def test_provider_error_has_correct_error_code(self) -> None:
         """
         Test that ProviderError has PROVIDER_ERROR code.
 
@@ -239,7 +239,7 @@ class TestProviderError:
         # Assert
         assert error.error_code == "PROVIDER_ERROR"
 
-    def test_provider_error_has_correct_status_code(self):
+    def test_provider_error_has_correct_status_code(self) -> None:
         """
         Test that ProviderError has 502 status code.
 
@@ -254,7 +254,7 @@ class TestProviderError:
         # Assert
         assert error.status_code == 502
 
-    def test_provider_error_includes_provider_name(self):
+    def test_provider_error_includes_provider_name(self) -> None:
         """
         Test that ProviderError includes provider name.
 
@@ -269,7 +269,7 @@ class TestProviderError:
         # Assert
         assert error.provider == "korapay"
 
-    def test_provider_error_with_original_error(self):
+    def test_provider_error_with_original_error(self) -> None:
         """
         Test that ProviderError can include original error message.
 
@@ -286,7 +286,7 @@ class TestProviderError:
         assert error.original_error == "Connection timeout after 30s"
         assert error.provider == "voicepay"
 
-    def test_provider_error_without_original_error(self):
+    def test_provider_error_without_original_error(self) -> None:
         """
         Test that ProviderError works without original error.
 
@@ -301,7 +301,7 @@ class TestProviderError:
         # Assert
         assert error.original_error is None
 
-    def test_provider_error_inherits_from_onepay_error(self):
+    def test_provider_error_inherits_from_onepay_error(self) -> None:
         """
         Test that ProviderError inherits from OnePayError.
 
@@ -317,7 +317,7 @@ class TestProviderError:
         assert isinstance(error, OnePayError)
         assert isinstance(error, Exception)
 
-    def test_provider_error_examples(self):
+    def test_provider_error_examples(self) -> None:
         """
         Test common provider error scenarios.
 
@@ -343,7 +343,7 @@ class TestProviderError:
 class TestAuthenticationError:
     """Test AuthenticationError exception class."""
 
-    def test_authentication_error_has_correct_error_code(self):
+    def test_authentication_error_has_correct_error_code(self) -> None:
         """
         Test that AuthenticationError has AUTHENTICATION_ERROR code.
 
@@ -356,7 +356,7 @@ class TestAuthenticationError:
         # Assert
         assert error.error_code == "AUTHENTICATION_ERROR"
 
-    def test_authentication_error_has_correct_status_code(self):
+    def test_authentication_error_has_correct_status_code(self) -> None:
         """
         Test that AuthenticationError has 401 status code.
 
@@ -368,7 +368,7 @@ class TestAuthenticationError:
         # Assert
         assert error.status_code == 401
 
-    def test_authentication_error_default_message(self):
+    def test_authentication_error_default_message(self) -> None:
         """
         Test that AuthenticationError has default message.
 
@@ -380,7 +380,7 @@ class TestAuthenticationError:
         # Assert
         assert error.message == "Authentication required"
 
-    def test_authentication_error_custom_message(self):
+    def test_authentication_error_custom_message(self) -> None:
         """
         Test that AuthenticationError accepts custom message.
 
@@ -392,7 +392,7 @@ class TestAuthenticationError:
         # Assert
         assert error.message == "Invalid credentials"
 
-    def test_authentication_error_inherits_from_onepay_error(self):
+    def test_authentication_error_inherits_from_onepay_error(self) -> None:
         """
         Test that AuthenticationError inherits from OnePayError.
 
@@ -405,7 +405,7 @@ class TestAuthenticationError:
         assert isinstance(error, OnePayError)
         assert isinstance(error, Exception)
 
-    def test_authentication_error_examples(self):
+    def test_authentication_error_examples(self) -> None:
         """
         Test common authentication error scenarios.
 
@@ -428,7 +428,7 @@ class TestAuthenticationError:
 class TestAuthorizationError:
     """Test AuthorizationError exception class."""
 
-    def test_authorization_error_has_correct_error_code(self):
+    def test_authorization_error_has_correct_error_code(self) -> None:
         """
         Test that AuthorizationError has AUTHORIZATION_ERROR code.
 
@@ -441,7 +441,7 @@ class TestAuthorizationError:
         # Assert
         assert error.error_code == "AUTHORIZATION_ERROR"
 
-    def test_authorization_error_has_correct_status_code(self):
+    def test_authorization_error_has_correct_status_code(self) -> None:
         """
         Test that AuthorizationError has 403 status code.
 
@@ -453,7 +453,7 @@ class TestAuthorizationError:
         # Assert
         assert error.status_code == 403
 
-    def test_authorization_error_default_message(self):
+    def test_authorization_error_default_message(self) -> None:
         """
         Test that AuthorizationError has default message.
 
@@ -465,7 +465,7 @@ class TestAuthorizationError:
         # Assert
         assert error.message == "Access denied"
 
-    def test_authorization_error_custom_message(self):
+    def test_authorization_error_custom_message(self) -> None:
         """
         Test that AuthorizationError accepts custom message.
 
@@ -477,7 +477,7 @@ class TestAuthorizationError:
         # Assert
         assert error.message == "Insufficient permissions"
 
-    def test_authorization_error_inherits_from_onepay_error(self):
+    def test_authorization_error_inherits_from_onepay_error(self) -> None:
         """
         Test that AuthorizationError inherits from OnePayError.
 
@@ -490,7 +490,7 @@ class TestAuthorizationError:
         assert isinstance(error, OnePayError)
         assert isinstance(error, Exception)
 
-    def test_authorization_error_examples(self):
+    def test_authorization_error_examples(self) -> None:
         """
         Test common authorization error scenarios.
 
@@ -513,7 +513,7 @@ class TestAuthorizationError:
 class TestGlobalExceptionHandler:
     """Test global exception handler behavior."""
 
-    def test_handler_returns_correct_json_structure(self):
+    def test_handler_returns_correct_json_structure(self) -> None:
         """
         Test that handler returns JSON with success, message, and error_code.
 
@@ -524,7 +524,7 @@ class TestGlobalExceptionHandler:
         app = create_app()
 
         @app.route('/test-error')
-        def test_error():
+        def test_error() -> None:
             raise ValidationError("Test validation error", field="test_field")
 
         # Act
@@ -538,7 +538,7 @@ class TestGlobalExceptionHandler:
         assert data['message'] == "Test validation error"
         assert data['error_code'] == "VALIDATION_ERROR"
 
-    def test_handler_uses_correct_status_code(self):
+    def test_handler_uses_correct_status_code(self) -> None:
         """
         Test that handler uses exception's status code.
 
@@ -549,7 +549,7 @@ class TestGlobalExceptionHandler:
         app = create_app()
 
         @app.route('/test-auth-error')
-        def test_auth_error():
+        def test_auth_error() -> None:
             raise AuthenticationError("Invalid token")
 
         # Act
@@ -559,7 +559,7 @@ class TestGlobalExceptionHandler:
         # Assert
         assert response.status_code == 401
 
-    def test_handler_logs_error_with_correlation_id(self):
+    def test_handler_logs_error_with_correlation_id(self) -> None:
         """
         Test that handler logs error with correlation ID.
 
@@ -570,7 +570,7 @@ class TestGlobalExceptionHandler:
         app = create_app()
 
         @app.route('/test-provider-error')
-        def test_provider_error():
+        def test_provider_error() -> None:
             g.correlation_id = "test-correlation-123"
             raise ProviderError("Service timeout", provider="korapay")
 
@@ -581,7 +581,7 @@ class TestGlobalExceptionHandler:
         # Assert
         assert response.status_code == 502
 
-    def test_handler_works_for_all_exception_types(self):
+    def test_handler_works_for_all_exception_types(self) -> None:
         """
         Test that handler works for all custom exception types.
 
@@ -630,7 +630,7 @@ class TestGlobalExceptionHandler:
                 assert data['error_code'] == expected_code
                 assert data['success'] is False
 
-    def test_handler_includes_all_required_fields(self):
+    def test_handler_includes_all_required_fields(self) -> None:
         """
         Test that handler response includes all required fields.
 
@@ -641,7 +641,7 @@ class TestGlobalExceptionHandler:
         app = create_app()
 
         @app.route('/test')
-        def test_route():
+        def test_route() -> None:
             raise ValidationError("Test error")
 
         # Act
@@ -659,7 +659,7 @@ class TestGlobalExceptionHandler:
 class TestExceptionHierarchy:
     """Test exception inheritance and hierarchy."""
 
-    def test_all_exceptions_inherit_from_onepay_error(self):
+    def test_all_exceptions_inherit_from_onepay_error(self) -> None:
         """
         Test that all custom exceptions inherit from OnePayError.
 
@@ -678,7 +678,7 @@ class TestExceptionHierarchy:
             assert isinstance(exc, OnePayError)
             assert isinstance(exc, Exception)
 
-    def test_exceptions_can_be_caught_generically(self):
+    def test_exceptions_can_be_caught_generically(self) -> None:
         """
         Test that all exceptions can be caught as OnePayError.
 
@@ -697,7 +697,7 @@ class TestExceptionHierarchy:
             with pytest.raises(OnePayError):
                 raise exc
 
-    def test_exceptions_can_be_caught_specifically(self):
+    def test_exceptions_can_be_caught_specifically(self) -> None:
         """
         Test that exceptions can be caught by their specific type.
 
@@ -719,7 +719,7 @@ class TestExceptionHierarchy:
         with pytest.raises(AuthorizationError):
             raise AuthorizationError("test")
 
-    def test_exception_hierarchy_order(self):
+    def test_exception_hierarchy_order(self) -> None:
         """
         Test that exception catching respects hierarchy order.
 
@@ -737,7 +737,7 @@ class TestExceptionHierarchy:
         except OnePayError:
             pytest.fail("Should have caught ValidationError specifically")
 
-    def test_all_exceptions_have_required_attributes(self):
+    def test_all_exceptions_have_required_attributes(self) -> None:
         """
         Test that all exceptions have message, error_code, and status_code.
 

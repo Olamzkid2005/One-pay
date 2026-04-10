@@ -17,7 +17,7 @@ import pytest
 class TestLoginJsFile:
     """Verify the extracted login.js file exists and is referenced correctly."""
 
-    def test_login_js_file_exists(self):
+    def test_login_js_file_exists(self) -> None:
         """
         Test that static/js/login.js exists as an external file.
 
@@ -28,7 +28,7 @@ class TestLoginJsFile:
         js_path = os.path.join(project_root, "static", "js", "login.js")
         assert os.path.isfile(js_path), "static/js/login.js must exist"
 
-    def test_login_js_is_not_empty(self):
+    def test_login_js_is_not_empty(self) -> None:
         """
         Test that login.js contains actual JavaScript content.
 
@@ -38,7 +38,7 @@ class TestLoginJsFile:
         js_path = os.path.join(project_root, "static", "js", "login.js")
         assert os.path.getsize(js_path) > 0, "static/js/login.js must not be empty"
 
-    def test_login_js_contains_toggle_password(self):
+    def test_login_js_contains_toggle_password(self) -> None:
         """
         Test that login.js contains the togglePassword function.
 
@@ -62,7 +62,7 @@ class TestLoginHtmlReferences:
         with open(html_path) as f:
             return f.read()
 
-    def test_login_html_references_login_js(self):
+    def test_login_html_references_login_js(self) -> None:
         """
         Test that login.html has a script tag referencing login.js.
 
@@ -73,7 +73,7 @@ class TestLoginHtmlReferences:
         assert ("login.js" in content or "hashed_url('js/login.js')" in content), \
             "login.html must reference login.js"
 
-    def test_login_html_uses_defer_attribute(self):
+    def test_login_html_uses_defer_attribute(self) -> None:
         """
         Test that the login.js script tag uses the defer attribute.
 
@@ -82,7 +82,7 @@ class TestLoginHtmlReferences:
         content = self._read_login_html()
         assert "defer" in content, "login.js script tag must use defer attribute"
 
-    def test_login_html_has_no_inline_toggle_password(self):
+    def test_login_html_has_no_inline_toggle_password(self) -> None:
         """
         Test that login.html does not contain inline togglePassword definition.
 
@@ -118,7 +118,7 @@ class TestLoginPageRenders:
         if hasattr(flask_app, '_shutdown_event'):
             flask_app._shutdown_event.set()
 
-    def test_login_page_returns_200(self, client):
+    def test_login_page_returns_200(self, client) -> None:
         """
         Test that the login page loads with HTTP 200.
 
@@ -127,7 +127,7 @@ class TestLoginPageRenders:
         response = client.get("/api/v1/login")
         assert response.status_code == 200
 
-    def test_login_page_contains_login_js_reference(self, client):
+    def test_login_page_contains_login_js_reference(self, client) -> None:
         """
         Test that the rendered login page includes a reference to login.js.
 
@@ -139,7 +139,7 @@ class TestLoginPageRenders:
         assert re.search(rb'login\.[a-f0-9]{8}\.js|login\.js', response.data), \
             "Rendered page must reference login.js (with or without hash)"
 
-    def test_login_page_contains_csp_nonce(self, client):
+    def test_login_page_contains_csp_nonce(self, client) -> None:
         """
         Test that the rendered login page includes a nonce in inline scripts.
 
@@ -148,7 +148,7 @@ class TestLoginPageRenders:
         response = client.get("/api/v1/login")
         assert b"nonce=" in response.data
 
-    def test_login_page_csp_header_contains_nonce(self, client):
+    def test_login_page_csp_header_contains_nonce(self, client) -> None:
         """
         Test that the CSP response header includes a nonce directive.
 

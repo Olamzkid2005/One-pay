@@ -11,7 +11,7 @@ import pytest
 class TestRefundInitiation:
     """Test refund initiation functionality."""
 
-    def test_initiate_refund_makes_post_to_refunds_initiate(self):
+    def test_initiate_refund_makes_post_to_refunds_initiate(self) -> None:
         """Test initiate_refund makes POST to /refunds/initiate endpoint."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -45,7 +45,7 @@ class TestRefundInitiation:
             assert call_args[0][0] == "POST"
             assert "/refunds/initiate" in call_args[0][1]
 
-    def test_initiate_refund_generates_refund_reference_if_not_provided(self):
+    def test_initiate_refund_generates_refund_reference_if_not_provided(self) -> None:
         """Test generates refund_reference if None: f'REFUND-{payment_reference}-{timestamp}'."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -77,7 +77,7 @@ class TestRefundInitiation:
             request_body = call_args[1]["json"]
             assert request_body["reference"].startswith("REFUND-ONEPAY-TEST-123-")
 
-    def test_initiate_refund_validates_amount_minimum_100_naira(self):
+    def test_initiate_refund_validates_amount_minimum_100_naira(self) -> None:
         """Test validates refund amount >= 100 Naira."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -94,7 +94,7 @@ class TestRefundInitiation:
 
             assert "at least" in str(exc_info.value).lower() or "minimum" in str(exc_info.value).lower()
 
-    def test_initiate_refund_validates_amount_not_exceed_original(self):
+    def test_initiate_refund_validates_amount_not_exceed_original(self) -> None:
         """Test validates refund amount <= original transaction amount."""
         # This test would require database access to check original amount
         # For now, we'll test that the validation logic exists in the method signature
@@ -110,7 +110,7 @@ class TestRefundInitiation:
             # Verify method accepts amount parameter
             assert hasattr(korapay, 'initiate_refund')
 
-    def test_initiate_refund_includes_correct_request_body_fields(self):
+    def test_initiate_refund_includes_correct_request_body_fields(self) -> None:
         """Test includes correct request body fields: payment_reference, reference, amount, reason."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -149,7 +149,7 @@ class TestRefundInitiation:
             assert request_body["amount"] == 1000
             assert request_body["reason"] == "Customer request"
 
-    def test_initiate_refund_handles_400_validation_errors(self):
+    def test_initiate_refund_handles_400_validation_errors(self) -> None:
         """Test handles 400 validation errors from KoraPay."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):

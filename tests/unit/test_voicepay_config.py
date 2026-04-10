@@ -11,7 +11,7 @@ import pytest
 from config import BaseConfig, ProductionConfig
 
 
-def test_voicepay_config_exists():
+def test_voicepay_config_exists() -> None:
     """Test that VoicePay configuration variables exist"""
     assert hasattr(BaseConfig, 'VOICEPAY_WEBHOOK_URL')
     assert hasattr(BaseConfig, 'VOICEPAY_WEBHOOK_SECRET')
@@ -23,7 +23,7 @@ def test_voicepay_config_exists():
     assert hasattr(BaseConfig, 'VOICEPAY_WEBHOOK_ENABLED')
 
 
-def test_voicepay_webhook_url_format_production(monkeypatch):
+def test_voicepay_webhook_url_format_production(monkeypatch) -> None:
     """Test that VoicePay webhook URL must be HTTPS in production"""
     # Set production environment with HTTP URL (should fail)
     monkeypatch.setenv('APP_ENV', 'production')
@@ -44,7 +44,7 @@ def test_voicepay_webhook_url_format_production(monkeypatch):
         ProductionConfig.validate()
 
 
-def test_voicepay_webhook_secret_length_production(monkeypatch):
+def test_voicepay_webhook_secret_length_production(monkeypatch) -> None:
     """Test that VoicePay webhook secret must be at least 32 characters in production"""
     monkeypatch.setenv('APP_ENV', 'production')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'https://voicepay.ng/webhook')
@@ -64,7 +64,7 @@ def test_voicepay_webhook_secret_length_production(monkeypatch):
         ProductionConfig.validate()
 
 
-def test_voicepay_config_disabled_no_validation(monkeypatch):
+def test_voicepay_config_disabled_no_validation(monkeypatch) -> None:
     """Test that VoicePay validation is skipped when disabled"""
     monkeypatch.setenv('APP_ENV', 'production')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'false')
@@ -97,7 +97,7 @@ def test_voicepay_config_disabled_no_validation(monkeypatch):
     assert hasattr(Config, 'VOICEPAY_WEBHOOK_URL')
 
 
-def test_voicepay_secrets_must_be_unique(monkeypatch):
+def test_voicepay_secrets_must_be_unique(monkeypatch) -> None:
     """Test that VoicePay webhook secret must be different from other secrets"""
     monkeypatch.setenv('APP_ENV', 'production')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'https://voicepay.ng/webhook')
@@ -117,7 +117,7 @@ def test_voicepay_secrets_must_be_unique(monkeypatch):
         ProductionConfig.validate()
 
 
-def test_voicepay_secret_same_as_korapay_secret(monkeypatch):
+def test_voicepay_secret_same_as_korapay_secret(monkeypatch) -> None:
     """Test that VoicePay webhook secret cannot be same as KoraPay webhook secret"""
     monkeypatch.setenv('APP_ENV', 'production')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'https://voicepay.ng/webhook')
@@ -138,7 +138,7 @@ def test_voicepay_secret_same_as_korapay_secret(monkeypatch):
         ProductionConfig.validate()
 
 
-def test_voicepay_placeholder_secret_rejected(monkeypatch):
+def test_voicepay_placeholder_secret_rejected(monkeypatch) -> None:
     """Test that placeholder secrets are rejected in production"""
     monkeypatch.setenv('APP_ENV', 'production')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'https://voicepay.ng/webhook')
@@ -159,7 +159,7 @@ def test_voicepay_placeholder_secret_rejected(monkeypatch):
         ProductionConfig.validate()
 
 
-def test_voicepay_missing_webhook_url_production(monkeypatch):
+def test_voicepay_missing_webhook_url_production(monkeypatch) -> None:
     """Test that missing webhook URL fails in production when enabled"""
     monkeypatch.setenv('APP_ENV', 'production')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', '')  # Empty
@@ -180,7 +180,7 @@ def test_voicepay_missing_webhook_url_production(monkeypatch):
         ProductionConfig.validate()
 
 
-def test_voicepay_missing_webhook_secret_production(monkeypatch):
+def test_voicepay_missing_webhook_secret_production(monkeypatch) -> None:
     """Test that missing webhook secret fails in production when enabled"""
     monkeypatch.setenv('APP_ENV', 'production')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'https://voicepay.ng/webhook')
@@ -201,7 +201,7 @@ def test_voicepay_missing_webhook_secret_production(monkeypatch):
         ProductionConfig.validate()
 
 
-def test_voicepay_api_key_too_short(monkeypatch):
+def test_voicepay_api_key_too_short(monkeypatch) -> None:
     """Test that API key shorter than 32 characters fails in production"""
     monkeypatch.setenv('APP_ENV', 'production')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'https://voicepay.ng/webhook')
@@ -223,7 +223,7 @@ def test_voicepay_api_key_too_short(monkeypatch):
         ProductionConfig.validate()
 
 
-def test_voicepay_config_valid_production(monkeypatch):
+def test_voicepay_config_valid_production(monkeypatch) -> None:
     """Test that valid VoicePay configuration passes in production"""
     monkeypatch.setenv('APP_ENV', 'production')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'https://voicepay.ng/webhook')
@@ -256,7 +256,7 @@ def test_voicepay_config_valid_production(monkeypatch):
     assert Config.VOICEPAY_WEBHOOK_ENABLED == True
 
 
-def test_voicepay_timeout_and_retry_defaults():
+def test_voicepay_timeout_and_retry_defaults() -> None:
     """Test that VoicePay timeout and retry settings have correct defaults"""
     from config import BaseConfig
 
@@ -264,7 +264,7 @@ def test_voicepay_timeout_and_retry_defaults():
     assert BaseConfig.VOICEPAY_WEBHOOK_MAX_RETRIES == 3
 
 
-def test_voicepay_timeout_and_retry_custom(monkeypatch):
+def test_voicepay_timeout_and_retry_custom(monkeypatch) -> None:
     """Test that VoicePay timeout and retry settings can be customized"""
     monkeypatch.setenv('VOICEPAY_WEBHOOK_TIMEOUT_SECS', '30')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_MAX_RETRIES', '5')
@@ -281,7 +281,7 @@ def test_voicepay_timeout_and_retry_custom(monkeypatch):
     assert Config.VOICEPAY_WEBHOOK_MAX_RETRIES == 5
 
 
-def test_voicepay_sandbox_config_separate(monkeypatch):
+def test_voicepay_sandbox_config_separate(monkeypatch) -> None:
     """Test that sandbox configuration is separate from production"""
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'https://voicepay.ng/webhook')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_SECRET', 'prod-secret-32-characters-long')
@@ -302,7 +302,7 @@ def test_voicepay_sandbox_config_separate(monkeypatch):
     assert Config.VOICEPAY_WEBHOOK_SECRET != Config.VOICEPAY_WEBHOOK_SECRET_SANDBOX
 
 
-def test_voicepay_enabled_flag_true(monkeypatch):
+def test_voicepay_enabled_flag_true(monkeypatch) -> None:
     """Test that VOICEPAY_WEBHOOK_ENABLED=true is parsed correctly"""
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'true')
 
@@ -316,7 +316,7 @@ def test_voicepay_enabled_flag_true(monkeypatch):
     assert Config.VOICEPAY_WEBHOOK_ENABLED == True
 
 
-def test_voicepay_enabled_flag_false(monkeypatch):
+def test_voicepay_enabled_flag_false(monkeypatch) -> None:
     """Test that VOICEPAY_WEBHOOK_ENABLED=false is parsed correctly"""
     monkeypatch.setenv('VOICEPAY_WEBHOOK_ENABLED', 'false')
 
@@ -330,7 +330,7 @@ def test_voicepay_enabled_flag_false(monkeypatch):
     assert Config.VOICEPAY_WEBHOOK_ENABLED == False
 
 
-def test_voicepay_enabled_flag_default(monkeypatch):
+def test_voicepay_enabled_flag_default(monkeypatch) -> None:
     """Test that VOICEPAY_WEBHOOK_ENABLED defaults to true"""
     # Explicitly unset the environment variable to test default
     monkeypatch.delenv('VOICEPAY_WEBHOOK_ENABLED', raising=False)
@@ -346,7 +346,7 @@ def test_voicepay_enabled_flag_default(monkeypatch):
     assert Config.VOICEPAY_WEBHOOK_ENABLED == True
 
 
-def test_voicepay_http_url_rejected_production(monkeypatch):
+def test_voicepay_http_url_rejected_production(monkeypatch) -> None:
     """Test that HTTP URLs are rejected in production (not HTTPS)"""
     monkeypatch.setenv('APP_ENV', 'production')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'http://voicepay.ng/webhook')  # HTTP not HTTPS
@@ -367,7 +367,7 @@ def test_voicepay_http_url_rejected_production(monkeypatch):
         ProductionConfig.validate()
 
 
-def test_voicepay_development_allows_http(monkeypatch):
+def test_voicepay_development_allows_http(monkeypatch) -> None:
     """Test that HTTP URLs are allowed in development"""
     monkeypatch.setenv('APP_ENV', 'development')
     monkeypatch.setenv('VOICEPAY_WEBHOOK_URL', 'http://localhost:3000/webhook')
@@ -387,7 +387,7 @@ def test_voicepay_development_allows_http(monkeypatch):
 
 
 
-def test_voicepay_complete_configuration_integration(monkeypatch):
+def test_voicepay_complete_configuration_integration(monkeypatch) -> None:
     """Integration test: Complete VoicePay configuration in production"""
     # Set up complete production environment
     monkeypatch.setenv('APP_ENV', 'production')
@@ -461,7 +461,7 @@ def test_voicepay_complete_configuration_integration(monkeypatch):
     assert Config.VOICEPAY_WEBHOOK_URL_SANDBOX.startswith('https://')
 
 
-def test_voicepay_config_summary():
+def test_voicepay_config_summary() -> None:
     """Summary test: Print VoicePay configuration structure"""
     from config import BaseConfig
 

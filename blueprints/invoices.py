@@ -162,6 +162,37 @@ def invoices_page():
 # ── List invoices (API) ────────────────────────────────────────────────────────
 
 
+def _format_invoice_list_item(invoice) -> dict:
+    """Format a single invoice for list response."""
+    return {
+        "invoice_number": invoice.invoice_number,
+        "transaction_reference": invoice.transaction.tx_ref if invoice.transaction else None,
+        "customer_email": invoice.customer_email,
+        "amount": str(invoice.amount),
+        "currency": invoice.currency,
+        "status": invoice.status.value if hasattr(invoice.status, "value") else str(invoice.status),
+        "created_at": invoice.created_at_utc_iso(),
+        "paid_at": invoice.paid_at_utc_iso() if invoice.paid_at else None,
+    }
+
+
+def _parse_list_params() -> tuple[int, int, str, str]:
+    """Parse and validate list query params. Returns (page, page_size, status_filter, sort)."""
+    try:
+        page = int(request.args.get("page", 1))
+        page_size = int(request.args.get("page_size", 20))
+    except (ValueError, TypeError):
+        raise ValidationError("Invalid pagination parameters")
+    if page < 1:
+        raise ValidationError("Page must be >= 1")
+    page_size = min(max(page_size, 1), 100)
+    sort = request.args.get("sort", "created_desc")
+    valid_sorts = ["created_desc", "created_asc", "amount_desc", "amount_asc"]
+    if sort not in valid_sorts:
+        raise ValidationError(f"Invalid sort parameter. Must be one of: {', '.join(valid_sorts)}")
+    return page, page_size, request.args.get("status"), sort
+
+
 @invoices_bp.route("/invoices/list", methods=["GET"])
 def list_invoices():
     """List invoices with pagination and filtering"""
@@ -169,117 +200,55 @@ def list_invoices():
         return unauthenticated()
 
     with get_db() as db:
-        # Rate limit: 50 requests per minute
-        if not check_rate_limit(
-            db, f"invoice_list:{current_user_id()}", limit=50, window_secs=60
-        ):
+        if not check_rate_limit(db, f"invoice_list:{current_user_id()}", limit=50, window_secs=60):
             return rate_limited()
 
-        # Parse pagination parameters
-        try:
-            page = int(request.args.get("page", 1))
-            page_size = int(request.args.get("page_size", 20))
-        except (ValueError, TypeError):
-            raise ValidationError("Invalid pagination parameters")
+        page, page_size, status_filter, sort = _parse_list_params()
 
-        # Validate page and page_size
-        if page < 1:
-            raise ValidationError("Page must be >= 1")
-
-        # Limit page_size to 100
-        page_size = min(page_size, 100)
-        if page_size < 1:
-            raise ValidationError("Page size must be >= 1")
-
-        # Parse optional status filter
-        status_filter = request.args.get("status")
-
-        # Parse optional sort parameter
-        sort = request.args.get("sort", "created_desc")
-
-        # Validate sort parameter
-        valid_sorts = ["created_desc", "created_asc", "amount_desc", "amount_asc"]
-        if sort not in valid_sorts:
-            raise ValidationError(
-                f"Invalid sort parameter. Must be one of: {', '.join(valid_sorts)}"
-            )
-
-        # Get invoice history using service
         from core.audit import log_event
         from services.invoice import invoice_service
 
         try:
             invoices, total_count = invoice_service.get_invoice_history(
-                db=db,
-                user_id=current_user_id(),
-                status=status_filter,
-                page=page,
-                page_size=page_size,
-                sort=sort,
+                db=db, user_id=current_user_id(), status=status_filter,
+                page=page, page_size=page_size, sort=sort,
             )
-
-            # Add audit logging
-            log_event(
-                db=db,
-                event="invoice.list",
-                user_id=current_user_id(),
-                ip_address=request.remote_addr,
-                detail={
-                    "page": page,
-                    "page_size": page_size,
-                    "status_filter": status_filter,
-                    "sort": sort,
-                    "result_count": len(invoices),
-                },
-            )
-
-            # Format response
-            invoice_list = []
-            for invoice in invoices:
-                invoice_list.append(
-                    {
-                        "invoice_number": invoice.invoice_number,
-                        "transaction_reference": invoice.transaction.tx_ref
-                        if invoice.transaction
-                        else None,
-                        "customer_email": invoice.customer_email,
-                        "amount": str(invoice.amount),
-                        "currency": invoice.currency,
-                        "status": invoice.status.value
-                        if hasattr(invoice.status, "value")
-                        else str(invoice.status),
-                        "created_at": invoice.created_at_utc_iso(),
-                        "paid_at": invoice.paid_at_utc_iso()
-                        if invoice.paid_at
-                        else None,
-                    }
-                )
-
-            # Calculate pagination metadata
-            total_pages = (total_count + page_size - 1) // page_size  # Ceiling division
-
-            return jsonify(
-                {
-                    "success": True,
-                    "invoices": invoice_list,
-                    "pagination": {
-                        "page": page,
-                        "page_size": page_size,
-                        "total_pages": total_pages,
-                        "total_count": total_count,
-                    },
-                }
-            ), 200
-
+            log_event(db=db, event="invoice.list", user_id=current_user_id(), ip_address=request.remote_addr,
+                      detail={"page": page, "page_size": page_size, "status_filter": status_filter,
+                              "sort": sort, "result_count": len(invoices)})
+            total_pages = (total_count + page_size - 1) // page_size
+            return jsonify({
+                "success": True,
+                "invoices": [_format_invoice_list_item(inv) for inv in invoices],
+                "pagination": {"page": page, "page_size": page_size, "total_pages": total_pages, "total_count": total_count},
+            }), 200
         except Exception as e:
-            logger.error(
-                "Invoice list failed | user_id=%d error=%s", current_user_id(), e
-            )
+            logger.error("Invoice list failed | user_id=%d error=%s", current_user_id(), e)
             from core.exceptions import OnePayError
             raise OnePayError("Unable to retrieve invoices. Please try again later.", "INVOICE_LIST_FAILED", 500)
 
 
 # ── Get invoice details ────────────────────────────────────────────────────────
+
+
+def _format_invoice_detail(invoice, base_url: str) -> dict:
+    """Format full invoice detail for API response."""
+    payment_link = f"{base_url}/verify/{invoice.transaction.tx_ref}" if invoice.transaction else None
+    status_val = invoice.status.value if hasattr(invoice.status, "value") else str(invoice.status)
+    return {
+        "invoice_number": invoice.invoice_number,
+        "transaction_reference": invoice.transaction.tx_ref if invoice.transaction else None,
+        "amount": str(invoice.amount), "currency": invoice.currency,
+        "description": invoice.description, "customer_email": invoice.customer_email,
+        "customer_phone": invoice.customer_phone, "business_name": invoice.business_name,
+        "business_address": invoice.business_address, "business_tax_id": invoice.business_tax_id,
+        "business_logo_url": invoice.business_logo_url, "payment_terms": invoice.payment_terms,
+        "status": status_val, "created_at": invoice.created_at_utc_iso(),
+        "sent_at": invoice.sent_at_utc_iso() if invoice.sent_at else None,
+        "paid_at": invoice.paid_at_utc_iso() if invoice.paid_at else None,
+        "payment_link": payment_link,
+        "download_url": f"/api/invoices/{invoice.invoice_number}/download",
+    }
 
 
 @invoices_bp.route("/invoices/<invoice_number>", methods=["GET"])
@@ -289,83 +258,71 @@ def get_invoice(invoice_number):
         return unauthenticated()
 
     with get_db() as db:
-        # Rate limit: 50 requests per minute
-        if not check_rate_limit(
-            db, f"invoice_get:{current_user_id()}", limit=50, window_secs=60
-        ):
+        if not check_rate_limit(db, f"invoice_get:{current_user_id()}", limit=50, window_secs=60):
             return rate_limited()
 
-        # Validate invoice_number format (INV-YYYY-NNNNNN)
-        import re
+        invoice, _ = _get_invoice_and_transaction(db, invoice_number)
 
-        if not re.match(r"^INV-\d{4}-\d{6}$", invoice_number):
-            raise ValidationError("Invalid invoice number format")
-
-        # Fetch invoice with ownership verification
         from core.audit import log_event
-        from services.invoice import invoice_service
+        log_event(db=db, event="invoice.viewed", user_id=current_user_id(),
+                  tx_ref=invoice.transaction.tx_ref if invoice.transaction else None,
+                  ip_address=request.remote_addr,
+                  detail={"invoice_number": invoice.invoice_number,
+                          "status": invoice.status.value if hasattr(invoice.status, "value") else str(invoice.status)})
 
-        invoice = invoice_service.get_invoice_by_number(
-            db=db, invoice_number=invoice_number, user_id=current_user_id()
-        )
-
-        if not invoice:
-            raise ValidationError("Invoice not found")
-
-        # Add audit logging
-        log_event(
-            db=db,
-            event="invoice.viewed",
-            user_id=current_user_id(),
-            tx_ref=invoice.transaction.tx_ref if invoice.transaction else None,
-            ip_address=request.remote_addr,
-            detail={
-                "invoice_number": invoice.invoice_number,
-                "status": invoice.status.value
-                if hasattr(invoice.status, "value")
-                else str(invoice.status),
-            },
-        )
-
-        # Build payment link URL
         base_url = request.host_url.rstrip("/")
-        payment_link = None
-        if invoice.transaction:
-            payment_link = f"{base_url}/verify/{invoice.transaction.tx_ref}"
-
-        # Return detailed invoice information
-        return jsonify(
-            {
-                "success": True,
-                "invoice": {
-                    "invoice_number": invoice.invoice_number,
-                    "transaction_reference": invoice.transaction.tx_ref
-                    if invoice.transaction
-                    else None,
-                    "amount": str(invoice.amount),
-                    "currency": invoice.currency,
-                    "description": invoice.description,
-                    "customer_email": invoice.customer_email,
-                    "customer_phone": invoice.customer_phone,
-                    "business_name": invoice.business_name,
-                    "business_address": invoice.business_address,
-                    "business_tax_id": invoice.business_tax_id,
-                    "business_logo_url": invoice.business_logo_url,
-                    "payment_terms": invoice.payment_terms,
-                    "status": invoice.status.value
-                    if hasattr(invoice.status, "value")
-                    else str(invoice.status),
-                    "created_at": invoice.created_at_utc_iso(),
-                    "sent_at": invoice.sent_at_utc_iso() if invoice.sent_at else None,
-                    "paid_at": invoice.paid_at_utc_iso() if invoice.paid_at else None,
-                    "payment_link": payment_link,
-                    "download_url": f"/api/invoices/{invoice.invoice_number}/download",
-                },
-            }
-        ), 200
+        return jsonify({"success": True, "invoice": _format_invoice_detail(invoice, base_url)}), 200
 
 
 # ── Download invoice PDF ───────────────────────────────────────────────────────
+
+
+def _get_invoice_and_transaction(db, invoice_number: str):
+    """Fetch invoice and its transaction, raising on errors."""
+    import re
+
+    from models.transaction import Transaction
+    from services.invoice import invoice_service
+
+    if not re.match(r"^INV-\d{4}-\d{6}$", invoice_number):
+        raise ValidationError("Invalid invoice number format")
+    invoice = invoice_service.get_invoice_by_number(db=db, invoice_number=invoice_number, user_id=current_user_id())
+    if not invoice:
+        raise ValidationError("Invoice not found")
+    transaction = db.query(Transaction).filter(Transaction.id == invoice.transaction_id).first()
+    if not transaction:
+        from core.exceptions import OnePayError
+        raise OnePayError("Unable to process invoice. Please contact support.", "INVOICE_ERROR", 500)
+    return invoice, transaction
+
+
+def _generate_invoice_pdf_response(invoice, transaction, invoice_number: str):
+    """Generate PDF and return Flask response."""
+    from flask import make_response
+
+    from core.audit import log_event
+    from services.invoice import invoice_service
+
+    base_url = request.host_url.rstrip("/")
+    payment_url = f"{base_url}/verify/{transaction.tx_ref}"
+    try:
+        pdf_bytes = invoice_service.generate_invoice_pdf(invoice=invoice, transaction=transaction, payment_url=payment_url)
+        log_event(db=None, event="invoice.downloaded", user_id=current_user_id(), tx_ref=transaction.tx_ref,
+                  ip_address=request.remote_addr, detail={"invoice_number": invoice.invoice_number, "pdf_size_bytes": len(pdf_bytes)})
+        response = make_response(pdf_bytes)
+        response.headers["Content-Type"] = "application/pdf"
+        response.headers["Content-Disposition"] = f'attachment; filename="{invoice_number}.pdf"'
+        response.headers["Content-Length"] = len(pdf_bytes)
+        logger.info("Invoice PDF downloaded | invoice=%s user_id=%d size=%d bytes", invoice.invoice_number, current_user_id(), len(pdf_bytes))
+        return response, payment_url, pdf_bytes
+    except TimeoutError as e:
+        logger.error("PDF generation timeout | invoice=%s error=%s", invoice.invoice_number, e)
+        from core.exceptions import OnePayError
+        raise OnePayError("Unable to generate invoice PDF. Please try again later.", "PDF_TIMEOUT", 500)
+    except Exception as e:
+        logger.error("PDF generation failed | invoice=%s error=%s", invoice.invoice_number, e)
+        from core.exceptions import OnePayError
+        raise OnePayError("Unable to generate invoice PDF. Please try again later.", "PDF_ERROR", 500)
 
 
 @invoices_bp.route("/invoices/<invoice_number>/download", methods=["GET"])
@@ -373,113 +330,12 @@ def download_invoice(invoice_number):
     """Download invoice as PDF"""
     if not current_user_id():
         return unauthenticated()
-
     with get_db() as db:
-        # Rate limit: 50 requests per minute
-        if not check_rate_limit(
-            db, f"invoice_download:{current_user_id()}", limit=50, window_secs=60
-        ):
+        if not check_rate_limit(db, f"invoice_download:{current_user_id()}", limit=50, window_secs=60):
             return rate_limited()
-
-        # Validate invoice_number format (INV-YYYY-NNNNNN)
-        import re
-
-        if not re.match(r"^INV-\d{4}-\d{6}$", invoice_number):
-            raise ValidationError("Invalid invoice number format")
-
-        # Fetch invoice with ownership verification
-        from core.audit import log_event
-        from services.invoice import invoice_service
-
-        invoice = invoice_service.get_invoice_by_number(
-            db=db, invoice_number=invoice_number, user_id=current_user_id()
-        )
-
-        if not invoice:
-            raise ValidationError("Invoice not found")
-
-        # Fetch associated transaction
-        from models.transaction import Transaction
-
-        transaction = (
-            db.query(Transaction)
-            .filter(Transaction.id == invoice.transaction_id)
-            .first()
-        )
-
-        if not transaction:
-            logger.error(
-                "Transaction not found for invoice | invoice=%s transaction_id=%d",
-                invoice.invoice_number,
-                invoice.transaction_id,
-            )
-            from core.exceptions import OnePayError
-            raise OnePayError("Unable to process invoice. Please contact support.", "INVOICE_ERROR", 500)
-
-        # Generate PDF using InvoiceService
-        try:
-            # Build payment URL
-            base_url = request.host_url.rstrip("/")
-            payment_url = f"{base_url}/verify/{transaction.tx_ref}"
-
-            # Generate PDF
-            pdf_bytes = invoice_service.generate_invoice_pdf(
-                invoice=invoice, transaction=transaction, payment_url=payment_url
-            )
-
-            # Add audit logging
-            log_event(
-                db=db,
-                event="invoice.downloaded",
-                user_id=current_user_id(),
-                tx_ref=transaction.tx_ref,
-                ip_address=request.remote_addr,
-                detail={
-                    "invoice_number": invoice.invoice_number,
-                    "pdf_size_bytes": len(pdf_bytes),
-                },
-            )
-
-            # Set appropriate headers and stream PDF
-            from flask import make_response
-
-            response = make_response(pdf_bytes)
-            response.headers["Content-Type"] = "application/pdf"
-            response.headers["Content-Disposition"] = (
-                f'attachment; filename="{invoice_number}.pdf"'
-            )
-            response.headers["Content-Length"] = len(pdf_bytes)
-
-            logger.info(
-                "Invoice PDF downloaded | invoice=%s user_id=%d size=%d bytes",
-                invoice.invoice_number,
-                current_user_id(),
-                len(pdf_bytes),
-            )
-
-            return response
-
-        except TimeoutError as e:
-            logger.error(
-                "PDF generation timeout | invoice=%s user_id=%d error=%s",
-                invoice.invoice_number,
-                current_user_id(),
-                e,
-            )
-            from core.exceptions import OnePayError
-            raise OnePayError("Unable to generate invoice PDF. Please try again later.", "PDF_TIMEOUT", 500)
-        except Exception as e:
-            logger.error(
-                "PDF generation failed | invoice=%s user_id=%d error=%s",
-                invoice.invoice_number,
-                current_user_id(),
-                e,
-            )
-            from core.exceptions import OnePayError
-            raise OnePayError("Unable to generate invoice PDF. Please try again later.", "PDF_ERROR", 500)
-
-
-# ── Send invoice via email ─────────────────────────────────────────────────────
+        invoice, transaction = _get_invoice_and_transaction(db, invoice_number)
+        response, _, _ = _generate_invoice_pdf_response(invoice, transaction, invoice_number)
+        return response
 
 
 @invoices_bp.route("/invoices/<invoice_number>/send", methods=["POST"])
@@ -487,159 +343,53 @@ def send_invoice(invoice_number):
     """Send invoice via email to customer"""
     if not current_user_id():
         return unauthenticated()
-
-    # Validate Content-Type to prevent CSRF via form submission
     if request.content_type != "application/json":
         raise ValidationError("Content-Type must be application/json")
 
     with get_db() as db:
-        # Rate limit: 10 requests per minute
-        if not check_rate_limit(
-            db, f"invoice_email:{current_user_id()}", limit=10, window_secs=60
-        ):
+        if not check_rate_limit(db, f"invoice_email:{current_user_id()}", limit=10, window_secs=60):
             return rate_limited()
 
-        # Validate invoice_number format (INV-YYYY-NNNNNN)
-        import re
+        invoice, transaction = _get_invoice_and_transaction(db, invoice_number)
 
-        if not re.match(r"^INV-\d{4}-\d{6}$", invoice_number):
-            raise ValidationError("Invalid invoice number format")
-
-        # Fetch invoice with ownership verification
-        from core.audit import log_event
-        from services.invoice import invoice_service
-
-        invoice = invoice_service.get_invoice_by_number(
-            db=db, invoice_number=invoice_number, user_id=current_user_id()
-        )
-
-        if not invoice:
-            raise ValidationError("Invoice not found")
-
-        # Parse optional recipient_email parameter
         data = request.get_json(silent=True) or {}
-        recipient_email = data.get("recipient_email")
-
-        # Use invoice customer_email if no recipient specified
-        if not recipient_email:
-            recipient_email = invoice.customer_email
-
-        # Validate recipient email exists
+        recipient_email = data.get("recipient_email") or invoice.customer_email
         if not recipient_email:
             raise ValidationError("No recipient email available")
 
-        # Get merchant email for BCC (merchant receives a copy)
         from models.user import User
-
         merchant = db.query(User).filter(User.id == current_user_id()).first()
         merchant_email = merchant.email if merchant else None
 
-        # Fetch associated transaction
-        from models.transaction import Transaction
+        _, payment_url, pdf_bytes = _generate_invoice_pdf_response(invoice, transaction, invoice_number)
 
-        transaction = (
-            db.query(Transaction)
-            .filter(Transaction.id == invoice.transaction_id)
-            .first()
-        )
+        from datetime import datetime, timezone
 
-        if not transaction:
-            logger.error(
-                "Transaction not found for invoice | invoice=%s transaction_id=%d",
-                invoice.invoice_number,
-                invoice.transaction_id,
-            )
-            from core.exceptions import OnePayError
-            raise OnePayError("Unable to process invoice. Please contact support.", "INVOICE_ERROR", 500)
+        from core.audit import log_event
+        from models.invoice import InvoiceStatus
+        from services.email import send_invoice_email
 
-        # Generate PDF
         try:
-            # Build payment URL
-            base_url = request.host_url.rstrip("/")
-            payment_url = f"{base_url}/verify/{transaction.tx_ref}"
-
-            # Generate PDF
-            pdf_bytes = invoice_service.generate_invoice_pdf(
-                invoice=invoice, transaction=transaction, payment_url=payment_url
-            )
-
-            # Send email using email service
-            from datetime import datetime, timezone
-
-            from models.invoice import InvoiceStatus
-            from services.email import send_invoice_email
-
             email_sent = send_invoice_email(
-                to_email=recipient_email,
-                invoice=invoice,
-                pdf_bytes=pdf_bytes,
-                payment_url=payment_url,
-                qr_code_data_uri=transaction.qr_code_payment_url,
+                to_email=recipient_email, invoice=invoice, pdf_bytes=pdf_bytes,
+                payment_url=payment_url, qr_code_data_uri=transaction.qr_code_payment_url,
                 merchant_email=merchant_email,
             )
-
-            if email_sent:
-                # Update invoice status to sent
-                invoice.status = InvoiceStatus.SENT
-                invoice.sent_at = datetime.now(timezone.utc)
-                db.flush()
-
-                # Add audit logging
-                log_event(
-                    db=db,
-                    event="invoice.emailed",
-                    user_id=current_user_id(),
-                    tx_ref=transaction.tx_ref,
-                    ip_address=request.remote_addr,
-                    detail={
-                        "invoice_number": invoice.invoice_number,
-                        "recipient_email": recipient_email,
-                        "sent_at": invoice.sent_at.isoformat(),
-                    },
-                )
-
-                logger.info(
-                    "Invoice email sent | invoice=%s to=%s user_id=%d",
-                    invoice.invoice_number,
-                    recipient_email,
-                    current_user_id(),
-                )
-
-                return jsonify(
-                    {
-                        "success": True,
-                        "message": "Invoice sent successfully",
-                        "sent_to": recipient_email,
-                        "sent_at": invoice.sent_at_utc_iso(),
-                    }
-                ), 200
-            else:
-                # Email failed
-                logger.error(
-                    "Invoice email failed | invoice=%s to=%s user_id=%d",
-                    invoice.invoice_number,
-                    recipient_email,
-                    current_user_id(),
-                )
+            if not email_sent:
                 from core.exceptions import OnePayError
                 raise OnePayError("Unable to send invoice email. Please try again later.", "EMAIL_ERROR", 500)
 
-        except TimeoutError as e:
-            logger.error(
-                "PDF generation timeout for email | invoice=%s user_id=%d error=%s",
-                invoice.invoice_number,
-                current_user_id(),
-                e,
-            )
-            from core.exceptions import OnePayError
-            raise OnePayError("Unable to generate invoice PDF. Please try again later.", "PDF_TIMEOUT", 500)
+            invoice.status = InvoiceStatus.SENT
+            invoice.sent_at = datetime.now(timezone.utc)
+            db.flush()
+            log_event(db=db, event="invoice.emailed", user_id=current_user_id(), tx_ref=transaction.tx_ref,
+                      ip_address=request.remote_addr,
+                      detail={"invoice_number": invoice.invoice_number, "recipient_email": recipient_email, "sent_at": invoice.sent_at.isoformat()})
+            logger.info("Invoice email sent | invoice=%s to=%s user_id=%d", invoice.invoice_number, recipient_email, current_user_id())
+            return jsonify({"success": True, "message": "Invoice sent successfully", "sent_to": recipient_email, "sent_at": invoice.sent_at_utc_iso()}), 200
+
         except Exception as e:
-            logger.error(
-                "Invoice email failed | invoice=%s user_id=%d error=%s",
-                invoice.invoice_number,
-                current_user_id(),
-                e,
-            )
+            logger.error("Invoice email failed | invoice=%s user_id=%d error=%s", invoice.invoice_number, current_user_id(), e)
             from core.exceptions import OnePayError
             raise OnePayError("Unable to send invoice. Please try again later.", "INVOICE_SEND_ERROR", 500)
 
@@ -772,79 +522,57 @@ def _upsert_invoice_settings(db, settings, data: dict, fields: dict):
     return settings
 
 
+def _safe_settings_field(val, maxlen: int = 255) -> str:
+    """Sanitize a settings text field."""
+    import html
+    if not val:
+        return None
+    s = str(val).strip()
+    s = "".join(c for c in s if c == "\n" or c == "\t" or (ord(c) >= 32 and ord(c) != 127))
+    return html.escape(s)[:maxlen] if s else None
+
+
 @invoices_bp.route("/invoices/settings", methods=["POST"])
 def update_invoice_settings():
     """Update merchant invoice settings"""
     if not current_user_id():
         return unauthenticated()
-
     if request.content_type != "application/json":
         raise ValidationError("Content-Type must be application/json")
 
     with get_db() as db:
-        if not check_rate_limit(
-            db, f"invoice_settings_update:{current_user_id()}", limit=10, window_secs=60
-        ):
+        if not check_rate_limit(db, f"invoice_settings_update:{current_user_id()}", limit=10, window_secs=60):
             return rate_limited()
-
-        import html
 
         from core.audit import log_event
         from models.invoice import InvoiceSettings
 
         data = request.get_json(silent=True) or {}
-
-        def _safe(val, maxlen=255):
-            if not val:
-                return None
-            s = str(val).strip()
-            s = "".join(c for c in s if c == "\n" or c == "\t" or (ord(c) >= 32 and ord(c) != 127))
-            return html.escape(s)[:maxlen] if s else None
-
         auto_send_email = data.get("auto_send_email")
         if auto_send_email is not None and not isinstance(auto_send_email, bool):
             raise ValidationError("auto_send_email must be a boolean value")
 
-        business_logo_url = None
-        if data.get("business_logo_url"):
-            business_logo_url = _validate_logo_url(data["business_logo_url"], current_user_id())
+        business_logo_url = _validate_logo_url(data["business_logo_url"], current_user_id()) if data.get("business_logo_url") else None
 
         fields = {
             "user_id": current_user_id(),
-            "business_name": _safe(data.get("business_name"), 255),
-            "business_address": _safe(data.get("business_address"), 1000),
-            "business_tax_id": _safe(data.get("business_tax_id"), 100),
+            "business_name": _safe_settings_field(data.get("business_name"), 255),
+            "business_address": _safe_settings_field(data.get("business_address"), 1000),
+            "business_tax_id": _safe_settings_field(data.get("business_tax_id"), 100),
             "business_logo_url": business_logo_url,
-            "default_payment_terms": _safe(data.get("default_payment_terms"), 500),
+            "default_payment_terms": _safe_settings_field(data.get("default_payment_terms"), 500),
             "auto_send_email": auto_send_email,
         }
 
-        settings = (
-            db.query(InvoiceSettings)
-            .filter(InvoiceSettings.user_id == current_user_id())
-            .first()
-        )
+        settings = db.query(InvoiceSettings).filter(InvoiceSettings.user_id == current_user_id()).first()
         settings = _upsert_invoice_settings(db, settings, data, fields)
 
         try:
             db.commit()
-            log_event(
-                db=db,
-                event="invoice.settings_updated",
-                user_id=current_user_id(),
-                ip_address=request.remote_addr,
-                detail={
-                    "business_name": settings.business_name,
-                    "has_logo": bool(settings.business_logo_url),
-                    "auto_send_email": settings.auto_send_email,
-                },
-            )
+            log_event(db=db, event="invoice.settings_updated", user_id=current_user_id(), ip_address=request.remote_addr,
+                      detail={"business_name": settings.business_name, "has_logo": bool(settings.business_logo_url), "auto_send_email": settings.auto_send_email})
             logger.info("Invoice settings updated | user_id=%d", current_user_id())
-            return jsonify({
-                "success": True,
-                "message": "Invoice settings updated successfully",
-                "settings": settings.to_dict(),
-            }), 200
+            return jsonify({"success": True, "message": "Invoice settings updated successfully", "settings": settings.to_dict()}), 200
         except Exception as e:
             db.rollback()
             logger.error("Invoice settings update failed | user_id=%d error=%s", current_user_id(), e)

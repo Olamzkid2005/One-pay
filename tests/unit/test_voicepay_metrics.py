@@ -15,7 +15,7 @@ except ImportError:
 
 
 @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="prometheus_client not installed")
-def test_voicepay_metrics_registered():
+def test_voicepay_metrics_registered() -> None:
     """Test that VoicePay metrics are registered with Prometheus"""
     # Get all registered metric names
     metric_names = [m.name for m in REGISTRY.collect()]
@@ -28,7 +28,7 @@ def test_voicepay_metrics_registered():
 
 
 @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="prometheus_client not installed")
-def test_voicepay_webhook_success_metric(monkeypatch):
+def test_voicepay_webhook_success_metric(monkeypatch) -> None:
     """Test that successful webhook delivery increments success counter"""
     from prometheus_client import REGISTRY
 
@@ -80,7 +80,7 @@ def test_voicepay_webhook_success_metric(monkeypatch):
 
 
 @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="prometheus_client not installed")
-def test_voicepay_webhook_failure_metric(monkeypatch):
+def test_voicepay_webhook_failure_metric(monkeypatch) -> None:
     """Test that failed webhook delivery increments failure counter"""
     from prometheus_client import REGISTRY
 
@@ -133,7 +133,7 @@ def test_voicepay_webhook_failure_metric(monkeypatch):
 
 
 @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="prometheus_client not installed")
-def test_voicepay_webhook_duration_metric(monkeypatch):
+def test_voicepay_webhook_duration_metric(monkeypatch) -> None:
     """Test that webhook duration is tracked"""
     import time
 
@@ -177,7 +177,7 @@ def test_voicepay_webhook_duration_metric(monkeypatch):
 
 
 @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="prometheus_client not installed")
-def test_voicepay_payment_amount_metric():
+def test_voicepay_payment_amount_metric() -> None:
     """Test that payment amounts are tracked"""
     from datetime import datetime, timedelta, timezone
     from decimal import Decimal

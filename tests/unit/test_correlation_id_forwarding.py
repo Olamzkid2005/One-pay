@@ -16,7 +16,7 @@ from flask import Flask, g
 class TestKoraPayCorrelationIdForwarding:
     """Test correlation ID forwarding in KoraPay API requests."""
 
-    def test_korapay_includes_correlation_id_in_headers(self):
+    def test_korapay_includes_correlation_id_in_headers(self) -> None:
         """
         WHEN a KoraPay API request is made with a correlation ID in context,
         THE System SHALL include the correlation ID in the X-Correlation-ID header.
@@ -36,7 +36,7 @@ class TestKoraPayCorrelationIdForwarding:
             assert "X-Correlation-ID" in headers
             assert headers["X-Correlation-ID"] == "test-correlation-123"
 
-    def test_korapay_no_correlation_id_when_outside_context(self):
+    def test_korapay_no_correlation_id_when_outside_context(self) -> None:
         """
         WHEN a KoraPay API request is made outside Flask context,
         THE System SHALL not include X-Correlation-ID header.
@@ -52,7 +52,7 @@ class TestKoraPayCorrelationIdForwarding:
         # Should not raise error, just skip correlation ID
         assert "X-Correlation-ID" not in headers
 
-    def test_korapay_no_correlation_id_when_not_set(self):
+    def test_korapay_no_correlation_id_when_not_set(self) -> None:
         """
         WHEN a KoraPay API request is made without correlation ID in context,
         THE System SHALL not include X-Correlation-ID header.
@@ -70,7 +70,7 @@ class TestKoraPayCorrelationIdForwarding:
             assert "X-Correlation-ID" not in headers
 
     @patch('services.korapay.requests.Session.request')
-    def test_korapay_correlation_id_sent_in_actual_request(self, mock_request):
+    def test_korapay_correlation_id_sent_in_actual_request(self, mock_request) -> None:
         """
         WHEN a KoraPay API request is made,
         THE correlation ID SHALL be included in the actual HTTP request headers.
@@ -133,7 +133,7 @@ class TestWebhookCorrelationIdForwarding:
     @patch('services.webhook.requests.post')
     def test_webhook_includes_correlation_id_in_headers(
         self, mock_post, mock_validate, mock_gethostbyname
-    ):
+    ) -> None:
         """
         WHEN an outbound webhook is sent with a correlation ID in context,
         THE System SHALL include the correlation ID in the X-Correlation-ID header.
@@ -180,7 +180,7 @@ class TestWebhookCorrelationIdForwarding:
     @patch('services.webhook.requests.post')
     def test_webhook_no_correlation_id_when_outside_context(
         self, mock_post, mock_validate, mock_gethostbyname
-    ):
+    ) -> None:
         """
         WHEN an outbound webhook is sent outside Flask context,
         THE System SHALL not include X-Correlation-ID header.
@@ -223,7 +223,7 @@ class TestWebhookCorrelationIdForwarding:
     @patch('services.webhook.requests.post')
     def test_webhook_no_correlation_id_when_not_set(
         self, mock_post, mock_validate, mock_gethostbyname
-    ):
+    ) -> None:
         """
         WHEN an outbound webhook is sent without correlation ID in context,
         THE System SHALL not include X-Correlation-ID header.
@@ -264,7 +264,7 @@ class TestWebhookCorrelationIdForwarding:
             headers = call_kwargs.get('headers', {})
             assert "X-Correlation-ID" not in headers
 
-    def test_webhook_deliver_webhook_includes_correlation_id(self):
+    def test_webhook_deliver_webhook_includes_correlation_id(self) -> None:
         """
         WHEN deliver_webhook is called with a transaction,
         THE System SHALL include correlation ID in webhook headers.
@@ -310,7 +310,7 @@ class TestVoicePayWebhookCorrelationIdForwarding:
     """Test correlation ID forwarding in VoicePay webhook requests."""
 
     @patch('services.voicepay_webhook.requests.post')
-    def test_voicepay_webhook_includes_correlation_id(self, mock_post):
+    def test_voicepay_webhook_includes_correlation_id(self, mock_post) -> None:
         """
         WHEN a VoicePay webhook is sent with a correlation ID in context,
         THE System SHALL include the correlation ID in the X-Correlation-ID header.
@@ -351,7 +351,7 @@ class TestVoicePayWebhookCorrelationIdForwarding:
             assert headers["X-Correlation-ID"] == "voicepay-correlation-123"
 
     @patch('services.voicepay_webhook.requests.post')
-    def test_voicepay_webhook_no_correlation_id_outside_context(self, mock_post):
+    def test_voicepay_webhook_no_correlation_id_outside_context(self, mock_post) -> None:
         """
         WHEN a VoicePay webhook is sent outside Flask context,
         THE System SHALL not include X-Correlation-ID header.

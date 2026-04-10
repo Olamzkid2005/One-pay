@@ -18,7 +18,7 @@ from flask import Flask, g
 class TestRateLimitEnforcement:
     """Test rate limit enforcement behavior."""
 
-    def test_allows_request_when_under_limit(self):
+    def test_allows_request_when_under_limit(self) -> None:
         """
         Test that requests are allowed when under the rate limit.
 
@@ -33,7 +33,7 @@ class TestRateLimitEnforcement:
 
         @app.route('/test')
         @rate_limit("test:{ip}", limit=5, window_secs=60)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -46,7 +46,7 @@ class TestRateLimitEnforcement:
                 assert response.status_code == 200
                 assert response.get_json() == {"success": True}
 
-    def test_blocks_request_when_limit_exceeded(self):
+    def test_blocks_request_when_limit_exceeded(self) -> None:
         """
         Test that requests are blocked when rate limit is exceeded.
 
@@ -61,7 +61,7 @@ class TestRateLimitEnforcement:
 
         @app.route('/test')
         @rate_limit("test:{ip}", limit=5, window_secs=60)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -73,7 +73,7 @@ class TestRateLimitEnforcement:
 
                 assert response.status_code == 429
 
-    def test_rate_limit_checked_before_route_handler(self):
+    def test_rate_limit_checked_before_route_handler(self) -> None:
         """
         Test that rate limit is checked before the route handler executes.
 
@@ -89,7 +89,7 @@ class TestRateLimitEnforcement:
 
         @app.route('/test')
         @rate_limit("test:{ip}", limit=5, window_secs=60)
-        def test_route():
+        def test_route() -> None:
             handler_called.append(True)
             return {"success": True}
 
@@ -108,7 +108,7 @@ class TestRateLimitEnforcement:
 class TestKeyPlaceholderResolution:
     """Test key placeholder resolution for {user_id}, {ip}, {api_key}."""
 
-    def test_resolves_ip_placeholder(self):
+    def test_resolves_ip_placeholder(self) -> None:
         """
         Test that {ip} placeholder is resolved to client IP.
 
@@ -123,7 +123,7 @@ class TestKeyPlaceholderResolution:
 
         @app.route('/test')
         @rate_limit("login:{ip}", limit=5, window_secs=60)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -139,7 +139,7 @@ class TestKeyPlaceholderResolution:
                 resolved_key = call_args[0][1]  # Second argument is the key
                 assert '192.168.1.1' in resolved_key or '127.0.0.1' in resolved_key
 
-    def test_resolves_user_id_placeholder(self):
+    def test_resolves_user_id_placeholder(self) -> None:
         """
         Test that {user_id} placeholder is resolved from Flask's g object.
 
@@ -154,7 +154,7 @@ class TestKeyPlaceholderResolution:
 
         @app.route('/test')
         @rate_limit("api:{user_id}", limit=100, window_secs=60)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -176,7 +176,7 @@ class TestKeyPlaceholderResolution:
                     resolved_key = call_args[0][1]
                     assert 'user-123' in resolved_key
 
-    def test_resolves_api_key_placeholder(self):
+    def test_resolves_api_key_placeholder(self) -> None:
         """
         Test that {api_key} placeholder is resolved from Flask's g object.
 
@@ -191,7 +191,7 @@ class TestKeyPlaceholderResolution:
 
         @app.route('/test')
         @rate_limit("api:{api_key}", limit=100, window_secs=60)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -213,7 +213,7 @@ class TestKeyPlaceholderResolution:
                     resolved_key = call_args[0][1]
                     assert 'pk_test_abc123' in resolved_key
 
-    def test_resolves_anonymous_user_placeholder(self):
+    def test_resolves_anonymous_user_placeholder(self) -> None:
         """
         Test that {user_id} defaults to 'anon' for unauthenticated users.
 
@@ -228,7 +228,7 @@ class TestKeyPlaceholderResolution:
 
         @app.route('/test')
         @rate_limit("api:{user_id}", limit=100, window_secs=60)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -244,7 +244,7 @@ class TestKeyPlaceholderResolution:
                     resolved_key = call_args[0][1]
                     assert 'anon' in resolved_key
 
-    def test_resolves_multiple_placeholders(self):
+    def test_resolves_multiple_placeholders(self) -> None:
         """
         Test that multiple placeholders can be resolved in a single key.
 
@@ -258,7 +258,7 @@ class TestKeyPlaceholderResolution:
 
         @app.route('/test')
         @rate_limit("api:{user_id}:{ip}", limit=100, window_secs=60)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -284,7 +284,7 @@ class TestKeyPlaceholderResolution:
 class Test429ResponseFormat:
     """Test 429 response format and content."""
 
-    def test_429_response_has_success_false(self):
+    def test_429_response_has_success_false(self) -> None:
         """
         Test that 429 response has success: false.
 
@@ -299,7 +299,7 @@ class Test429ResponseFormat:
 
         @app.route('/test')
         @rate_limit("test:{ip}", limit=5, window_secs=60)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -312,7 +312,7 @@ class Test429ResponseFormat:
 
                 assert data.get('success') is False
 
-    def test_429_response_has_error_code(self):
+    def test_429_response_has_error_code(self) -> None:
         """
         Test that 429 response has error code RATE_LIMIT_EXCEEDED.
 
@@ -326,7 +326,7 @@ class Test429ResponseFormat:
 
         @app.route('/test')
         @rate_limit("test:{ip}", limit=5, window_secs=60)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -339,7 +339,7 @@ class Test429ResponseFormat:
 
                 assert data.get('error') == 'RATE_LIMIT_EXCEEDED'
 
-    def test_429_response_has_user_friendly_message(self):
+    def test_429_response_has_user_friendly_message(self) -> None:
         """
         Test that 429 response has a user-friendly message.
 
@@ -353,7 +353,7 @@ class Test429ResponseFormat:
 
         @app.route('/test')
         @rate_limit("test:{ip}", limit=5, window_secs=60)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -367,7 +367,7 @@ class Test429ResponseFormat:
                 assert 'message' in data
                 assert 'Too many requests' in data.get('message', '')
 
-    def test_429_response_has_retry_after_field(self):
+    def test_429_response_has_retry_after_field(self) -> None:
         """
         Test that 429 response includes retry_after field.
 
@@ -381,7 +381,7 @@ class Test429ResponseFormat:
 
         @app.route('/test')
         @rate_limit("test:{ip}", limit=5, window_secs=120)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -399,7 +399,7 @@ class Test429ResponseFormat:
 class TestRetryAfterHeader:
     """Test Retry-After header in 429 responses."""
 
-    def test_429_response_has_retry_after_header(self):
+    def test_429_response_has_retry_after_header(self) -> None:
         """
         Test that 429 response includes Retry-After header.
 
@@ -414,7 +414,7 @@ class TestRetryAfterHeader:
 
         @app.route('/test')
         @rate_limit("test:{ip}", limit=5, window_secs=60)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -426,7 +426,7 @@ class TestRetryAfterHeader:
 
                 assert 'Retry-After' in response.headers
 
-    def test_retry_after_header_matches_window_secs(self):
+    def test_retry_after_header_matches_window_secs(self) -> None:
         """
         Test that Retry-After header value matches window_secs parameter.
 
@@ -440,7 +440,7 @@ class TestRetryAfterHeader:
 
         @app.route('/test')
         @rate_limit("test:{ip}", limit=5, window_secs=300)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -452,7 +452,7 @@ class TestRetryAfterHeader:
 
                 assert response.headers.get('Retry-After') == '300'
 
-    def test_retry_after_header_is_string(self):
+    def test_retry_after_header_is_string(self) -> None:
         """
         Test that Retry-After header is a string (per HTTP spec).
 
@@ -466,7 +466,7 @@ class TestRetryAfterHeader:
 
         @app.route('/test')
         @rate_limit("test:{ip}", limit=5, window_secs=60)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -482,7 +482,7 @@ class TestRetryAfterHeader:
 class TestRateLimitDecoratorIntegration:
     """Test decorator integration with database-backed rate limiter."""
 
-    def test_decorator_calls_check_rate_limit_with_correct_params(self):
+    def test_decorator_calls_check_rate_limit_with_correct_params(self) -> None:
         """
         Test that decorator passes correct parameters to check_rate_limit.
 
@@ -497,7 +497,7 @@ class TestRateLimitDecoratorIntegration:
 
         @app.route('/test')
         @rate_limit("test:{ip}", limit=10, window_secs=120, critical=True)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -514,7 +514,7 @@ class TestRateLimitDecoratorIntegration:
                 assert call_args[0][3] == 120  # window_secs
                 assert call_args[0][4] is True  # critical
 
-    def test_decorator_uses_context_manager_for_db(self):
+    def test_decorator_uses_context_manager_for_db(self) -> None:
         """
         Test that decorator uses get_db context manager.
 
@@ -529,7 +529,7 @@ class TestRateLimitDecoratorIntegration:
 
         @app.route('/test')
         @rate_limit("test:{ip}", limit=5, window_secs=60)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -552,7 +552,7 @@ class TestRateLimitDecoratorIntegration:
 class TestRateLimitDecoratorEdgeCases:
     """Test edge cases for rate limit decorator."""
 
-    def test_decorator_with_custom_window(self):
+    def test_decorator_with_custom_window(self) -> None:
         """
         Test that custom window_secs parameter works correctly.
 
@@ -566,7 +566,7 @@ class TestRateLimitDecoratorEdgeCases:
 
         @app.route('/test')
         @rate_limit("test:{ip}", limit=5, window_secs=3600)  # 1 hour
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert
@@ -579,7 +579,7 @@ class TestRateLimitDecoratorEdgeCases:
                 # Verify retry_after matches custom window
                 assert response.headers.get('Retry-After') == '3600'
 
-    def test_decorator_preserves_route_function_metadata(self):
+    def test_decorator_preserves_route_function_metadata(self) -> None:
         """
         Test that decorator preserves the original function's metadata.
 
@@ -594,7 +594,7 @@ class TestRateLimitDecoratorEdgeCases:
 
         @app.route('/test')
         @rate_limit("test:{ip}", limit=5, window_secs=60)
-        def test_route():
+        def test_route() -> None:
             """Test route docstring."""
             return {"success": True}
 
@@ -602,7 +602,7 @@ class TestRateLimitDecoratorEdgeCases:
         # The wrapped function should preserve the original name
         assert test_route.__name__ == 'test_route'
 
-    def test_decorator_with_zero_limit(self):
+    def test_decorator_with_zero_limit(self) -> None:
         """
         Test decorator behavior with zero limit (edge case).
 
@@ -616,7 +616,7 @@ class TestRateLimitDecoratorEdgeCases:
 
         @app.route('/test')
         @rate_limit("test:{ip}", limit=0, window_secs=60)
-        def test_route():
+        def test_route() -> None:
             return {"success": True}
 
         # Act & Assert

@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     """Add Google OAuth fields to users table."""
     # Add OAuth provider columns
     op.add_column('users', sa.Column('google_id', sa.String(length=255), nullable=True))
@@ -28,7 +28,7 @@ def upgrade():
     op.create_index('ix_users_google_id', 'users', ['google_id'], unique=True)
 
 
-def downgrade():
+def downgrade() -> None:
     """Remove Google OAuth fields from users table."""
     op.drop_index('ix_users_google_id', table_name='users')
     op.drop_column('users', 'auth_provider')

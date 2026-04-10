@@ -11,7 +11,7 @@ import pytest
 class TestStatusMapping:
     """Test status mapping for transfer confirmation."""
 
-    def test_normalize_confirm_response_maps_success_to_00(self):
+    def test_normalize_confirm_response_maps_success_to_00(self) -> None:
         """Test _normalize_confirm_response maps 'success' to '00'."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -33,7 +33,7 @@ class TestStatusMapping:
             result = korapay._normalize_confirm_response(kora_response)
             assert result["responseCode"] == "00"
 
-    def test_normalize_confirm_response_maps_processing_to_z0(self):
+    def test_normalize_confirm_response_maps_processing_to_z0(self) -> None:
         """Test _normalize_confirm_response maps 'processing' to 'Z0'."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -55,7 +55,7 @@ class TestStatusMapping:
             result = korapay._normalize_confirm_response(kora_response)
             assert result["responseCode"] == "Z0"
 
-    def test_normalize_confirm_response_maps_failed_to_99(self):
+    def test_normalize_confirm_response_maps_failed_to_99(self) -> None:
         """Test _normalize_confirm_response maps 'failed' to '99'."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -77,7 +77,7 @@ class TestStatusMapping:
             result = korapay._normalize_confirm_response(kora_response)
             assert result["responseCode"] == "99"
 
-    def test_normalize_confirm_response_preserves_transaction_reference(self):
+    def test_normalize_confirm_response_preserves_transaction_reference(self) -> None:
         """Test _normalize_confirm_response preserves transaction_reference in response."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):

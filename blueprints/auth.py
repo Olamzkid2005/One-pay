@@ -195,15 +195,25 @@ def register_page():
 # ── Login ──────────────────────────────────────────────────────────────────────
 
 
+def _handle_login_2fa(db, user, username: str):
+    """Send 2FA code and redirect to verify page."""
+    from services.email import send_2fa_code
+    otp_code = str(secrets.randbelow(1000000)).zfill(6)
+    user.email_otp = otp_code
+    user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    send_2fa_code(user.email, otp_code)
+    session["pre_2fa_user_id"] = user.id
+    log_event(db, "2fa.code_sent", user_id=user.id, ip_address=client_ip(), detail={"username": username})
+    return redirect(url_for("auth.verify_2fa"))
+
+
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login_page():
     if current_user_id():
         return redirect(url_for("payments.dashboard"))
-
     if request.method == "GET":
         return render_template("login.html", csrf_token=get_csrf_token())
 
-    # CSRF first — before touching the DB or rate limiter
     username = (request.form.get("username") or "").strip()
     password = request.form.get("password") or ""
 
@@ -217,63 +227,29 @@ def login_page():
             return render_template("login.html", csrf_token=get_csrf_token())
 
         user = db.query(User).filter(User.username == username).first()
-
         if not user or not user.is_active:
             flash("Incorrect username or password.", "error")
             return render_template("login.html", username=username, csrf_token=get_csrf_token())
 
         if user.is_locked():
-            flash(
-                "Account temporarily locked due to too many failed attempts. Try again later.",
-                "error",
-            )
+            flash("Account temporarily locked due to too many failed attempts. Try again later.", "error")
             return render_template("login.html", csrf_token=get_csrf_token())
 
         if not user.check_password(password):
             user.record_failed_login(Config.LOGIN_MAX_ATTEMPTS, Config.LOCKOUT_DURATION_SECS)
-            log_event(
-                db,
-                "merchant.login_failed",
-                user_id=user.id,
-                ip_address=client_ip(),
-                detail={"username": username},
-            )
+            log_event(db, "merchant.login_failed", user_id=user.id, ip_address=client_ip(), detail={"username": username})
             flash("Incorrect username or password.", "error")
             return render_template("login.html", username=username, csrf_token=get_csrf_token())
 
         user.record_successful_login()
 
-        # 2FA CHECK - Require verification before granting full access
         if getattr(user, "two_factor_enabled", False):
-            from services.email import send_2fa_code
+            return _handle_login_2fa(db, user, username)
 
-            otp_code = str(secrets.randbelow(1000000)).zfill(6)
-            user.email_otp = otp_code
-            user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
-            send_2fa_code(user.email, otp_code)
-            session["pre_2fa_user_id"] = user.id
-            log_event(
-                db,
-                "2fa.code_sent",
-                user_id=user.id,
-                ip_address=client_ip(),
-                detail={"username": username},
-            )
-            return redirect(url_for("auth.verify_2fa"))
-
-        # Regenerate session completely to prevent session fixation attacks
         _regenerate_session_secure(user.id, user.username)
-
-        log_event(
-            db,
-            "merchant.login",
-            user_id=user.id,
-            ip_address=client_ip(),
-            detail={"username": username},
-        )
+        log_event(db, "merchant.login", user_id=user.id, ip_address=client_ip(), detail={"username": username})
         logger.info("Merchant logged in: %s", username)
-        next_url = request.args.get("next") or url_for("payments.dashboard")
-        return redirect(next_url)
+        return redirect(request.args.get("next") or url_for("payments.dashboard"))
 
 
 # ── Logout ─────────────────────────────────────────────────────────────────────
@@ -505,10 +481,7 @@ def google_config():
 
 
 def _handle_oauth_2fa_or_login(db, user, provider: str, profile: dict):
-    """
-    Handle 2FA check or direct login for OAuth flows.
-    Returns a JSON response. Sets session data.
-    """
+    """Handle 2FA check or direct login for OAuth flows. Returns JSON response or None."""
     if getattr(user, "two_factor_enabled", False):
         from services.email import send_2fa_code
         otp_code = str(secrets.randbelow(1000000)).zfill(6)
@@ -520,169 +493,95 @@ def _handle_oauth_2fa_or_login(db, user, provider: str, profile: dict):
         return jsonify({"success": True, "redirect_url": url_for("auth.verify_2fa")})
     session["user_id"] = user.id
     session["username"] = user.username
-    return None  # Caller should continue to set their own response
+    return None
+
+
+def _resolve_google_user(db, profile: dict):
+    """
+    Find or create a user from a Google OAuth profile.
+    Returns (user, event_name, flash_message).
+    Raises OnePayError on account conflict.
+    """
+    from core.exceptions import OnePayError
+
+    user = User.find_by_google_id(db, profile["google_id"])
+    if user:
+        return user, "oauth.login", None
+
+    user = User.find_by_email(db, profile["email"])
+    if user:
+        if user.google_id and user.google_id != profile["google_id"]:
+            log_event(db, "oauth.account_conflict", user_id=user.id, ip_address=client_ip(),
+                      detail={"provider": "google", "email": profile["email"]})
+            raise OnePayError("This email is already linked to a different Google account.", "ACCOUNT_CONFLICT", 409)
+        user.link_google_account(profile["google_id"], profile["profile_picture_url"], profile["full_name"])
+        db.flush()
+        return user, "oauth.account_linked", f"Welcome back, {user.username}! Your Google account has been linked."
+
+    user = User.create_from_google(db, profile)
+    db.flush()
+    db.refresh(user)
+    return user, "oauth.account_created", f"Welcome, {user.username}! Your account has been created."
 
 
 @auth_bp.route("/auth/google/callback", methods=["POST"])
 def google_callback():
-    """
-    Handle Google OAuth callback.
-    Receives ID token from frontend, validates it, and creates/links user account.
-    """
-    # Validate Content-Type
+    """Handle Google OAuth callback."""
     if request.content_type != "application/json":
         raise ValidationError("Content-Type must be application/json")
 
     data = request.get_json(silent=True) or {}
     credential = data.get("credential", "").strip()
-    csrf_token = data.get("csrf_token", "")
-
-    # Validate CSRF token
-    if not is_valid_csrf_token(csrf_token):
+    if not is_valid_csrf_token(data.get("csrf_token", "")):
         raise AuthorizationError("Session expired. Please refresh and try again.")
-
-    # Validate credential is present
     if not credential:
         raise ValidationError("Missing credential")
 
     with get_db() as db:
-        # Apply rate limiting (5 requests per IP per 60 seconds)
         if not check_rate_limit(db, f"google_oauth:{client_ip()}", limit=5, window_secs=60, critical=True):
-            log_event(
-                db,
-                "oauth.rate_limit_exceeded",
-                ip_address=client_ip(),
-                detail={"provider": "google"},
-            )
+            log_event(db, "oauth.rate_limit_exceeded", ip_address=client_ip(), detail={"provider": "google"})
             from core.exceptions import OnePayError
-
-            raise OnePayError(
-                "Too many authentication attempts. Please wait and try again.", "RATE_LIMIT_EXCEEDED", 429
-            )
+            raise OnePayError("Too many authentication attempts. Please wait and try again.", "RATE_LIMIT_EXCEEDED", 429)
 
         try:
-            # Validate token
             client_id = Config.GOOGLE_CLIENT_ID
             if not client_id:
-                logger.error("Google OAuth not configured (missing GOOGLE_CLIENT_ID)")
                 from core.exceptions import OnePayError
-
                 raise OnePayError("Google authentication is not available.", "SERVICE_UNAVAILABLE", 503)
 
-            validator = GoogleTokenValidator(client_id)
-            token_payload = validator.validate_token(credential)
-
-            # SECURITY FIX (VULN-001): Regenerate session IMMEDIATELY after token validation
-            # This MUST happen BEFORE any user lookup or account creation to prevent session fixation
-            # Attacker cannot pre-set victim's session because session is regenerated here
+            token_payload = GoogleTokenValidator(client_id).validate_token(credential)
             _regenerate_session_secure_minimal()
-
-            # Extract profile
             profile = GoogleProfileExtractor.extract_profile(token_payload)
 
-            # Check if user exists by google_id
-            user = User.find_by_google_id(db, profile["google_id"])
-
-            if user:
-                # User exists with this Google ID - log them in
-                # Session already regenerated above, just set user data
-                resp = _handle_oauth_2fa_or_login(db, user, "google", profile)
-                if resp:
-                    return resp
-                log_event(db, "oauth.login", user_id=user.id, ip_address=client_ip(),
-                          detail={"provider": "google", "email": profile["email"]})
-                logger.info("Google OAuth login: %s", user.username)
-                return jsonify({"success": True, "redirect_url": url_for("payments.dashboard")})
-
-            # User doesn't exist by google_id - check by email
-            user = User.find_by_email(db, profile["email"])
-
-            if user:
-                # Email exists - check if already linked to different Google account
-                if user.google_id and user.google_id != profile["google_id"]:
-                    log_event(
-                        db,
-                        "oauth.account_conflict",
-                        user_id=user.id,
-                        ip_address=client_ip(),
-                        detail={"provider": "google", "email": profile["email"]},
-                    )
-                    from core.exceptions import OnePayError
-
-                    raise OnePayError(
-                        "This email is already linked to a different Google account.", "ACCOUNT_CONFLICT", 409
-                    )
-
-                # Link Google account to existing user
-                user.link_google_account(
-                    profile["google_id"],
-                    profile["profile_picture_url"],
-                    profile["full_name"],
-                )
-                db.flush()
-
-                # Session already regenerated above, just set user data
-                resp = _handle_oauth_2fa_or_login(db, user, "google", profile)
-                if resp:
-                    return resp
-                log_event(db, "oauth.account_linked", user_id=user.id, ip_address=client_ip(),
-                          detail={"provider": "google", "email": profile["email"]})
-                logger.info("Google account linked to existing user: %s", user.username)
-                flash(f"Welcome back, {user.username}! Your Google account has been linked.", "success")
-                return jsonify({"success": True, "redirect_url": url_for("payments.dashboard")})
-
-            # No existing user - create new account
-            user = User.create_from_google(db, profile)
-            db.flush()
-            db.refresh(user)
-
-            # Session already regenerated above, just set user data
+            user, event_name, flash_msg = _resolve_google_user(db, profile)
             resp = _handle_oauth_2fa_or_login(db, user, "google", profile)
             if resp:
                 return resp
-            log_event(db, "oauth.account_created", user_id=user.id, ip_address=client_ip(),
-                      detail={"provider": "google", "email": profile["email"], "username": user.username})
-            logger.info("New user created via Google OAuth: %s", user.username)
-            flash(f"Welcome, {user.username}! Your account has been created.", "success")
+
+            detail = {"provider": "google", "email": profile["email"]}
+            if event_name == "oauth.account_created":
+                detail["username"] = user.username
+            log_event(db, event_name, user_id=user.id, ip_address=client_ip(), detail=detail)
+            logger.info("Google OAuth %s: %s", event_name, user.username)
+            if flash_msg:
+                flash(flash_msg, "success")
             return jsonify({"success": True, "redirect_url": url_for("payments.dashboard")})
 
         except ValueError as e:
-            # Token validation or profile extraction failed
             error_msg = str(e)
             logger.warning("Google OAuth validation failed | ip=%s error=%s", client_ip(), error_msg)
-            log_event(
-                db,
-                "oauth.authentication_failed",
-                ip_address=client_ip(),
-                detail={"provider": "google", "error": error_msg},
-            )
-            logger.warning("Google OAuth authentication failed: %s | ip=%s", error_msg, client_ip())
-
-            # Return user-friendly error message
+            log_event(db, "oauth.authentication_failed", ip_address=client_ip(), detail={"provider": "google", "error": error_msg})
             if "not verified" in error_msg.lower():
                 raise AuthenticationError("Please verify your email address with Google before signing in.")
-            else:
-                raise AuthenticationError("Authentication failed. Please try again.")
+            raise AuthenticationError("Authentication failed. Please try again.")
 
         except OnePayError:
-            raise  # Re-raise OnePayError to let the global handler deal with it
+            raise
 
         except Exception as e:
-            # Unexpected error
-            logger.error(
-                "Google OAuth error | ip=%s error=%s",
-                client_ip(),
-                e,
-                exc_info=True,
-            )
-            log_event(
-                db,
-                "oauth.internal_error",
-                ip_address=client_ip(),
-                detail={"provider": "google", "error": "Internal error"},
-            )
+            logger.error("Google OAuth error | ip=%s error=%s", client_ip(), e, exc_info=True)
+            log_event(db, "oauth.internal_error", ip_address=client_ip(), detail={"provider": "google", "error": "Internal error"})
             from core.exceptions import OnePayError
-
             raise OnePayError("An error occurred. Please try again later.", "INTERNAL_ERROR", 500)
 
 
@@ -777,6 +676,24 @@ def github_login():
         return redirect(url_for("auth.login_page"))
 
 
+def _resolve_github_user(db, profile: dict):
+    """Find or create user from GitHub profile. Returns (user, event, flash_msg)."""
+    user = User.find_by_github_id(db, profile["github_id"])
+    if user:
+        return user, "oauth.login", None
+
+    user = User.find_by_email(db, profile["email"])
+    if user:
+        user.link_github_account(profile["github_id"], profile["profile_picture_url"], profile["full_name"])
+        db.flush()
+        return user, "oauth.account_linked", f"Welcome back, {user.username}! Your GitHub account has been linked."
+
+    user = User.create_from_github(db, profile)
+    db.flush()
+    db.refresh(user)
+    return user, "oauth.account_created", f"Welcome, {user.username}! Your account has been created."
+
+
 @auth_bp.route("/auth/github/callback", methods=["GET"])
 def github_callback():
     code = request.args.get("code")
@@ -791,86 +708,18 @@ def github_callback():
 
         try:
             _regenerate_session_secure_minimal()
-
             token = GitHubOAuthService.exchange_code_for_token(code)
             profile = GitHubOAuthService.get_user_profile(token)
 
-            user = User.find_by_github_id(db, profile["github_id"])
-            if user:
-                if getattr(user, "two_factor_enabled", False):
-                    otp_code = str(secrets.randbelow(1000000)).zfill(6)
-                    user.email_otp = otp_code
-                    user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
-                    from services.email import send_2fa_code
-
-                    send_2fa_code(user.email, otp_code)
-                    session["pre_2fa_user_id"] = user.id
-                    return redirect(url_for("auth.verify_2fa"))
-
-                _regenerate_session_secure(user.id, user.username)
-                log_event(
-                    db,
-                    "oauth.login",
-                    user_id=user.id,
-                    ip_address=client_ip(),
-                    detail={"provider": "github"},
-                )
-                return redirect(url_for("payments.dashboard"))
-
-            user = User.find_by_email(db, profile["email"])
-            if user:
-                if getattr(user, "two_factor_enabled", False):
-                    otp_code = str(secrets.randbelow(1000000)).zfill(6)
-                    user.email_otp = otp_code
-                    user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
-                    from services.email import send_2fa_code
-
-                    send_2fa_code(user.email, otp_code)
-                    session["pre_2fa_user_id"] = user.id
-                    return redirect(url_for("auth.verify_2fa"))
-
-                user.link_github_account(
-                    profile["github_id"],
-                    profile["profile_picture_url"],
-                    profile["full_name"],
-                )
-                _regenerate_session_secure(user.id, user.username)
-                log_event(
-                    db,
-                    "oauth.account_linked",
-                    user_id=user.id,
-                    ip_address=client_ip(),
-                    detail={"provider": "github"},
-                )
-                flash(
-                    f"Welcome back, {user.username}! Your GitHub account has been linked.",
-                    "success",
-                )
-                return redirect(url_for("payments.dashboard"))
-
-            user = User.create_from_github(db, profile)
-            if getattr(user, "two_factor_enabled", False):
-                otp_code = str(secrets.randbelow(1000000)).zfill(6)
-                user.email_otp = otp_code
-                user.email_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
-                from services.email import send_2fa_code
-
-                send_2fa_code(user.email, otp_code)
-                session["pre_2fa_user_id"] = user.id
-                return redirect(url_for("auth.verify_2fa"))
+            user, event_name, flash_msg = _resolve_github_user(db, profile)
+            resp = _handle_oauth_2fa_or_login(db, user, "github", profile)
+            if resp:
+                return resp
 
             _regenerate_session_secure(user.id, user.username)
-            log_event(
-                db,
-                "oauth.account_created",
-                user_id=user.id,
-                ip_address=client_ip(),
-                detail={"provider": "github"},
-            )
-            flash(
-                f"Welcome, {user.username}! Your account has been created.",
-                "success",
-            )
+            log_event(db, event_name, user_id=user.id, ip_address=client_ip(), detail={"provider": "github"})
+            if flash_msg:
+                flash(flash_msg, "success")
             return redirect(url_for("payments.dashboard"))
 
         except Exception as e:

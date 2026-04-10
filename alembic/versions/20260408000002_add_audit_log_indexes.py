@@ -13,11 +13,11 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     op.create_index('ix_audit_logs_created_at', 'audit_logs', ['created_at'])
     op.create_index('ix_audit_logs_user_id', 'audit_logs', ['user_id'])
 
 
-def downgrade():
+def downgrade() -> None:
     op.drop_index('ix_audit_logs_user_id', table_name='audit_logs')
     op.drop_index('ix_audit_logs_created_at', table_name='audit_logs')

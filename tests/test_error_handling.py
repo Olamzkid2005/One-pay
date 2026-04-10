@@ -87,7 +87,7 @@ def unicode_route():
 
 
 @pytest.fixture
-def test_app():
+def test_app() -> None:
     """Create a minimal Flask app with error handlers for testing."""
     from app import create_app
     app = create_app()
@@ -113,7 +113,7 @@ def client(test_app):
 # Requirement 25.1: Test error response format
 # ============================================================================
 
-def test_validation_error_response_format(client):
+def test_validation_error_response_format(client) -> None:
     """Test ValidationError returns standardized JSON format."""
     response = client.get('/test/validation-error')
     data = json.loads(response.data)
@@ -129,7 +129,7 @@ def test_validation_error_response_format(client):
     assert data['error_code'] == "VALIDATION_ERROR"
 
 
-def test_authentication_error_response_format(client):
+def test_authentication_error_response_format(client) -> None:
     """Test AuthenticationError returns standardized JSON format."""
     response = client.get('/test/auth-error')
     data = json.loads(response.data)
@@ -139,7 +139,7 @@ def test_authentication_error_response_format(client):
     assert data['error_code'] == "AUTHENTICATION_ERROR"
 
 
-def test_authorization_error_response_format(client):
+def test_authorization_error_response_format(client) -> None:
     """Test AuthorizationError returns standardized JSON format."""
     response = client.get('/test/authz-error')
     data = json.loads(response.data)
@@ -149,7 +149,7 @@ def test_authorization_error_response_format(client):
     assert data['error_code'] == "AUTHORIZATION_ERROR"
 
 
-def test_provider_error_response_format(client):
+def test_provider_error_response_format(client) -> None:
     """Test ProviderError returns standardized JSON format."""
     response = client.get('/test/provider-error')
     data = json.loads(response.data)
@@ -159,7 +159,7 @@ def test_provider_error_response_format(client):
     assert data['error_code'] == "PROVIDER_ERROR"
 
 
-def test_generic_onepay_error_response_format(client):
+def test_generic_onepay_error_response_format(client) -> None:
     """Test generic OnePayError returns standardized JSON format."""
     response = client.get('/test/generic-error')
     data = json.loads(response.data)
@@ -169,7 +169,7 @@ def test_generic_onepay_error_response_format(client):
     assert data['error_code'] == "CUSTOM_ERROR"
 
 
-def test_error_response_has_no_extra_fields(client):
+def test_error_response_has_no_extra_fields(client) -> None:
     """Test error responses don't include extra fields beyond success, message, error_code."""
     response = client.get('/test/validation-error')
     data = json.loads(response.data)
@@ -182,31 +182,31 @@ def test_error_response_has_no_extra_fields(client):
 # Requirement 25.2: Test status codes
 # ============================================================================
 
-def test_validation_error_status_code(client):
+def test_validation_error_status_code(client) -> None:
     """Test ValidationError returns HTTP 400."""
     response = client.get('/test/validation-error')
     assert response.status_code == 400
 
 
-def test_authentication_error_status_code(client):
+def test_authentication_error_status_code(client) -> None:
     """Test AuthenticationError returns HTTP 401."""
     response = client.get('/test/auth-error')
     assert response.status_code == 401
 
 
-def test_authorization_error_status_code(client):
+def test_authorization_error_status_code(client) -> None:
     """Test AuthorizationError returns HTTP 403."""
     response = client.get('/test/authz-error')
     assert response.status_code == 403
 
 
-def test_provider_error_status_code(client):
+def test_provider_error_status_code(client) -> None:
     """Test ProviderError returns HTTP 502."""
     response = client.get('/test/provider-error')
     assert response.status_code == 502
 
 
-def test_custom_status_code(client):
+def test_custom_status_code(client) -> None:
     """Test OnePayError respects custom status codes."""
     response = client.get('/test/custom-status')
     assert response.status_code == 418
@@ -216,7 +216,7 @@ def test_custom_status_code(client):
 # Requirement 25.3: Test correlation ID in errors
 # ============================================================================
 
-def test_correlation_id_in_error_logs(client, caplog):
+def test_correlation_id_in_error_logs(client, caplog) -> None:
     """Test that correlation ID is included in error logs."""
     # Set log level to capture error logs
     with caplog.at_level(logging.ERROR):
@@ -238,7 +238,7 @@ def test_correlation_id_in_error_logs(client, caplog):
     assert error_record.correlation_id == 'test-correlation-123'
 
 
-def test_correlation_id_generated_when_not_provided(client, caplog):
+def test_correlation_id_generated_when_not_provided(client, caplog) -> None:
     """Test that correlation ID is generated when not provided in request."""
     with caplog.at_level(logging.ERROR):
         client.get('/test/validation-error')
@@ -253,7 +253,7 @@ def test_correlation_id_generated_when_not_provided(client, caplog):
     assert len(error_record.correlation_id) > 0
 
 
-def test_correlation_id_in_response_header(client):
+def test_correlation_id_in_response_header(client) -> None:
     """Test that correlation ID is returned in X-Correlation-ID header."""
     response = client.get(
         '/test/validation-error',
@@ -265,7 +265,7 @@ def test_correlation_id_in_response_header(client):
     assert response.headers['X-Correlation-ID'] == 'test-corr-456'
 
 
-def test_error_log_contains_error_code(client, caplog):
+def test_error_log_contains_error_code(client, caplog) -> None:
     """Test that error logs contain the error code."""
     with caplog.at_level(logging.ERROR):
         client.get('/test/validation-error')
@@ -278,7 +278,7 @@ def test_error_log_contains_error_code(client, caplog):
     assert 'VALIDATION_ERROR' in log_message
 
 
-def test_error_log_contains_message(client, caplog):
+def test_error_log_contains_message(client, caplog) -> None:
     """Test that error logs contain the error message."""
     with caplog.at_level(logging.ERROR):
         client.get('/test/validation-error')
@@ -295,7 +295,7 @@ def test_error_log_contains_message(client, caplog):
 # Requirement 25.4: Test internal details not exposed
 # ============================================================================
 
-def test_provider_error_hides_internal_details(client):
+def test_provider_error_hides_internal_details(client) -> None:
     """Test that ProviderError doesn't expose internal error details."""
     response = client.get('/test/internal-details')
     data = json.loads(response.data)
@@ -306,7 +306,7 @@ def test_provider_error_hides_internal_details(client):
     assert data['message'] == "Payment provider unavailable"
 
 
-def test_validation_error_no_stack_trace(client):
+def test_validation_error_no_stack_trace(client) -> None:
     """Test that error responses don't include stack traces."""
     response = client.get('/test/validation-error')
     data = json.loads(response.data)
@@ -318,7 +318,7 @@ def test_validation_error_no_stack_trace(client):
     assert 'line ' not in response_str
 
 
-def test_error_response_no_exception_type(client):
+def test_error_response_no_exception_type(client) -> None:
     """Test that error responses don't expose Python exception types."""
     response = client.get('/test/validation-error')
     data = json.loads(response.data)
@@ -330,7 +330,7 @@ def test_error_response_no_exception_type(client):
     assert 'Error' not in data['message']  # Only in error_code
 
 
-def test_error_response_no_file_paths(client):
+def test_error_response_no_file_paths(client) -> None:
     """Test that error responses don't expose file paths."""
     response = client.get('/test/unexpected')
     data = json.loads(response.data)
@@ -342,7 +342,7 @@ def test_error_response_no_file_paths(client):
     assert '.py' not in response_str
 
 
-def test_generic_error_message_for_unexpected_errors(client):
+def test_generic_error_message_for_unexpected_errors(client) -> None:
     """Test that unexpected errors return generic messages."""
     response = client.get('/test/unexpected')
     data = json.loads(response.data)
@@ -358,7 +358,7 @@ def test_generic_error_message_for_unexpected_errors(client):
 # Edge cases and integration tests
 # ============================================================================
 
-def test_multiple_errors_same_request(client):
+def test_multiple_errors_same_request(client) -> None:
     """Test that each error in a request gets its own correlation ID."""
     # First request
     response1 = client.get('/test/validation-error')
@@ -372,7 +372,7 @@ def test_multiple_errors_same_request(client):
     assert corr_id_1 != corr_id_2
 
 
-def test_error_with_special_characters(client):
+def test_error_with_special_characters(client) -> None:
     """Test error messages with special characters are properly escaped."""
     response = client.get('/test/special-chars')
     data = json.loads(response.data)
@@ -383,7 +383,7 @@ def test_error_with_special_characters(client):
     assert isinstance(data, dict)
 
 
-def test_error_with_unicode(client):
+def test_error_with_unicode(client) -> None:
     """Test error messages with unicode characters."""
     response = client.get('/test/unicode')
     data = json.loads(response.data)
@@ -392,14 +392,14 @@ def test_error_with_unicode(client):
     assert data['error_code'] == 'VALIDATION_ERROR'
 
 
-def test_error_response_content_type(client):
+def test_error_response_content_type(client) -> None:
     """Test that error responses have correct Content-Type header."""
     response = client.get('/test/validation-error')
 
     assert 'application/json' in response.content_type
 
 
-def test_all_error_types_have_consistent_format(client):
+def test_all_error_types_have_consistent_format(client) -> None:
     """Test that all error types follow the same response format."""
     test_routes = [
         ('/test/validation-error', 400),

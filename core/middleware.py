@@ -24,19 +24,21 @@ def register_middleware(app: Flask) -> None:
 
 
 def _register_before_request(app: Flask) -> None:
+    _register_security_checks(app)
+    _register_session_management(app)
+
+
+def _register_security_checks(app: Flask) -> None:
     @app.before_request
     def verify_production_config():
         if os.getenv("APP_ENV") == "production":
             assert not app.config["DEBUG"], "DEBUG must be False in production"
-            assert app.config["SESSION_COOKIE_SECURE"], (
-                "SESSION_COOKIE_SECURE must be True in production"
-            )
+            assert app.config["SESSION_COOKIE_SECURE"], "SESSION_COOKIE_SECURE must be True in production"
             assert Config.ENFORCE_HTTPS, "HTTPS must be enforced in production"
 
     @app.before_request
     def inject_correlation_id():
-        correlation_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
-        g.correlation_id = correlation_id
+        g.correlation_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
 
     @app.before_request
     def inject_request_id():
@@ -59,14 +61,20 @@ def _register_before_request(app: Flask) -> None:
                 g.user_id = user_id
                 g.api_key = api_key
                 with get_db() as db:
-                    log_event(
-                        db,
-                        "api_key.used",
-                        user_id=user_id,
-                        ip_address=client_ip(),
-                        detail={"endpoint": request.endpoint},
-                    )
+                    log_event(db, "api_key.used", user_id=user_id, ip_address=client_ip(), detail={"endpoint": request.endpoint})
 
+    @app.before_request
+    def enforce_https():
+        if not Config.ENFORCE_HTTPS or Config.DEBUG:
+            return None
+        if request.is_secure:
+            return None
+        if Config.TRUST_X_FORWARDED_PROTO and (request.headers.get("X-Forwarded-Proto") or "").lower() == "https":
+            return None
+        return redirect(request.url.replace("http://", "https://", 1), code=301)
+
+
+def _register_session_management(app: Flask) -> None:
     @app.before_request
     def invalidate_old_sessions():
         if app.config.get("TESTING"):
@@ -85,24 +93,12 @@ def _register_before_request(app: Flask) -> None:
         if app.config.get("TESTING"):
             return None
         from core.ip import client_ip
-
         if "user_id" not in session:
             return None
         result = _check_ip_binding(client_ip())
         if result is not None:
             return result
         return _check_ua_binding()
-
-    @app.before_request
-    def enforce_https():
-        if not Config.ENFORCE_HTTPS or Config.DEBUG:
-            return None
-        if request.is_secure:
-            return None
-        if Config.TRUST_X_FORWARDED_PROTO:
-            if (request.headers.get("X-Forwarded-Proto") or "").lower() == "https":
-                return None
-        return redirect(request.url.replace("http://", "https://", 1), code=301)
 
 
 def _check_session_max_age() -> None:
@@ -211,7 +207,7 @@ def _register_after_request(app: Flask) -> None:
         response.headers.setdefault(
             "Content-Security-Policy",
             f"default-src 'self'; "
-            f"script-src 'self' 'nonce-{nonce}' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://accounts.google.com/gsi/ https://accounts.google.com; "
+            f"script-src 'self' 'unsafe-inline' 'nonce-{nonce}' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://accounts.google.com/gsi/ https://accounts.google.com; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://accounts.google.com; "
             "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com; "
             "img-src 'self' data: https://lh3.googleusercontent.com; "

@@ -5,7 +5,7 @@ import os
 import pytest
 
 
-def test_api_key_config_defaults():
+def test_api_key_config_defaults() -> None:
     """Test API key configuration defaults"""
     from config import BaseConfig
 
@@ -13,7 +13,7 @@ def test_api_key_config_defaults():
     assert BaseConfig.API_KEY_GENERATION_RATE_LIMIT == 5
 
 
-def test_inbound_webhook_config_defaults(monkeypatch):
+def test_inbound_webhook_config_defaults(monkeypatch) -> None:
     """Test inbound webhook configuration defaults"""
     # Clear the env var to test the default
     monkeypatch.delenv("INBOUND_WEBHOOK_SECRET", raising=False)
@@ -28,7 +28,7 @@ def test_inbound_webhook_config_defaults(monkeypatch):
     assert config.BaseConfig.INBOUND_WEBHOOK_SECRET == ""
 
 
-def test_api_rate_limit_config_defaults():
+def test_api_rate_limit_config_defaults() -> None:
     """Test API rate limit configuration defaults"""
     from config import BaseConfig
 
@@ -36,7 +36,7 @@ def test_api_rate_limit_config_defaults():
     assert BaseConfig.RATE_LIMIT_API_STATUS_CHECK == 500
 
 
-def test_production_validates_inbound_webhook_secret(monkeypatch):
+def test_production_validates_inbound_webhook_secret(monkeypatch) -> None:
     """Test production requires INBOUND_WEBHOOK_SECRET"""
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("SECRET_KEY", "a" * 32)
@@ -53,7 +53,7 @@ def test_production_validates_inbound_webhook_secret(monkeypatch):
         ProductionConfig.validate()
 
 
-def test_production_validates_inbound_webhook_secret_length(monkeypatch):
+def test_production_validates_inbound_webhook_secret_length(monkeypatch) -> None:
     """Test production requires INBOUND_WEBHOOK_SECRET minimum 32 chars"""
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("SECRET_KEY", "a" * 32)

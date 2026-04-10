@@ -15,7 +15,7 @@ import pytest
 class TestWebhookIdempotencyCleanupIntegration:
     """Integration tests for webhook idempotency cleanup."""
 
-    def test_cleanup_deletes_old_records_integration(self):
+    def test_cleanup_deletes_old_records_integration(self) -> None:
         """
         Test that cleanup deletes old webhook idempotency records.
 
@@ -66,7 +66,7 @@ class TestWebhookIdempotencyCleanupIntegration:
         mock_query.filter.assert_called_once()
         mock_filter.delete.assert_called_once()
 
-    def test_cleanup_preserves_recent_records(self):
+    def test_cleanup_preserves_recent_records(self) -> None:
         """
         Test that cleanup does not delete recent records.
 
@@ -90,7 +90,7 @@ class TestWebhookIdempotencyCleanupIntegration:
         assert deleted_count == 0
         mock_db.commit.assert_called_once()
 
-    def test_cleanup_can_be_called_manually(self):
+    def test_cleanup_can_be_called_manually(self) -> None:
         """
         Test that cleanup function can be called manually (not just as a periodic task).
 

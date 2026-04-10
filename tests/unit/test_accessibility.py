@@ -38,19 +38,19 @@ def _read_css(name):
 class TestBaseHtml:
     """Accessibility checks for the base template."""
 
-    def test_lang_attribute(self):
+    def test_lang_attribute(self) -> None:
         """base.html must declare lang="en" for screen readers (Req 16.5)."""
         content = _read_template("base.html")
         assert 'lang="en"' in content, 'base.html must have <html lang="en">'
 
-    def test_theme_toggle_has_aria_label(self):
+    def test_theme_toggle_has_aria_label(self) -> None:
         """Theme toggle button must have aria-label (Req 16.1)."""
         content = _read_template("base.html")
         assert 'aria-label="Toggle dark/light mode"' in content, (
             "Theme toggle button must have aria-label='Toggle dark/light mode'"
         )
 
-    def test_theme_toggle_is_button(self):
+    def test_theme_toggle_is_button(self) -> None:
         """Theme toggle must be a <button> element for keyboard access (Req 16.4)."""
         content = _read_template("base.html")
         assert re.search(r'<button[^>]+id="theme-toggle"', content), (
@@ -63,33 +63,33 @@ class TestBaseHtml:
 class TestLoginHtml:
     """Accessibility checks for the login template."""
 
-    def test_has_main_element(self):
+    def test_has_main_element(self) -> None:
         """login.html must have a <main> landmark element (Req 16.5)."""
         content = _read_template("login.html")
         assert "<main" in content, "login.html must contain a <main> element"
 
-    def test_username_label_for_attribute(self):
+    def test_username_label_for_attribute(self) -> None:
         """Username label must have for='username' (Req 16.2)."""
         content = _read_template("login.html")
         assert 'for="username"' in content, (
             "Username label must have for='username'"
         )
 
-    def test_username_input_has_id(self):
+    def test_username_input_has_id(self) -> None:
         """Username input must have id='username' matching the label (Req 16.2)."""
         content = _read_template("login.html")
         assert 'id="username"' in content, (
             "Username input must have id='username'"
         )
 
-    def test_password_label_for_attribute(self):
+    def test_password_label_for_attribute(self) -> None:
         """Password label must have for='password' (Req 16.2)."""
         content = _read_template("login.html")
         assert 'for="password"' in content, (
             "Password label must have for='password'"
         )
 
-    def test_password_toggle_has_aria_label(self):
+    def test_password_toggle_has_aria_label(self) -> None:
         """Password visibility toggle must have aria-label (Req 16.1)."""
         content = _read_template("login.html")
         assert 'aria-label="Toggle password visibility"' in content, (
@@ -102,32 +102,32 @@ class TestLoginHtml:
 class TestRegisterHtml:
     """Accessibility checks for the registration template."""
 
-    def test_has_main_element(self):
+    def test_has_main_element(self) -> None:
         """register.html must have a <main> landmark element (Req 16.5)."""
         content = _read_template("register.html")
         assert "<main" in content, "register.html must contain a <main> element"
 
-    def test_username_label_for_attribute(self):
+    def test_username_label_for_attribute(self) -> None:
         """Username label must have for='username' (Req 16.2)."""
         content = _read_template("register.html")
         assert 'for="username"' in content
 
-    def test_email_label_for_attribute(self):
+    def test_email_label_for_attribute(self) -> None:
         """Email label must have for='email' (Req 16.2)."""
         content = _read_template("register.html")
         assert 'for="email"' in content
 
-    def test_password_label_for_attribute(self):
+    def test_password_label_for_attribute(self) -> None:
         """Password label must have for='password' (Req 16.2)."""
         content = _read_template("register.html")
         assert 'for="password"' in content
 
-    def test_confirm_password_label_for_attribute(self):
+    def test_confirm_password_label_for_attribute(self) -> None:
         """Confirm password label must have for='password2' (Req 16.2)."""
         content = _read_template("register.html")
         assert 'for="password2"' in content
 
-    def test_password_toggle_has_aria_label(self):
+    def test_password_toggle_has_aria_label(self) -> None:
         """Password toggle buttons must have aria-label (Req 16.1)."""
         content = _read_template("register.html")
         assert 'aria-label="Toggle password visibility"' in content
@@ -138,17 +138,17 @@ class TestRegisterHtml:
 class TestForgotPasswordHtml:
     """Accessibility checks for the forgot password template."""
 
-    def test_has_main_element(self):
+    def test_has_main_element(self) -> None:
         """forgot_password.html must have a <main> landmark element (Req 16.5)."""
         content = _read_template("forgot_password.html")
         assert "<main" in content
 
-    def test_username_label_for_attribute(self):
+    def test_username_label_for_attribute(self) -> None:
         """Username label must have for='username' (Req 16.2)."""
         content = _read_template("forgot_password.html")
         assert 'for="username"' in content
 
-    def test_username_input_has_id(self):
+    def test_username_input_has_id(self) -> None:
         """Username input must have id='username' (Req 16.2)."""
         content = _read_template("forgot_password.html")
         assert 'id="username"' in content
@@ -159,14 +159,14 @@ class TestForgotPasswordHtml:
 class TestInputCss:
     """Accessibility checks for the CSS file."""
 
-    def test_focus_visible_styles_exist(self):
+    def test_focus_visible_styles_exist(self) -> None:
         """input.css must define :focus-visible styles (Req 16.3)."""
         content = _read_css("input.css")
         assert ":focus-visible" in content, (
             "input.css must contain :focus-visible styles for keyboard navigation"
         )
 
-    def test_focus_visible_has_outline(self):
+    def test_focus_visible_has_outline(self) -> None:
         """Focus-visible styles must include an outline (Req 16.3)."""
         content = _read_css("input.css")
         # Find the focus-visible block and verify outline is set
@@ -174,7 +174,7 @@ class TestInputCss:
             "Focus-visible styles must set an outline property"
         )
 
-    def test_contrast_ratio_comment_exists(self):
+    def test_contrast_ratio_comment_exists(self) -> None:
         """input.css must document color contrast ratios (Req 16.6)."""
         content = _read_css("input.css")
         assert "Contrast ratio" in content or "contrast ratio" in content, (
@@ -187,7 +187,7 @@ class TestInputCss:
 class TestLoadingStatesJs:
     """Verify loading-states.js exists for keyboard user feedback (Req 16.4)."""
 
-    def test_loading_states_js_exists(self):
+    def test_loading_states_js_exists(self) -> None:
         """loading-states.js must exist to provide keyboard-accessible feedback."""
         path = os.path.join(_project_root(), "static", "js", "loading-states.js")
         assert os.path.isfile(path), "static/js/loading-states.js must exist"

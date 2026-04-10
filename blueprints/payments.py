@@ -570,26 +570,93 @@ def _try_send_invoice_email(db, invoice, transaction: Transaction, payment_url: 
         )
 
 
-@payments_bp.route("/payments/link", methods=["POST"])
-def create_payment_link():
+def _get_rate_limit_key_and_limit() -> tuple[str, int]:
+    """Return (rate_key, limit) for the current request context."""
+    from flask import g
+
+    from core.api_auth import is_api_key_authenticated
+    if is_api_key_authenticated():
+        return f"api_link:{g.api_key}", Config.RATE_LIMIT_API_LINK_CREATE
+    return f"link:user:{current_user_id()}", Config.RATE_LIMIT_LINK_CREATE
+
+
+def _validate_payment_link_request() -> None:
+    """Validate Content-Type and CSRF for payment link creation. Raises on failure."""
+    from core.api_auth import is_api_key_authenticated
     if request.content_type != "application/json":
         from core.exceptions import OnePayError
         raise OnePayError("Content-Type must be application/json", "UNSUPPORTED_MEDIA_TYPE", 415)
-    if not current_user_id():
-        return unauthenticated()
-
-    from core.api_auth import is_api_key_authenticated
     if not is_api_key_authenticated():
         csrf_header = request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token")
         if not is_valid_csrf_token(csrf_header):
             raise AuthorizationError("CSRF validation failed")
 
+
+def _build_payment_link_transaction(db, data: dict, amount, idempotency_key) -> "Transaction":
+    """Build and persist a new Transaction for a payment link."""
+    tx_ref = generate_tx_reference()
+    expires_at = generate_expiration_time()
+    hash_token = generate_hash_token(tx_ref, amount, expires_at)
+
+    user = db.query(User).filter(User.id == current_user_id()).first()
+    per_link_webhook = validate_webhook_url(data.get("webhook_url", ""))
+    webhook_url = per_link_webhook or (user.webhook_url if user else None)
+
+    description = _safe(data.get("description"))
+    if description and len(description) > 255:
+        raise ValidationError("Description too long (max 255 characters)")
+
+    transaction = Transaction(
+        tx_ref=tx_ref,
+        idempotency_key=idempotency_key,
+        user_id=current_user_id(),
+        amount=amount,
+        currency=str(data.get("currency", "NGN")).upper()[:3],
+        description=description,
+        customer_email=_safe_email(data.get("customer_email")),
+        customer_phone=_safe_phone(data.get("customer_phone")),
+        return_url=validate_return_url(data.get("return_url")),
+        webhook_url=webhook_url,
+        hash_token=hash_token,
+        expires_at=expires_at,
+    )
+    _attach_virtual_account(db, transaction, amount)
+    db.add(transaction)
+    db.flush()
+    db.refresh(transaction)
+    return transaction, user
+
+
+def _build_payment_link_response(transaction, payment_url: str, invoice_number) -> dict:
+    """Build the JSON response dict for a created payment link."""
+    data = {
+        "success": True,
+        "message": "Payment link created successfully",
+        "tx_ref": transaction.tx_ref,
+        "payment_url": payment_url,
+        "amount": str(transaction.amount),
+        "currency": transaction.currency,
+        "description": transaction.description,
+        "expires_at": transaction.expires_at_utc_iso(),
+        "virtual_account_number": transaction.virtual_account_number,
+        "virtual_bank_name": transaction.virtual_bank_name,
+        "virtual_account_name": transaction.virtual_account_name,
+        "qr_code_payment_url": transaction.qr_code_payment_url,
+        "qr_code_virtual_account": transaction.qr_code_virtual_account,
+    }
+    if invoice_number:
+        data["invoice_number"] = invoice_number
+    return data
+
+
+@payments_bp.route("/payments/link", methods=["POST"])
+def create_payment_link():
+    _validate_payment_link_request()
+    if not current_user_id():
+        return unauthenticated()
+
     with get_db() as db:
-        from flask import g
-        if is_api_key_authenticated():
-            rate_key, limit = f"api_link:{g.api_key}", Config.RATE_LIMIT_API_LINK_CREATE
-        else:
-            rate_key, limit = f"link:user:{current_user_id()}", Config.RATE_LIMIT_LINK_CREATE
+        rate_key, limit = _get_rate_limit_key_and_limit()
         if not check_rate_limit(db, rate_key, limit):
             return rate_limited()
 
@@ -601,14 +668,10 @@ def create_payment_link():
             base_url = request.host_url.rstrip("/")
             logger.info("Idempotent link returned | merchant=%s ref=%s", current_username(), existing.tx_ref)
             return jsonify({
-                "success": True,
-                "message": "Existing payment link returned (idempotent)",
-                "tx_ref": existing.tx_ref,
-                "payment_url": f"{base_url}/pay/{existing.tx_ref}",
-                "amount": str(existing.amount),
-                "currency": existing.currency,
-                "description": existing.description,
-                "expires_at": existing.expires_at_utc_iso(),
+                "success": True, "message": "Existing payment link returned (idempotent)",
+                "tx_ref": existing.tx_ref, "payment_url": f"{base_url}/pay/{existing.tx_ref}",
+                "amount": str(existing.amount), "currency": existing.currency,
+                "description": existing.description, "expires_at": existing.expires_at_utc_iso(),
                 "virtual_account_number": existing.virtual_account_number,
                 "virtual_bank_name": existing.virtual_bank_name,
                 "virtual_account_name": existing.virtual_account_name,
@@ -617,75 +680,23 @@ def create_payment_link():
             }), 200
 
         amount = _parse_amount(data.get("amount"))
-        tx_ref = generate_tx_reference()
-        expires_at = generate_expiration_time()
-        hash_token = generate_hash_token(tx_ref, amount, expires_at)
-
-        user = db.query(User).filter(User.id == current_user_id()).first()
-        per_link_webhook = validate_webhook_url(data.get("webhook_url", ""))
-        webhook_url = per_link_webhook or (user.webhook_url if user else None)
-
-        description = _safe(data.get("description"))
-        if description and len(description) > 255:
-            raise ValidationError("Description too long (max 255 characters)")
-
-        transaction = Transaction(
-            tx_ref=tx_ref,
-            idempotency_key=idempotency_key,
-            user_id=current_user_id(),
-            amount=amount,
-            currency=str(data.get("currency", "NGN")).upper()[:3],
-            description=description,
-            customer_email=_safe_email(data.get("customer_email")),
-            customer_phone=_safe_phone(data.get("customer_phone")),
-            return_url=validate_return_url(data.get("return_url")),
-            webhook_url=webhook_url,
-            hash_token=hash_token,
-            expires_at=expires_at,
-        )
-
-        _attach_virtual_account(db, transaction, amount)
-        db.add(transaction)
-        db.flush()
-        db.refresh(transaction)
+        transaction, user = _build_payment_link_transaction(db, data, amount, idempotency_key)
         cache_delete(f"payment_summary:{current_user_id()}")
 
         base_url = request.host_url.rstrip("/")
-        payment_url = f"{base_url}/pay/{tx_ref}"
+        payment_url = f"{base_url}/pay/{transaction.tx_ref}"
 
-        _generate_qr_codes(transaction, payment_url, amount, description)
+        _generate_qr_codes(transaction, payment_url, amount, transaction.description)
         invoice_number = _auto_create_invoice(db, transaction, user, payment_url)
 
-        log_event(
-            db, "link.created",
-            user_id=current_user_id(), tx_ref=tx_ref, ip_address=client_ip(),
-            detail={"amount": str(amount), "currency": transaction.currency},
-        )
-        logger.info("Payment link created | merchant=%s ref=%s amount=%s", current_username(), tx_ref, amount)
-        if tx_ref.startswith("VP-BILL-"):
-            logger.info(
-                "VoicePay payment link created | tx_ref=%s merchant=%s amount=₦%.2f description=%s",
-                tx_ref, current_username(), float(amount), description or "N/A",
-            )
+        log_event(db, "link.created", user_id=current_user_id(), tx_ref=transaction.tx_ref,
+                  ip_address=client_ip(), detail={"amount": str(amount), "currency": transaction.currency})
+        logger.info("Payment link created | merchant=%s ref=%s amount=%s", current_username(), transaction.tx_ref, amount)
+        if transaction.tx_ref.startswith("VP-BILL-"):
+            logger.info("VoicePay payment link created | tx_ref=%s merchant=%s amount=₦%.2f description=%s",
+                        transaction.tx_ref, current_username(), float(amount), transaction.description or "N/A")
 
-        response_data = {
-            "success": True,
-            "message": "Payment link created successfully",
-            "tx_ref": tx_ref,
-            "payment_url": payment_url,
-            "amount": str(amount),
-            "currency": transaction.currency,
-            "description": transaction.description,
-            "expires_at": transaction.expires_at_utc_iso(),
-            "virtual_account_number": transaction.virtual_account_number,
-            "virtual_bank_name": transaction.virtual_bank_name,
-            "virtual_account_name": transaction.virtual_account_name,
-            "qr_code_payment_url": transaction.qr_code_payment_url,
-            "qr_code_virtual_account": transaction.qr_code_virtual_account,
-        }
-        if invoice_number:
-            response_data["invoice_number"] = invoice_number
-        return jsonify(response_data), 201
+        return jsonify(_build_payment_link_response(transaction, payment_url, invoice_number)), 201
 
 
 # ── Transaction status ─────────────────────────────────────────────────────────
@@ -807,412 +818,63 @@ def transaction_history():
 # ── Re-issue expired link ──────────────────────────────────────────────────────
 
 
+def _build_reissued_transaction(original, new_tx_ref: str, new_expires_at, new_hash_token):
+    """Build a new Transaction from an original's details."""
+    return Transaction(
+        tx_ref=new_tx_ref,
+        user_id=original.user_id,
+        amount=original.amount,
+        currency=original.currency,
+        description=original.description,
+        customer_email=original.customer_email,
+        customer_phone=original.customer_phone,
+        return_url=original.return_url,
+        webhook_url=original.webhook_url,
+        hash_token=new_hash_token,
+        expires_at=new_expires_at,
+    )
+
+
 @payments_bp.route("/payments/reissue/<tx_ref>", methods=["POST"])
 def reissue_payment_link(tx_ref):
-    # VULN-007 FIX: Validate Content-Type for JSON API
-    if request.content_type != "application/json":
-        raise ValidationError("Content-Type must be application/json")
+    _validate_payment_link_request()
     if not current_user_id():
         return unauthenticated()
-
-    # Skip CSRF for API key authenticated requests
-    from core.api_auth import is_api_key_authenticated
-
-    if not is_api_key_authenticated():
-        csrf_header = request.headers.get("X-CSRFToken") or request.headers.get(
-            "X-CSRF-Token"
-        )
-        if not is_valid_csrf_token(csrf_header):
-            raise AuthorizationError("CSRF validation failed")
-
     if not valid_tx_ref(tx_ref):
         raise ValidationError("Invalid transaction reference format")
 
     with get_db() as db:
-        # Fetch original transaction
         original = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
-
-        if not original:
+        if not original or original.user_id != current_user_id():
             raise ValidationError("Transaction not found")
-
-        # Verify ownership
-        if original.user_id != current_user_id():
-            raise ValidationError("Transaction not found")
-
-        # Don't re-issue verified transactions
         if original.status == TransactionStatus.VERIFIED or original.transfer_confirmed:
             raise ValidationError("Cannot re-issue a verified transaction")
 
-        # Generate new transaction with same details
         new_tx_ref = generate_tx_reference()
         new_expires_at = generate_expiration_time()
-        new_hash_token = generate_hash_token(
-            new_tx_ref, original.amount, new_expires_at
-        )
+        new_hash_token = generate_hash_token(new_tx_ref, original.amount, new_expires_at)
+        new_transaction = _build_reissued_transaction(original, new_tx_ref, new_expires_at, new_hash_token)
 
-        new_transaction = Transaction(
-            tx_ref=new_tx_ref,
-            user_id=current_user_id(),
-            amount=original.amount,
-            currency=original.currency,
-            description=original.description,
-            customer_email=original.customer_email,
-            customer_phone=original.customer_phone,
-            return_url=original.return_url,
-            webhook_url=original.webhook_url,
-            hash_token=new_hash_token,
-            expires_at=new_expires_at,
-        )
-
-        # Create virtual account with KoraPay
-        if korapay.is_transfer_configured():
-            amount_kobo = int(round(original.amount * 100))
-            try:
-                va = korapay.create_virtual_account(
-                    transaction_reference=new_tx_ref,
-                    amount_kobo=amount_kobo,
-                    account_name=f"{current_username()} - OnePay Payment",
-                )
-                # Store virtual account details
-                new_transaction.virtual_account_number = va.get("accountNumber")
-                new_transaction.virtual_bank_name = va.get("bankName")
-                new_transaction.virtual_account_name = va.get("accountName")
-                logger.info(
-                    "Virtual account created for reissue | ref=%s acct=%s",
-                    new_tx_ref,
-                    va.get("accountNumber"),
-                )
-            except KoraPayError as e:
-                logger.error("Virtual account creation failed for reissue: %s", e)
-                raise ProviderError("Payment provider unavailable", provider="KoraPay")
-
+        _attach_virtual_account(db, new_transaction, original.amount)
         db.add(new_transaction)
         db.flush()
         db.refresh(new_transaction)
 
-        log_event(
-            db,
-            "link.reissued",
-            user_id=current_user_id(),
-            tx_ref=new_tx_ref,
-            ip_address=client_ip(),
-            detail={"original_tx_ref": tx_ref, "amount": str(original.amount)},
-        )
+        log_event(db, "link.reissued", user_id=current_user_id(), tx_ref=new_tx_ref, ip_address=client_ip(),
+                  detail={"original_tx_ref": tx_ref, "amount": str(original.amount)})
 
         base_url = request.host_url.rstrip("/")
         payment_url = f"{base_url}/pay/{new_tx_ref}"
+        logger.info("Payment link re-issued | merchant=%s original=%s new=%s", current_username(), tx_ref, new_tx_ref)
 
-        logger.info(
-            "Payment link re-issued | merchant=%s original=%s new=%s",
-            current_username(),
-            tx_ref,
-            new_tx_ref,
-        )
-
-        return jsonify(
-            {
-                "success": True,
-                "message": "Payment link re-issued successfully",
-                "tx_ref": new_tx_ref,
-                "payment_url": payment_url,
-                "amount": str(new_transaction.amount),
-                "currency": new_transaction.currency,
-                "description": new_transaction.description,
-                "expires_at": new_transaction.expires_at_utc_iso(),
-                "virtual_account_number": new_transaction.virtual_account_number,
-                "virtual_bank_name": new_transaction.virtual_bank_name,
-                "virtual_account_name": new_transaction.virtual_account_name,
-            }
-        ), 201
+        return jsonify({
+            "success": True, "message": "Payment link re-issued successfully",
+            "tx_ref": new_tx_ref, "payment_url": payment_url,
+            "amount": str(new_transaction.amount), "currency": new_transaction.currency,
+            "description": new_transaction.description, "expires_at": new_transaction.expires_at_utc_iso(),
+            "virtual_account_number": new_transaction.virtual_account_number,
+            "virtual_bank_name": new_transaction.virtual_bank_name,
+            "virtual_account_name": new_transaction.virtual_account_name,
+        }), 201
 
 
-# ── Audit log for transaction ─────────────────────────────────────────────────
-
-
-@rate_limit("audit:{user_id}", limit=20, window_secs=60)
-@payments_bp.route("/payments/audit/<tx_ref>", methods=["GET"])
-def transaction_audit(tx_ref):
-    if not current_user_id():
-        return unauthenticated()
-
-    if not valid_tx_ref(tx_ref):
-        raise ValidationError("Invalid transaction reference format")
-
-    with get_db() as db:
-        # Verify ownership
-        transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
-        if not transaction:
-            raise ValidationError("Transaction not found")
-
-        if transaction.user_id != current_user_id():
-            raise ValidationError("Transaction not found")
-
-        # Fetch audit logs for this transaction
-        logs = (
-            db.query(AuditLog)
-            .filter(AuditLog.tx_ref == tx_ref)
-            .order_by(AuditLog.created_at.asc())
-            .all()
-        )
-
-        return jsonify(
-            {
-                "success": True,
-                "tx_ref": tx_ref,
-                "audit_logs": [log.to_dict() for log in logs],
-            }
-        )
-
-
-# ── Expired payment link page ─────────────────────────────────────────────────
-
-
-@payments_bp.route("/expired/<tx_ref>")
-def expired_link(tx_ref):
-    """Display expired payment link page to customer"""
-    if not valid_tx_ref(tx_ref):
-        return render_template(
-            "expired.html", reference="Invalid", transaction_id="N/A"
-        ), 404
-
-    with get_db() as db:
-        transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
-        if not transaction:
-            return render_template(
-                "expired.html", reference="Not Found", transaction_id=tx_ref
-            ), 404
-
-        return render_template(
-            "expired.html",
-            reference=transaction.description or tx_ref,
-            transaction_id=tx_ref,
-        )
-
-
-# ── Download receipt ───────────────────────────────────────────────────────────
-
-
-@rate_limit("receipt:{user_id}", limit=10, window_secs=60)
-@payments_bp.route("/payments/receipt/<tx_ref>", methods=["GET"])
-def download_receipt(tx_ref):
-    """Generate and download a PDF receipt for a transaction"""
-    if not current_user_id():
-        raise AuthenticationError()
-
-    if not valid_tx_ref(tx_ref):
-        raise ValidationError("Invalid transaction reference format")
-
-    with get_db() as db:
-        transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
-
-        if not transaction:
-            raise ValidationError("Transaction not found")
-
-        # Verify ownership
-        if transaction.user_id != current_user_id():
-            raise ValidationError("Transaction not found")
-
-        # Generate PDF receipt
-        import io
-
-        from flask import make_response, send_file
-
-        from services.pdf_receipt import generate_receipt_pdf
-
-        try:
-            pdf_bytes = generate_receipt_pdf(transaction)
-
-            # Create response with PDF
-            response = make_response(pdf_bytes)
-            response.headers["Content-Type"] = "application/pdf"
-            response.headers["Content-Disposition"] = (
-                f"attachment; filename=OnePay_Receipt_{tx_ref}.pdf"
-            )
-
-            logger.info(
-                "PDF receipt downloaded | user=%s tx_ref=%s", current_username(), tx_ref
-            )
-            return response
-
-        except Exception as e:
-            logger.error(
-                "PDF receipt generation failed | user=%s tx_ref=%s error=%s",
-                current_username(),
-                tx_ref,
-                e,
-            )
-            from core.exceptions import OnePayError
-            raise OnePayError("Unable to generate receipt. Please try again later.", "RECEIPT_ERROR", 500)
-
-
-@payments_bp.route("/payments/receipt/<tx_ref>/preview", methods=["GET"])
-def preview_receipt_html(tx_ref):
-    """Generate and return HTML preview of receipt (for debugging/testing)"""
-    if not current_user_id():
-        raise AuthenticationError()
-
-    if not valid_tx_ref(tx_ref):
-        raise ValidationError("Invalid transaction reference format")
-
-    with get_db() as db:
-        transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
-
-        if not transaction:
-            raise ValidationError("Transaction not found")
-
-        if transaction.user_id != current_user_id():
-            raise ValidationError("Transaction not found")
-
-        from flask import make_response
-
-        from services.pdf_receipt import generate_receipt_html
-
-        try:
-            html = generate_receipt_html(transaction)
-
-            response = make_response(html)
-            response.headers["Content-Type"] = "text/html"
-            return response
-
-        except Exception as e:
-            logger.error(
-                "Receipt HTML preview failed | user=%s tx_ref=%s error=%s",
-                current_username(),
-                tx_ref,
-                e,
-            )
-            from core.exceptions import OnePayError
-            raise OnePayError("Unable to generate preview. Please try again later.", "PREVIEW_ERROR", 500)
-
-
-@payments_bp.route("/payments/refund/<tx_ref>", methods=["POST"])
-def initiate_refund(tx_ref):
-    """
-    Initiate a refund for a verified transaction.
-
-    Request body:
-        {
-            "amount": 1000,  # Optional, full refund if omitted
-            "reason": "Customer request"  # Optional
-        }
-
-    Returns:
-        {
-            "success": true,
-            "refund_reference": "REFUND-...",
-            "status": "processing"
-        }
-    """
-    # Authentication required
-    if not current_user_id():
-        raise AuthenticationError()
-
-    # Validate transaction reference format
-    if not valid_tx_ref(tx_ref):
-        raise ValidationError("Invalid transaction reference format")
-
-    # Parse request body
-    data = request.get_json() or {}
-    refund_amount = data.get("amount")
-    refund_reason = data.get("reason")
-
-    with get_db() as db:
-        # Find transaction
-        transaction = db.query(Transaction).filter(Transaction.tx_ref == tx_ref).first()
-
-        if not transaction:
-            raise ValidationError("Transaction not found")
-
-        # Verify ownership
-        if transaction.user_id != current_user_id():
-            raise ValidationError("Transaction not found")
-
-        # Validate transaction is VERIFIED
-        if transaction.status != TransactionStatus.VERIFIED:
-            raise ValidationError("Cannot refund transaction that is not verified")
-
-        # Check if already refunded
-        from models.refund import Refund
-
-        existing_refund = (
-            db.query(Refund).filter(Refund.transaction_id == transaction.id).first()
-        )
-
-        if existing_refund:
-            raise ValidationError("Transaction has already been refunded")
-
-        try:
-            # Call KoraPay to initiate refund
-            refund_data = korapay.initiate_refund(
-                payment_reference=tx_ref,
-                refund_reference=None,  # Auto-generate
-                amount=refund_amount,
-                reason=refund_reason,
-            )
-
-            # Create refund record in database
-            refund_amount_val = refund_data.get("amount")
-            if refund_amount_val is None:
-                from core.exceptions import OnePayError
-                raise OnePayError("Unable to process refund. Please contact support.", "REFUND_ERROR", 500)
-            refund = Refund(
-                transaction_id=transaction.id,
-                refund_reference=refund_data["reference"],
-                amount=Decimal(str(refund_amount_val)),
-                currency=refund_data["currency"],
-                status=refund_data["status"],
-                reason=refund_reason,
-            )
-            db.add(refund)
-
-            log_event(
-                db,
-                "payment.refund_initiated",
-                user_id=current_user_id(),
-                ip_address=client_ip(),
-                detail={
-                    "tx_ref": tx_ref,
-                    "refund_reference": refund_data["reference"],
-                    "amount": refund_data["amount"],
-                    "reason": refund_reason,
-                },
-            )
-
-            db.commit()
-
-            logger.info(
-                "Refund initiated | user=%s tx_ref=%s refund_ref=%s amount=%s",
-                current_username(),
-                tx_ref,
-                refund_data["reference"],
-                refund_data["amount"],
-            )
-
-            return jsonify(
-                {
-                    "success": True,
-                    "refund_reference": refund_data["reference"],
-                    "status": refund_data["status"],
-                    "amount": refund_data["amount"],
-                    "currency": refund_data["currency"],
-                }
-            ), 200
-
-        except KoraPayError as e:
-            logger.error(
-                "Refund initiation failed | user=%s tx_ref=%s error=%s",
-                current_username(),
-                tx_ref,
-                str(e),
-            )
-            raise ProviderError("Unable to process refund. Please try again later.", provider="KoraPay", original_error=str(e))
-        except Exception as e:
-            logger.error(
-                "Unexpected error during refund | user=%s tx_ref=%s error=%s",
-                current_username(),
-                tx_ref,
-                str(e),
-            )
-            db.rollback()
-            from core.exceptions import OnePayError
-            raise OnePayError("An unexpected error occurred", "INTERNAL_ERROR", 500)

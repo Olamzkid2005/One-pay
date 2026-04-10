@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     """Create refunds table for tracking refund operations."""
     op.create_table(
         'refunds',
@@ -42,7 +42,7 @@ def upgrade():
     op.create_index('idx_refunds_created_at', 'refunds', ['created_at'], unique=False)
 
 
-def downgrade():
+def downgrade() -> None:
     """Drop refunds table."""
     op.drop_index('idx_refunds_created_at', table_name='refunds')
     op.drop_index('idx_refunds_status', table_name='refunds')

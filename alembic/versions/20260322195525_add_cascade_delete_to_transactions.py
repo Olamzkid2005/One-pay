@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     """
     Add CASCADE DELETE behavior to transactions.user_id foreign key.
 
@@ -34,7 +34,7 @@ def upgrade():
     pass
 
 
-def downgrade():
+def downgrade() -> None:
     """
     Remove CASCADE DELETE behavior from transactions.user_id foreign key.
     """

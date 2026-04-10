@@ -71,7 +71,7 @@ class TestGoogleOAuthCallback:
             'iat': 1234567890
         }
 
-    def test_complete_oauth_flow_creates_new_account(self, client, mock_token_payload, mock_csrf):
+    def test_complete_oauth_flow_creates_new_account(self, client, mock_token_payload, mock_csrf) -> None:
         """
         Test that complete OAuth flow creates new account.
         Property 14: Authentication Success Logging
@@ -103,7 +103,7 @@ class TestGoogleOAuthCallback:
                     assert data['success'] is True
                     assert 'redirect_url' in data
 
-    def test_complete_oauth_flow_links_existing_account(self, client, mock_token_payload, mock_csrf):
+    def test_complete_oauth_flow_links_existing_account(self, client, mock_token_payload, mock_csrf) -> None:
         """
         Test that OAuth flow links to existing account with matching email.
         Property 8: Account Linking for Existing Users
@@ -144,7 +144,7 @@ class TestGoogleOAuthCallback:
                     # Verify link_google_account was called
                     mock_existing_user.link_google_account.assert_called_once()
 
-    def test_session_created_after_successful_authentication(self, client, mock_token_payload, mock_csrf):
+    def test_session_created_after_successful_authentication(self, client, mock_token_payload, mock_csrf) -> None:
         """
         Test that session is created after successful authentication.
         Property 10: Session Creation Completeness
@@ -180,7 +180,7 @@ class TestGoogleOAuthCallback:
                         # Session should have been regenerated
                         assert 'csrf_token' in sess
 
-    def test_csrf_validation_enforced(self, client):
+    def test_csrf_validation_enforced(self, client) -> None:
         """
         Test that CSRF validation is enforced.
         Property 11: Session Validation Consistency
@@ -198,7 +198,7 @@ class TestGoogleOAuthCallback:
         assert data['success'] is False
         assert 'CSRF' in data['message'] or 'Session expired' in data['message']
 
-    def test_rate_limiting_enforced(self, client, mock_token_payload, mock_csrf):
+    def test_rate_limiting_enforced(self, client, mock_token_payload, mock_csrf) -> None:
         """
         Test that rate limiting is enforced.
         Property 17: Rate Limiting Enforcement
@@ -226,7 +226,7 @@ class TestGoogleOAuthCallback:
                     assert data['success'] is False
                     assert 'Too many' in data['message']
 
-    def test_account_linking_conflict_rejection(self, client, mock_token_payload, mock_csrf):
+    def test_account_linking_conflict_rejection(self, client, mock_token_payload, mock_csrf) -> None:
         """
         Test that account linking conflict is rejected.
         Property 9: Account Linking Conflict Prevention
@@ -263,7 +263,7 @@ class TestGoogleOAuthCallback:
                     assert data['success'] is False
                     assert 'already linked' in data['message']
 
-    def test_no_token_storage_in_database(self, client, mock_token_payload, mock_csrf):
+    def test_no_token_storage_in_database(self, client, mock_token_payload, mock_csrf) -> None:
         """
         Test that OAuth tokens are not stored in database.
         Property 12: No Token Storage
@@ -299,7 +299,7 @@ class TestGoogleOAuthCallback:
                         assert not hasattr(user, 'access_token')
                         assert not hasattr(user, 'refresh_token')
 
-    def test_authentication_failure_logging(self, client, mock_csrf):
+    def test_authentication_failure_logging(self, client, mock_csrf) -> None:
         """
         Test that authentication failures are logged.
         Property 13: Authentication Failure Logging
@@ -329,7 +329,7 @@ class TestGoogleOAuthCallback:
                         call_args = mock_log_event.call_args
                         assert 'oauth.authentication_failed' in call_args[0] or 'failed' in str(call_args)
 
-    def test_authentication_success_logging(self, client, mock_token_payload, mock_csrf):
+    def test_authentication_success_logging(self, client, mock_token_payload, mock_csrf) -> None:
         """
         Test that successful authentication is logged.
         Property 14: Authentication Success Logging
@@ -383,7 +383,7 @@ class TestGoogleOAuthConfig:
         """Create test client."""
         return app.test_client()
 
-    def test_config_returns_enabled_when_configured(self, client):
+    def test_config_returns_enabled_when_configured(self, client) -> None:
         """Test that config returns enabled=true when OAuth is configured."""
         with patch('blueprints.auth.Config') as mock_config:
             mock_config.GOOGLE_CLIENT_ID = 'test-client-id.apps.googleusercontent.com'
@@ -395,7 +395,7 @@ class TestGoogleOAuthConfig:
             assert data['enabled'] is True
             assert data['client_id'] == 'test-client-id.apps.googleusercontent.com'
 
-    def test_config_returns_disabled_when_not_configured(self, client):
+    def test_config_returns_disabled_when_not_configured(self, client) -> None:
         """
         Test that config returns enabled=false when OAuth is not configured.
         Property 16: Graceful Degradation

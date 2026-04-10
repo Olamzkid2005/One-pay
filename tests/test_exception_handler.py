@@ -11,7 +11,7 @@ import pytest
 from core.exceptions import AuthenticationError, AuthorizationError, OnePayError, ProviderError, ValidationError
 
 
-def test_onepay_error_handler_registered():
+def test_onepay_error_handler_registered() -> None:
     """Test that OnePayError handler is registered in the app."""
     from app import app
     from core.exceptions import OnePayError as ImportedOnePayError
@@ -36,7 +36,7 @@ def test_onepay_error_handler_registered():
     assert callable(handler_func)
 
 
-def test_validation_error_properties():
+def test_validation_error_properties() -> None:
     """Test ValidationError has correct properties."""
     error = ValidationError("Invalid email", field="email")
 
@@ -46,7 +46,7 @@ def test_validation_error_properties():
     assert error.field == "email"
 
 
-def test_authentication_error_properties():
+def test_authentication_error_properties() -> None:
     """Test AuthenticationError has correct properties."""
     error = AuthenticationError("Invalid credentials")
 
@@ -55,7 +55,7 @@ def test_authentication_error_properties():
     assert error.status_code == 401
 
 
-def test_authorization_error_properties():
+def test_authorization_error_properties() -> None:
     """Test AuthorizationError has correct properties."""
     error = AuthorizationError("Access denied")
 
@@ -64,7 +64,7 @@ def test_authorization_error_properties():
     assert error.status_code == 403
 
 
-def test_provider_error_properties():
+def test_provider_error_properties() -> None:
     """Test ProviderError has correct properties."""
     error = ProviderError("Timeout", provider="korapay", original_error="Connection timeout")
 
@@ -75,7 +75,7 @@ def test_provider_error_properties():
     assert error.original_error == "Connection timeout"
 
 
-def test_generic_onepay_error_properties():
+def test_generic_onepay_error_properties() -> None:
     """Test generic OnePayError has correct properties."""
     error = OnePayError("Custom error", error_code="CUSTOM_ERROR", status_code=418)
 
@@ -84,7 +84,7 @@ def test_generic_onepay_error_properties():
     assert error.status_code == 418
 
 
-def test_error_response_format_structure():
+def test_error_response_format_structure() -> None:
     """Test that error responses have the correct structure."""
     # The handler should return JSON with success, message, and error_code
     # This is verified by the implementation in app.py

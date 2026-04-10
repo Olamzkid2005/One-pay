@@ -26,7 +26,7 @@ class TestUrlValidatorIntegration:
         mock_answer.__getitem__ = Mock(return_value=Mock(__str__=lambda self: ip))
         return mock_answer
 
-    def test_safe_http_request_pattern(self):
+    def test_safe_http_request_pattern(self) -> None:
         """
         Demonstrate the correct pattern for making HTTP requests with SSRF protection.
 
@@ -79,7 +79,7 @@ class TestUrlValidatorIntegration:
 
             assert response.status_code == 200
 
-    def test_reject_private_ip_before_request(self):
+    def test_reject_private_ip_before_request(self) -> None:
         """
         Demonstrate that private IPs are rejected BEFORE making HTTP requests.
 
@@ -104,7 +104,7 @@ class TestUrlValidatorIntegration:
         # Application should NOT proceed with HTTP request
         # This prevents SSRF attack
 
-    def test_dns_rebinding_attack_prevention(self):
+    def test_dns_rebinding_attack_prevention(self) -> None:
         """
         Demonstrate prevention of DNS rebinding attacks (TOCTOU).
 
@@ -142,7 +142,7 @@ class TestUrlValidatorIntegration:
         assert '1.2.3.4' in safe_url
         assert 'attacker.com' not in safe_url
 
-    def test_aws_metadata_endpoint_attack_prevention(self):
+    def test_aws_metadata_endpoint_attack_prevention(self) -> None:
         """
         Demonstrate prevention of AWS metadata endpoint SSRF attack.
 
@@ -167,7 +167,7 @@ class TestUrlValidatorIntegration:
 
         # No HTTP request should be made - credentials are safe
 
-    def test_localhost_bypass_attempt_prevention(self):
+    def test_localhost_bypass_attempt_prevention(self) -> None:
         """
         Demonstrate prevention of localhost bypass attempts.
 
@@ -195,7 +195,7 @@ class TestUrlValidatorIntegration:
             assert ip is None
             assert "The URL resolves to a restricted address" in error
 
-    def test_error_handling_for_dns_failures(self):
+    def test_error_handling_for_dns_failures(self) -> None:
         """
         Demonstrate proper error handling for DNS resolution failures.
 

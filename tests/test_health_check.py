@@ -2,7 +2,7 @@
 import pytest
 
 
-def test_health_check_includes_dependencies():
+def test_health_check_includes_dependencies() -> None:
     """Health check should include dependency status checks"""
     from flask import Flask
 

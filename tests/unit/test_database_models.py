@@ -37,7 +37,7 @@ class TestTransactionModelExtensions:
         yield session
         session.close()
 
-    def test_transaction_has_payment_provider_reference_column(self, db_session):
+    def test_transaction_has_payment_provider_reference_column(self, db_session) -> None:
         """Test Transaction model has payment_provider_reference column."""
         # Create transaction with new field
         tx = Transaction(
@@ -55,7 +55,7 @@ class TestTransactionModelExtensions:
         assert result is not None
         assert result.payment_provider_reference == 'KPY-CA-TEST-001'
 
-    def test_transaction_has_provider_fee_column(self, db_session):
+    def test_transaction_has_provider_fee_column(self, db_session) -> None:
         """Test Transaction model has provider_fee column."""
         tx = Transaction(
             tx_ref='TEST-002',
@@ -70,7 +70,7 @@ class TestTransactionModelExtensions:
         result = db_session.query(Transaction).filter_by(tx_ref='TEST-002').first()
         assert result.provider_fee == Decimal('22.50')
 
-    def test_transaction_has_provider_vat_column(self, db_session):
+    def test_transaction_has_provider_vat_column(self, db_session) -> None:
         """Test Transaction model has provider_vat column."""
         tx = Transaction(
             tx_ref='TEST-003',
@@ -85,7 +85,7 @@ class TestTransactionModelExtensions:
         result = db_session.query(Transaction).filter_by(tx_ref='TEST-003').first()
         assert result.provider_vat == Decimal('1.69')
 
-    def test_transaction_has_provider_transaction_date_column(self, db_session):
+    def test_transaction_has_provider_transaction_date_column(self, db_session) -> None:
         """Test Transaction model has provider_transaction_date column."""
         provider_date = datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
         tx = Transaction(
@@ -102,7 +102,7 @@ class TestTransactionModelExtensions:
         # SQLite doesn't preserve timezone info, so compare without timezone
         assert result.provider_transaction_date.replace(tzinfo=timezone.utc) == provider_date
 
-    def test_transaction_has_payer_bank_details_column(self, db_session):
+    def test_transaction_has_payer_bank_details_column(self, db_session) -> None:
         """Test Transaction model has payer_bank_details column."""
         bank_details = '{"bank_name": "Test Bank", "account_number": "0000000000"}'
         tx = Transaction(
@@ -118,7 +118,7 @@ class TestTransactionModelExtensions:
         result = db_session.query(Transaction).filter_by(tx_ref='TEST-005').first()
         assert result.payer_bank_details == bank_details
 
-    def test_transaction_has_failure_reason_column(self, db_session):
+    def test_transaction_has_failure_reason_column(self, db_session) -> None:
         """Test Transaction model has failure_reason column."""
         tx = Transaction(
             tx_ref='TEST-006',
@@ -133,7 +133,7 @@ class TestTransactionModelExtensions:
         result = db_session.query(Transaction).filter_by(tx_ref='TEST-006').first()
         assert result.failure_reason == 'Insufficient funds'
 
-    def test_transaction_has_provider_status_column(self, db_session):
+    def test_transaction_has_provider_status_column(self, db_session) -> None:
         """Test Transaction model has provider_status column."""
         tx = Transaction(
             tx_ref='TEST-007',
@@ -148,7 +148,7 @@ class TestTransactionModelExtensions:
         result = db_session.query(Transaction).filter_by(tx_ref='TEST-007').first()
         assert result.provider_status == 'success'
 
-    def test_transaction_has_bank_code_column(self, db_session):
+    def test_transaction_has_bank_code_column(self, db_session) -> None:
         """Test Transaction model has bank_code column."""
         tx = Transaction(
             tx_ref='TEST-008',
@@ -163,7 +163,7 @@ class TestTransactionModelExtensions:
         result = db_session.query(Transaction).filter_by(tx_ref='TEST-008').first()
         assert result.bank_code == '035'
 
-    def test_transaction_has_virtual_account_expiry_column(self, db_session):
+    def test_transaction_has_virtual_account_expiry_column(self, db_session) -> None:
         """Test Transaction model has virtual_account_expiry column."""
         expiry = datetime(2026, 4, 1, 13, 0, 0, tzinfo=timezone.utc)
         tx = Transaction(
@@ -180,7 +180,7 @@ class TestTransactionModelExtensions:
         # SQLite doesn't preserve timezone info, so compare without timezone
         assert result.virtual_account_expiry.replace(tzinfo=timezone.utc) == expiry
 
-    def test_transaction_new_fields_are_nullable(self, db_session):
+    def test_transaction_new_fields_are_nullable(self, db_session) -> None:
         """Test that new KoraPay fields are nullable (backward compatibility)."""
         # Create transaction without new fields
         tx = Transaction(
@@ -203,14 +203,14 @@ class TestTransactionModelExtensions:
         assert result.bank_code is None
         assert result.virtual_account_expiry is None
 
-    def test_transaction_has_payment_provider_reference_index(self, db_session):
+    def test_transaction_has_payment_provider_reference_index(self, db_session) -> None:
         """Test that payment_provider_reference has an index."""
         inspector = inspect(db_session.bind)
         indexes = inspector.get_indexes('transactions')
         index_names = [idx['name'] for idx in indexes]
         assert 'idx_payment_provider_reference' in index_names
 
-    def test_transaction_has_provider_transaction_date_index(self, db_session):
+    def test_transaction_has_provider_transaction_date_index(self, db_session) -> None:
         """Test that provider_transaction_date has an index."""
         inspector = inspect(db_session.bind)
         indexes = inspector.get_indexes('transactions')
@@ -240,7 +240,7 @@ class TestRefundModel:
         yield session
         session.close()
 
-    def test_refund_model_can_be_created(self, db_session):
+    def test_refund_model_can_be_created(self, db_session) -> None:
         """Test Refund model can be created and queried."""
         from models.refund import Refund, RefundStatus
 
@@ -274,7 +274,7 @@ class TestRefundModel:
         assert result.status == RefundStatus.PROCESSING
         assert result.reason == 'Customer request'
 
-    def test_refund_foreign_key_cascade_delete(self, db_session):
+    def test_refund_foreign_key_cascade_delete(self, db_session) -> None:
         """Test foreign key cascade delete works."""
         from models.refund import Refund, RefundStatus
 
@@ -318,7 +318,7 @@ class TestRefundModel:
             result = conn.execute(text("SELECT * FROM refunds WHERE id = :id"), {"id": refund_id})
             assert result.fetchone() is None
 
-    def test_refund_has_required_indexes(self, db_session):
+    def test_refund_has_required_indexes(self, db_session) -> None:
         """Test refund table has required indexes."""
         from models.refund import Refund
 
@@ -330,7 +330,7 @@ class TestRefundModel:
         assert 'idx_refunds_status' in index_names
         assert 'idx_refunds_created_at' in index_names
 
-    def test_refund_reference_is_unique(self, db_session):
+    def test_refund_reference_is_unique(self, db_session) -> None:
         """Test refund_reference has unique constraint."""
         from sqlalchemy.exc import IntegrityError
 

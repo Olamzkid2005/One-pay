@@ -81,6 +81,31 @@ class InvoiceService:
 
         raise RuntimeError("Unable to generate invoice number. Please try again.")
 
+    def _build_invoice_object(
+        self, db: Session, transaction: Transaction, user: User, settings: Optional[InvoiceSettings]
+    ) -> Invoice:
+        """Build and flush a new Invoice inside a savepoint. Returns the invoice."""
+        invoice_number = self.generate_invoice_number(db)
+        invoice = Invoice(
+            invoice_number=invoice_number,
+            transaction_id=transaction.id,
+            user_id=user.id,
+            amount=transaction.amount,
+            currency=transaction.currency,
+            description=transaction.description,
+            customer_email=transaction.customer_email,
+            customer_phone=transaction.customer_phone,
+            business_name=settings.business_name if settings else None,
+            business_address=settings.business_address if settings else None,
+            business_tax_id=settings.business_tax_id if settings else None,
+            business_logo_url=settings.business_logo_url if settings else None,
+            payment_terms=settings.default_payment_terms if settings else "Payment due upon receipt",
+            status=InvoiceStatus.DRAFT,
+        )
+        db.add(invoice)
+        db.flush()
+        return invoice
+
     def create_invoice(
         self,
         db: Session,
@@ -88,92 +113,27 @@ class InvoiceService:
         user: User,
         settings: Optional[InvoiceSettings] = None,
     ) -> Invoice:
-        """
-        Create invoice from transaction with merchant settings.
-
-        Args:
-            db: Database session
-            transaction: Transaction to create invoice for
-            user: User (merchant) creating the invoice
-            settings: Optional invoice settings (fetched if not provided)
-
-        Returns:
-            Created Invoice object
-
-        Raises:
-            IntegrityError: If invoice already exists for transaction
-        """
-        # Fetch settings if not provided
+        """Create invoice from transaction with merchant settings."""
         if settings is None:
-            settings = (
-                db.query(InvoiceSettings)
-                .filter(InvoiceSettings.user_id == user.id)
-                .first()
-            )
+            settings = db.query(InvoiceSettings).filter(InvoiceSettings.user_id == user.id).first()
 
-        # Generate unique invoice number with retry logic
         max_retries = 3
-        invoice = None
-
         for attempt in range(max_retries):
             try:
                 with db.begin_nested():
-                    invoice_number = self.generate_invoice_number(db)
-
-                    # Create invoice with denormalized data
-                    invoice = Invoice(
-                        invoice_number=invoice_number,
-                        transaction_id=transaction.id,
-                        user_id=user.id,
-                        amount=transaction.amount,
-                        currency=transaction.currency,
-                        description=transaction.description,
-                        customer_email=transaction.customer_email,
-                        customer_phone=transaction.customer_phone,
-                        # Merchant branding from settings (snapshot at creation)
-                        business_name=settings.business_name if settings else None,
-                        business_address=settings.business_address
-                        if settings
-                        else None,
-                        business_tax_id=settings.business_tax_id if settings else None,
-                        business_logo_url=settings.business_logo_url
-                        if settings
-                        else None,
-                        payment_terms=settings.default_payment_terms
-                        if settings
-                        else "Payment due upon receipt",
-                        status=InvoiceStatus.DRAFT,
-                    )
-
-                    db.add(invoice)
-                    db.flush()  # Force flush inside SAVEPOINT to catch IntegrityError safely
-
+                    invoice = self._build_invoice_object(db, transaction, user, settings)
             except IntegrityError as e:
-                # The nested transaction is automatically rolled back here!
-                # Check if it's a duplicate invoice_number (race condition)
                 if "invoice_number" in str(e).lower() or "unique" in str(e).lower():
-                    logger.warning(
-                        "Invoice number collision on attempt %d/%d, retrying...",
-                        attempt + 1,
-                        max_retries,
-                    )
+                    logger.warning("Invoice number collision on attempt %d/%d, retrying...", attempt + 1, max_retries)
                     if attempt == max_retries - 1:
-                        raise RuntimeError(
-                            "Unable to create invoice. Please try again."
-                        ) from e
+                        raise RuntimeError("Unable to create invoice. Please try again.") from e
                     continue
                 else:
-                    # Different integrity error (e.g., duplicate transaction_id)
                     raise
 
-            # If we reached here, the savepoint succeeded.
             db.refresh(invoice)
-            logger.info(
-                "Invoice created | invoice_number=%s tx_ref=%s user_id=%d",
-                invoice.invoice_number,
-                transaction.tx_ref,
-                user.id,
-            )
+            logger.info("Invoice created | invoice_number=%s tx_ref=%s user_id=%d",
+                        invoice.invoice_number, transaction.tx_ref, user.id)
             return invoice
 
         raise RuntimeError("Unable to create invoice. Please try again.")
@@ -323,112 +283,46 @@ class InvoiceService:
                 invoice.status.value,
             )
 
-    def render_invoice_html(
-        self,
-        invoice: Invoice,
-        transaction: Transaction,
-        payment_url: Optional[str] = None,
-    ) -> str:
-        """
-        Render invoice to HTML using Jinja2 template.
-
-        Args:
-            invoice: Invoice object to render
-            transaction: Associated transaction
-            payment_url: Optional payment link URL
-
-        Returns:
-            Rendered HTML string
-
-        Raises:
-            Exception: If template rendering fails
-        """
+    def _embed_logo(self, invoice: Invoice, context: dict) -> None:
+        """Fetch and embed business logo as base64 data URI (best-effort)."""
         import base64
-        from io import BytesIO
 
         import requests
+
+        if not invoice.business_logo_url:
+            return
+        try:
+            response = requests.get(invoice.business_logo_url, timeout=5, headers={"User-Agent": "OnePay-Invoice-Generator/1.0"})
+            response.raise_for_status()
+            content_type = response.headers.get("content-type", "").lower()
+            if any(t in content_type for t in ["image/png", "image/jpeg", "image/jpg", "image/svg+xml"]):
+                logo_base64 = base64.b64encode(response.content).decode()
+                context["logo_data_uri"] = f"data:{content_type};base64,{logo_base64}"
+                logger.debug("Logo embedded for invoice %s", invoice.invoice_number)
+            else:
+                logger.warning("Invalid logo content type: %s for invoice %s", content_type, invoice.invoice_number)
+        except Exception as e:
+            logger.warning("Failed to fetch logo for invoice %s: %s", invoice.invoice_number, e)
+
+    def render_invoice_html(self, invoice: Invoice, transaction: Transaction, payment_url: Optional[str] = None) -> str:
+        """Render invoice to HTML using Jinja2 template."""
         from flask import render_template
 
         try:
-            # Prepare template context
             context = {
                 "invoice": invoice,
                 "transaction": transaction,
                 "payment_url": payment_url,
                 "current_date": datetime.now(timezone.utc),
             }
-
-            # Embed QR code from transaction if available
             if transaction.qr_code_payment_url:
                 context["qr_code_data_uri"] = transaction.qr_code_payment_url
-
-            # Embed logo as base64 data URI if URL provided
-            if invoice.business_logo_url:
-                try:
-                    # Fetch logo with timeout
-                    response = requests.get(
-                        invoice.business_logo_url,
-                        timeout=5,
-                        headers={"User-Agent": "OnePay-Invoice-Generator/1.0"},
-                    )
-                    response.raise_for_status()
-
-                    # Validate content type
-                    content_type = response.headers.get("content-type", "").lower()
-                    if any(
-                        img_type in content_type
-                        for img_type in [
-                            "image/png",
-                            "image/jpeg",
-                            "image/jpg",
-                            "image/svg+xml",
-                        ]
-                    ):
-                        # Convert to base64 data URI
-                        logo_base64 = base64.b64encode(response.content).decode()
-                        context["logo_data_uri"] = (
-                            f"data:{content_type};base64,{logo_base64}"
-                        )
-                        logger.debug(
-                            "Logo embedded successfully for invoice %s",
-                            invoice.invoice_number,
-                        )
-                    else:
-                        logger.warning(
-                            "Invalid logo content type: %s for invoice %s",
-                            content_type,
-                            invoice.invoice_number,
-                        )
-                except requests.RequestException as e:
-                    logger.warning(
-                        "Failed to fetch logo for invoice %s: %s",
-                        invoice.invoice_number,
-                        e,
-                    )
-                    # Continue without logo (graceful degradation)
-                except Exception as e:
-                    logger.warning(
-                        "Unexpected error fetching logo for invoice %s: %s",
-                        invoice.invoice_number,
-                        e,
-                    )
-                    # Continue without logo (graceful degradation)
-
-            # Render template
+            self._embed_logo(invoice, context)
             html = render_template("invoice.html", **context)
-
-            logger.debug(
-                "Invoice HTML rendered successfully | invoice_number=%s",
-                invoice.invoice_number,
-            )
+            logger.debug("Invoice HTML rendered | invoice_number=%s", invoice.invoice_number)
             return html
-
         except Exception as e:
-            logger.error(
-                "Failed to render invoice HTML | invoice_number=%s error=%s",
-                invoice.invoice_number,
-                e,
-            )
+            logger.error("Failed to render invoice HTML | invoice_number=%s error=%s", invoice.invoice_number, e)
             raise
 
     def generate_invoice_pdf(

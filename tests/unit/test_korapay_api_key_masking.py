@@ -11,7 +11,7 @@ import pytest
 class TestAPIKeyMasking:
     """Test API key masking in logs to prevent credential leakage."""
 
-    def test_logs_show_masked_format_for_api_keys(self):
+    def test_logs_show_masked_format_for_api_keys(self) -> None:
         """Test logs show 'sk_****_1234' format for API keys."""
         valid_key = 'sk_test_abcdefghijklmnopqrstuvwxyz1234'
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -31,7 +31,7 @@ class TestAPIKeyMasking:
             assert masked.endswith("1234")
             assert valid_key not in masked
 
-    def test_full_api_key_never_appears_in_logs(self):
+    def test_full_api_key_never_appears_in_logs(self) -> None:
         """Test full API key never appears in logs."""
         import logging
         from io import StringIO
@@ -63,7 +63,7 @@ class TestAPIKeyMasking:
             finally:
                 logger.removeHandler(handler)
 
-    def test_masking_works_for_sk_live_prefix(self):
+    def test_masking_works_for_sk_live_prefix(self) -> None:
         """Test masking works for sk_live_ prefixed keys."""
         valid_key = 'sk_live_' + 'b' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -80,7 +80,7 @@ class TestAPIKeyMasking:
             assert "****" in masked
             assert valid_key not in masked
 
-    def test_masking_works_for_sk_test_prefix(self):
+    def test_masking_works_for_sk_test_prefix(self) -> None:
         """Test masking works for sk_test_ prefixed keys."""
         valid_key = 'sk_test_' + 'c' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):

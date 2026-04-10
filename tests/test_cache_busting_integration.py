@@ -8,7 +8,7 @@ import pytest
 from flask import render_template_string
 
 
-def test_hashed_url_in_template(app):
+def test_hashed_url_in_template(app) -> None:
     """Test that hashed_url() works in templates."""
     with app.test_request_context():
         # Render a simple template using hashed_url
@@ -32,7 +32,7 @@ def test_hashed_url_in_template(app):
         assert js_match is not None, "JS hash not found in rendered template"
 
 
-def test_base_template_uses_hashed_urls(app):
+def test_base_template_uses_hashed_urls(app) -> None:
     """Test that base.html uses hashed URLs."""
     with app.test_request_context():
         with open("templates/base.html") as f:

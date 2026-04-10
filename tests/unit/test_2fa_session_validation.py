@@ -28,21 +28,21 @@ def client(app):
 class TestVerify2FASessionValidation:
     """Tests for session validation on the /verify-2fa endpoint."""
 
-    def test_get_without_session_redirects_to_login(self, client):
+    def test_get_without_session_redirects_to_login(self, client) -> None:
         """GET /api/v1/verify-2fa without pre_2fa_user_id in session must redirect to login."""
         response = client.get("/api/v1/verify-2fa")
 
         assert response.status_code == 302
         assert "/login" in response.headers["Location"]
 
-    def test_post_without_session_redirects_to_login(self, client):
+    def test_post_without_session_redirects_to_login(self, client) -> None:
         """POST /api/v1/verify-2fa without pre_2fa_user_id in session must redirect to login."""
         response = client.post("/api/v1/verify-2fa", data={"csrf_token": "any"})
 
         assert response.status_code == 302
         assert "/login" in response.headers["Location"]
 
-    def test_get_with_session_renders_page(self, client):
+    def test_get_with_session_renders_page(self, client) -> None:
         """GET /api/v1/verify-2fa with pre_2fa_user_id in session must render the 2FA page."""
         with client.session_transaction() as sess:
             sess["pre_2fa_user_id"] = 42
@@ -51,7 +51,7 @@ class TestVerify2FASessionValidation:
 
         assert response.status_code == 200
 
-    def test_direct_navigation_without_login_redirects(self, client):
+    def test_direct_navigation_without_login_redirects(self, client) -> None:
         """Direct navigation to /api/v1/verify-2fa without going through login must redirect."""
         # Simulate a fresh session with no pre_2fa_user_id (direct navigation)
         response = client.get("/api/v1/verify-2fa", follow_redirects=False)
@@ -60,7 +60,7 @@ class TestVerify2FASessionValidation:
         location = response.headers["Location"]
         assert "login" in location
 
-    def test_stale_session_without_pre_2fa_user_id_redirects(self, client):
+    def test_stale_session_without_pre_2fa_user_id_redirects(self, client) -> None:
         """A session that has other keys but not pre_2fa_user_id must still redirect."""
         with client.session_transaction() as sess:
             sess["user_id"] = 99  # some other session data, but not pre_2fa_user_id
@@ -70,7 +70,7 @@ class TestVerify2FASessionValidation:
         assert response.status_code == 302
         assert "/login" in response.headers["Location"]
 
-    def test_post_with_valid_session_proceeds_to_verification(self, client):
+    def test_post_with_valid_session_proceeds_to_verification(self, client) -> None:
         """POST /api/v1/verify-2fa with pre_2fa_user_id in session must attempt verification."""
         with client.session_transaction() as sess:
             sess["pre_2fa_user_id"] = 1

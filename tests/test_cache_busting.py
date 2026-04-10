@@ -18,12 +18,12 @@ from flask import Flask
 class TestCacheBusting:
     """Test cache busting implementation."""
 
-    def test_manifest_exists(self):
+    def test_manifest_exists(self) -> None:
         """Manifest.json should exist in static directory."""
         manifest_path = os.path.join("static", "manifest.json")
         assert os.path.exists(manifest_path), "manifest.json not found"
 
-    def test_manifest_format(self):
+    def test_manifest_format(self) -> None:
         """Manifest should map original filenames to hashed versions."""
         manifest_path = os.path.join("static", "manifest.json")
         with open(manifest_path) as f:
@@ -47,7 +47,7 @@ class TestCacheBusting:
                 assert all(c in "0123456789abcdef" for c in hash_part), \
                     f"Hash should be hex: {hashed}"
 
-    def test_hashed_files_exist(self):
+    def test_hashed_files_exist(self) -> None:
         """Hashed files should exist on disk."""
         manifest_path = os.path.join("static", "manifest.json")
         with open(manifest_path) as f:
@@ -57,7 +57,7 @@ class TestCacheBusting:
             full_path = os.path.join("static", hashed_path.replace("/", os.sep))
             assert os.path.exists(full_path), f"Hashed file not found: {full_path}"
 
-    def test_hashed_url_helper(self, app, client):
+    def test_hashed_url_helper(self, app, client) -> None:
         """hashed_url() helper should return hashed paths from manifest."""
         with app.test_request_context():
             # Load manifest
@@ -81,7 +81,7 @@ class TestCacheBusting:
             assert ".css" in hashed_css
             assert "output" in hashed_css
 
-    def test_original_files_exist(self):
+    def test_original_files_exist(self) -> None:
         """Original (unhashed) files should still exist for development."""
         assert os.path.exists("static/css/output.css")
         assert os.path.exists("static/js/login.js")
@@ -89,7 +89,7 @@ class TestCacheBusting:
         assert os.path.exists("static/js/verify.js")
         assert os.path.exists("static/js/loading-states.js")
 
-    def test_hashed_content_matches_original(self):
+    def test_hashed_content_matches_original(self) -> None:
         """Hashed files should have identical content to originals."""
         manifest_path = os.path.join("static", "manifest.json")
         with open(manifest_path) as f:
@@ -107,13 +107,13 @@ class TestCacheBusting:
 class TestCacheHeaders:
     """Test cache headers for static files."""
 
-    def test_static_route_exists(self, client):
+    def test_static_route_exists(self, client) -> None:
         """Static file route should be accessible."""
         # Try to access a known static file
         response = client.get("/static/openapi.json")
         assert response.status_code == 200
 
-    def test_hashed_files_accessible(self, client):
+    def test_hashed_files_accessible(self, client) -> None:
         """Hashed files should be accessible via Flask."""
         manifest_path = os.path.join("static", "manifest.json")
         with open(manifest_path) as f:

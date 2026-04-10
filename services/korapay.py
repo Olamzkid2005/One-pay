@@ -22,6 +22,43 @@ from config import Config
 logger = logging.getLogger(__name__)
 
 
+def _mask_api_key(key: str) -> str:
+    """Mask API key for safe logging: sk_t****_1234"""
+    if not key or len(key) < 8:
+        return "****"
+    return f"{key[:4]}****{key[-4:]}"
+
+
+def _normalize_create_response(kora_response: dict, amount_kobo: int) -> dict:
+    """Convert KoraPay virtual account response to Quickteller-compatible format."""
+    bank_account = kora_response["bank_account"]
+    bank_name = bank_account["bank_name"].title()
+    expiry_str = bank_account["expiry_date_in_utc"]
+    try:
+        expiry_dt = datetime.strptime(expiry_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        validity_mins = max(0, int((expiry_dt - datetime.now(timezone.utc)).total_seconds() / 60))
+    except (ValueError, KeyError):
+        validity_mins = 30
+    status = kora_response.get("status", "processing")
+    response_code = "00" if status == "success" else ("99" if status == "failed" else "Z0")
+    return {
+        "accountNumber": bank_account["account_number"],
+        "bankName": bank_name,
+        "accountName": bank_account["account_name"],
+        "amount": amount_kobo,
+        "transactionReference": kora_response["reference"],
+        "responseCode": response_code,
+        "validityPeriodMins": validity_mins,
+    }
+
+
+def _normalize_confirm_response(kora_response: dict) -> dict:
+    """Convert KoraPay transfer status to Quickteller-compatible format."""
+    status = kora_response.get("status", "processing")
+    response_code = "00" if status == "success" else ("99" if status == "failed" else "Z0")
+    return {"responseCode": response_code, "transactionReference": kora_response["reference"]}
+
+
 class KoraPayError(Exception):
     """Base exception for all KoraPay API errors."""
 
@@ -277,28 +314,6 @@ class KoraPayService:
         """
         return not self.is_configured()
 
-    def _mask_api_key(self, key: str) -> str:
-        """
-        Mask API key for safe logging.
-
-        Shows first 4 and last 4 characters with **** in between.
-        Format: "sk_t****_1234"
-
-        Args:
-            key: API key to mask
-
-        Returns:
-            Masked API key string
-        """
-        if not key or len(key) < 8:
-            return "****"
-
-        # Extract first 4 and last 4 characters
-        first_4 = key[:4]
-        last_4 = key[-4:]
-
-        return f"{first_4}****{last_4}"
-
     def _get_auth_headers(self) -> dict:
         """
         Generate authentication headers for KoraPay API requests.
@@ -331,248 +346,114 @@ class KoraPayService:
 
         return headers
 
+    def _handle_response_status(self, response, attempt: int, max_retries: int, request_id: str) -> dict:
+        """
+        Handle HTTP response status codes. Returns parsed JSON on success,
+        raises KoraPayError on client errors, returns None to signal retry on server errors.
+        """
+        import time
+
+        if response.status_code == 429:
+            if attempt < max_retries:
+                retry_after = int(response.headers.get("Retry-After", 60))
+                logger.warning("Rate limited, retry after %ds | attempt=%d request_id=%s", retry_after, attempt, request_id)
+                time.sleep(retry_after)
+                return None  # signal retry
+            raise KoraPayError(f"Rate limit exceeded after {max_retries} attempts", error_code="RATE_LIMIT", status_code=429)
+
+        if 400 <= response.status_code < 500:
+            error_msg = f"Client error: {response.status_code}"
+            try:
+                error_data = response.json()
+                if "message" in error_data:
+                    error_msg = f"{error_msg} - {error_data['message']}"
+            except Exception as e:
+                logger.debug("Could not parse error response body: %s", e)
+            with self._metrics_lock:
+                self._metrics["total_requests"] += 1
+                self._metrics["failed_requests"] += 1
+            raise KoraPayError(error_msg, error_code=f"HTTP_{response.status_code}", status_code=response.status_code)
+
+        if response.status_code >= 500:
+            if attempt < max_retries:
+                delay = (2 ** (attempt - 1)) + (secrets.randbelow(500) / 1000)
+                logger.warning("Server error, retry in %.1fs | status=%d attempt=%d request_id=%s", delay, response.status_code, attempt, request_id)
+                time.sleep(delay)
+                return None  # signal retry
+            with self._metrics_lock:
+                self._metrics["total_requests"] += 1
+                self._metrics["failed_requests"] += 1
+            raise KoraPayError(f"Server error after {max_retries} attempts", error_code="SERVER_ERROR", status_code=response.status_code)
+
+        try:
+            response_data = response.json()
+            with self._metrics_lock:
+                self._metrics["total_requests"] += 1
+                self._metrics["successful_requests"] += 1
+                self._metrics["last_request_time"] = time.time()
+            return response_data
+        except requests.exceptions.JSONDecodeError:
+            logger.error("Invalid JSON response | status=%d request_id=%s", response.status_code, request_id)
+            raise KoraPayError("Invalid JSON response from payment provider", error_code="INVALID_JSON")
+
     def _make_request(self, method: str, endpoint: str, **kwargs) -> dict:
-        """
-        Make HTTP request to KoraPay API with retry logic.
-
-        Args:
-            method: HTTP method (GET, POST, etc.)
-            endpoint: API endpoint path (e.g., '/merchant/api/v1/charges/bank-transfer')
-            **kwargs: Additional arguments for requests (json, params, etc.)
-
-        Returns:
-            Parsed JSON response dict
-
-        Raises:
-            KoraPayError: On request failure after retries
-        """
+        """Make HTTP request to KoraPay API with retry logic."""
         import time
 
         from config import Config as FreshConfig
 
-        # Build full URL
-        base_url = FreshConfig.KORAPAY_BASE_URL
-        url = f"{base_url}{endpoint}"
-
-        # Get auth headers (includes X-Request-ID)
+        url = f"{FreshConfig.KORAPAY_BASE_URL}{endpoint}"
         headers = self._get_auth_headers()
         request_id = headers.get("X-Request-ID")
-
-        # Merge with any provided headers
         if "headers" in kwargs:
             headers.update(kwargs.pop("headers"))
-
-        # Set timeouts
-        timeout = (
-            FreshConfig.KORAPAY_CONNECT_TIMEOUT,
-            FreshConfig.KORAPAY_TIMEOUT_SECONDS,
-        )
-
-        # Set security options
+        timeout = (FreshConfig.KORAPAY_CONNECT_TIMEOUT, FreshConfig.KORAPAY_TIMEOUT_SECONDS)
         kwargs.setdefault("verify", True)
         kwargs.setdefault("allow_redirects", False)
-
-        # Retry configuration
         max_retries = FreshConfig.KORAPAY_MAX_RETRIES
         last_error = None
 
         for attempt in range(1, max_retries + 1):
             try:
-                # Start timing
                 start_time = time.perf_counter()
-
-                # Log request
-                logger.info(
-                    "KoraPay API request | method=%s endpoint=%s attempt=%d/%d request_id=%s",
-                    method,
-                    endpoint,
-                    attempt,
-                    max_retries,
-                    request_id,
-                )
-
-                # Make request
-                response = self._session.request(
-                    method=method, url=url, headers=headers, timeout=timeout, **kwargs
-                )
-
-                # Calculate duration
-                end_time = time.perf_counter()
-                duration_ms = int((end_time - start_time) * 1000)
-
-                # Log response with duration
-                logger.info(
-                    "KoraPay API response | status=%d endpoint=%s duration=%dms request_id=%s",
-                    response.status_code,
-                    endpoint,
-                    duration_ms,
-                    request_id,
-                )
-
-                # Log warning for slow requests (> 5 seconds)
+                logger.info("KoraPay API request | method=%s endpoint=%s attempt=%d/%d request_id=%s", method, endpoint, attempt, max_retries, request_id)
+                response = self._session.request(method=method, url=url, headers=headers, timeout=timeout, **kwargs)
+                duration_ms = int((time.perf_counter() - start_time) * 1000)
+                logger.info("KoraPay API response | status=%d endpoint=%s duration=%dms request_id=%s", response.status_code, endpoint, duration_ms, request_id)
                 if duration_ms > 5000:
-                    logger.warning(
-                        "Slow KoraPay API request | endpoint=%s duration=%dms request_id=%s",
-                        endpoint,
-                        duration_ms,
-                        request_id,
-                    )
+                    logger.warning("Slow KoraPay API request | endpoint=%s duration=%dms request_id=%s", endpoint, duration_ms, request_id)
 
-                # Handle rate limiting (429)
-                if response.status_code == 429:
-                    if attempt < max_retries:
-                        retry_after = int(response.headers.get("Retry-After", 60))
-                        logger.warning(
-                            "Rate limited, retry after %ds | attempt=%d request_id=%s",
-                            retry_after,
-                            attempt,
-                            request_id,
-                        )
-                        time.sleep(retry_after)
-                        continue
-                    else:
-                        raise KoraPayError(
-                            f"Rate limit exceeded after {max_retries} attempts",
-                            error_code="RATE_LIMIT",
-                            status_code=429,
-                        )
-
-                # Don't retry client errors (4xx except 429)
-                if 400 <= response.status_code < 500:
-                    error_msg = f"Client error: {response.status_code}"
-                    try:
-                        error_data = response.json()
-                        if "message" in error_data:
-                            error_msg = f"{error_msg} - {error_data['message']}"
-                    except Exception as e:
-                        logger.debug("Could not parse error response body: %s", e)
-
-                    with self._metrics_lock:
-                        self._metrics["total_requests"] += 1
-                        self._metrics["failed_requests"] += 1
-                    raise KoraPayError(
-                        error_msg,
-                        error_code=f"HTTP_{response.status_code}",
-                        status_code=response.status_code,
-                    )
-
-                # Retry server errors (5xx)
-                if response.status_code >= 500:
-                    if attempt < max_retries:
-                        # Exponential backoff: 2^(attempt-1) + jitter
-                        delay = (2 ** (attempt - 1)) + (secrets.randbelow(500) / 1000)
-                        logger.warning(
-                            "Server error, retry in %.1fs | status=%d attempt=%d request_id=%s",
-                            delay,
-                            response.status_code,
-                            attempt,
-                            request_id,
-                        )
-                        time.sleep(delay)
-                        continue
-                    else:
-                        with self._metrics_lock:
-                            self._metrics["total_requests"] += 1
-                            self._metrics["failed_requests"] += 1
-                        raise KoraPayError(
-                            f"Server error after {max_retries} attempts",
-                            error_code="SERVER_ERROR",
-                            status_code=response.status_code,
-                        )
-
-                # Success - parse and return JSON
-                try:
-                    response_data = response.json()
-                    # Update success metrics
-                    with self._metrics_lock:
-                        self._metrics["total_requests"] += 1
-                        self._metrics["successful_requests"] += 1
-                        self._metrics["last_request_time"] = time.time()
-                    self._response_times.append(duration_ms)
-                    return response_data
-                except requests.exceptions.JSONDecodeError:
-                    logger.error(
-                        "Invalid JSON response | status=%d request_id=%s",
-                        response.status_code,
-                        request_id,
-                    )
-                    raise KoraPayError(
-                        "Invalid JSON response from payment provider",
-                        error_code="INVALID_JSON",
-                    )
-
-            except requests.Timeout as e:
-                last_error = e
-                if attempt < max_retries:
-                    delay = (2 ** (attempt - 1)) + (secrets.randbelow(500) / 1000)
-                    logger.warning(
-                        "Request timeout, retry in %.1fs | attempt=%d request_id=%s",
-                        delay,
-                        attempt,
-                        request_id,
-                    )
-                    time.sleep(delay)
-                    continue
-                else:
-                    with self._metrics_lock:
-                        self._metrics["total_requests"] += 1
-                        self._metrics["failed_requests"] += 1
-                    raise KoraPayError(
-                        f"Request timeout after {max_retries} attempts",
-                        error_code="TIMEOUT",
-                    )
+                result = self._handle_response_status(response, attempt, max_retries, request_id)
+                if result is None:
+                    continue  # retry
+                self._response_times.append(duration_ms)
+                return result
 
             except requests.exceptions.SSLError as e:
-                # Don't retry SSL errors - security issue
-                # MUST be before ConnectionError since SSLError is a subclass
-                logger.error(
-                    "SSL verification failed | request_id=%s error=%s",
-                    request_id,
-                    str(e),
-                )
+                logger.error("SSL verification failed | request_id=%s error=%s", request_id, str(e))
                 with self._metrics_lock:
                     self._metrics["total_requests"] += 1
                     self._metrics["failed_requests"] += 1
-                raise KoraPayError(
-                    "Payment provider security error", error_code="SSL_ERROR"
-                )
+                raise KoraPayError("Payment provider security error", error_code="SSL_ERROR")
 
-            except requests.ConnectionError as e:
+            except (requests.Timeout, requests.ConnectionError) as e:
                 last_error = e
                 if attempt < max_retries:
                     delay = (2 ** (attempt - 1)) + (secrets.randbelow(500) / 1000)
-                    logger.warning(
-                        "Connection error, retry in %.1fs | attempt=%d request_id=%s",
-                        delay,
-                        attempt,
-                        request_id,
-                    )
+                    logger.warning("Network error, retry in %.1fs | attempt=%d request_id=%s", delay, attempt, request_id)
                     time.sleep(delay)
                     continue
-                else:
-                    with self._metrics_lock:
-                        self._metrics["total_requests"] += 1
-                        self._metrics["failed_requests"] += 1
-                    raise KoraPayError(
-                        f"Connection failed after {max_retries} attempts",
-                        error_code="CONNECTION_ERROR",
-                    )
+                with self._metrics_lock:
+                    self._metrics["total_requests"] += 1
+                    self._metrics["failed_requests"] += 1
+                error_code = "TIMEOUT" if isinstance(e, requests.Timeout) else "CONNECTION_ERROR"
+                raise KoraPayError(f"Request failed after {max_retries} attempts", error_code=error_code)
 
             except requests.exceptions.JSONDecodeError as e:
-                # Invalid JSON response from API
-                logger.error(
-                    "Invalid JSON response | request_id=%s error=%s", request_id, str(e)
-                )
-                raise KoraPayError(
-                    "Invalid JSON response from payment provider",
-                    error_code="INVALID_JSON",
-                )
+                logger.error("Invalid JSON response | request_id=%s error=%s", request_id, str(e))
+                raise KoraPayError("Invalid JSON response from payment provider", error_code="INVALID_JSON")
 
-        # Should not reach here, but just in case
-        raise KoraPayError(
-            f"Request failed after {max_retries} attempts: {last_error}",
-            error_code="MAX_RETRIES_EXCEEDED",
-        )
+        raise KoraPayError(f"Request failed after {max_retries} attempts: {last_error}", error_code="MAX_RETRIES_EXCEEDED")
 
     def _validate_response(self, response: dict, required_fields: list) -> None:
         """
@@ -701,86 +582,32 @@ class KoraPayService:
     def create_virtual_account(
         self, transaction_reference: str, amount_kobo: int, account_name: str
     ) -> dict:
-        """
-        Create a virtual bank account for a transaction.
-
-        Args:
-            transaction_reference: Unique transaction reference (tx_ref)
-            amount_kobo: Amount in kobo (for backward compatibility, converted to Naira internally)
-            account_name: Name to display on virtual account
-
-        Returns:
-            Dict with Quickteller-compatible structure:
-            {
-                "accountNumber": "1234567890",
-                "bankName": "Wema Bank",
-                "accountName": "Merchant - OnePay Payment",
-                "amount": 150000,  # kobo for compatibility
-                "transactionReference": "ONEPAY-...",
-                "responseCode": "Z0",  # pending
-                "validityPeriodMins": 30
-            }
-
-        Raises:
-            KoraPayError: On API failure or validation error
-        """
-        # Check if mock mode
+        """Create a virtual bank account for a transaction."""
         if self._is_mock():
-            return self._mock_create_virtual_account(
-                transaction_reference, amount_kobo, account_name
-            )
+            return self._mock_create_virtual_account(transaction_reference, amount_kobo, account_name)
 
-        # Convert amount from kobo to Naira (KoraPay uses major currency units)
         from decimal import Decimal
-
         amount_naira = Decimal(amount_kobo) / 100
-
-        # Validate amount range (100 to 999999999 Naira)
         if amount_naira < 100 or amount_naira > 999999999:
             raise KoraPayError(
                 f"Amount must be between ₦100 and ₦999,999,999 (got ₦{amount_naira})",
                 error_code="INVALID_AMOUNT",
             )
 
-        # Build request body
-        request_body = {
-            "reference": transaction_reference,
-            "amount": int(amount_naira),  # KoraPay expects integer Naira
-            "currency": "NGN",
-            "customer": {"account_name": account_name},
-        }
-
-        # Make API request
         response = self._make_request(
-            "POST", "/merchant/api/v1/charges/bank-transfer", json=request_body
+            "POST", "/merchant/api/v1/charges/bank-transfer",
+            json={"reference": transaction_reference, "amount": int(amount_naira),
+                  "currency": "NGN", "customer": {"account_name": account_name}},
         )
-
-        # Validate response structure
-        required_fields = [
-            "data.reference",
-            "data.payment_reference",
-            "data.status",
-            "data.currency",
-            "data.amount",
-            "data.bank_account.account_number",
-            "data.bank_account.bank_name",
-            "data.bank_account.account_name",
-            "data.bank_account.bank_code",
+        self._validate_response(response, [
+            "data.reference", "data.payment_reference", "data.status", "data.currency",
+            "data.amount", "data.bank_account.account_number", "data.bank_account.bank_name",
+            "data.bank_account.account_name", "data.bank_account.bank_code",
             "data.bank_account.expiry_date_in_utc",
-        ]
-        self._validate_response(response, required_fields)
-
-        # Normalize response to Quickteller format
+        ])
         normalized = self._normalize_create_response(response["data"], amount_kobo)
-
-        # Log success
-        logger.info(
-            "Virtual account created | ref=%s bank=%s acct=%s",
-            transaction_reference,
-            normalized.get("bankName"),
-            normalized.get("accountNumber"),
-        )
-
+        logger.info("Virtual account created | ref=%s bank=%s acct=%s",
+                    transaction_reference, normalized.get("bankName"), normalized.get("accountNumber"))
         return normalized
 
     def confirm_transfer(
@@ -829,85 +656,10 @@ class KoraPayService:
         return normalized
 
     def _normalize_create_response(self, kora_response: dict, amount_kobo: int) -> dict:
-        """
-        Convert KoraPay virtual account response to Quickteller-compatible format.
-
-        Args:
-            kora_response: The 'data' object from KoraPay API response
-            amount_kobo: Original amount in kobo (for backward compatibility)
-
-        Returns:
-            Dict with Quickteller-compatible structure
-        """
-
-        # Extract bank account details
-        bank_account = kora_response["bank_account"]
-
-        # Capitalize bank name for display
-        bank_name = bank_account["bank_name"].title()
-
-        # Calculate validity period from expiry timestamp
-        expiry_str = bank_account["expiry_date_in_utc"]
-        try:
-            # Parse ISO format: "2024-01-01T12:30:00Z"
-            expiry_dt = datetime.strptime(expiry_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-            now = datetime.now(timezone.utc)
-            validity_seconds = (expiry_dt - now).total_seconds()
-            validity_mins = max(0, int(validity_seconds / 60))
-        except (ValueError, KeyError):
-            # Default to 30 minutes if parsing fails
-            validity_mins = 30
-
-        # Map status to responseCode (for backward compatibility)
-        status = kora_response.get("status", "processing")
-        if status == "success":
-            response_code = "00"
-        elif status == "failed":
-            response_code = "99"
-        else:  # processing or any other status
-            response_code = "Z0"
-
-        # Build Quickteller-compatible response
-        return {
-            "accountNumber": bank_account["account_number"],
-            "bankName": bank_name,
-            "accountName": bank_account["account_name"],
-            "amount": amount_kobo,  # Keep in kobo for backward compatibility
-            "transactionReference": kora_response["reference"],
-            "responseCode": response_code,
-            "validityPeriodMins": validity_mins,
-        }
+        return _normalize_create_response(kora_response, amount_kobo)
 
     def _normalize_confirm_response(self, kora_response: dict) -> dict:
-        """
-        Convert KoraPay transfer status response to Quickteller-compatible format.
-
-        Args:
-            kora_response: The 'data' object from KoraPay API response
-
-        Returns:
-            Dict with Quickteller-compatible structure:
-            {
-                "responseCode": "00",  # 00=confirmed, Z0=pending, 99=failed
-                "transactionReference": "ONEPAY-..."
-            }
-        """
-        # Extract status from response
-        status = kora_response.get("status", "processing")
-
-        # Map KoraPay status to Quickteller responseCode
-        if status == "success":
-            response_code = "00"  # Confirmed
-        elif status == "failed":
-            response_code = "99"  # Failed
-        else:  # processing or any other status
-            response_code = "Z0"  # Pending
-
-        # Build Quickteller-compatible response
-        return {
-            "responseCode": response_code,
-            "transactionReference": kora_response["reference"],
-        }
+        return _normalize_confirm_response(kora_response)
 
     def initiate_refund(
         self,
@@ -916,82 +668,29 @@ class KoraPayService:
         amount: int = None,
         reason: str = None,
     ) -> dict:
-        """
-        Initiate a refund for a completed payment through KoraPay API.
-
-        Args:
-            payment_reference: Merchant transaction reference (tx_ref)
-            refund_reference: Unique refund identifier (auto-generated if None)
-            amount: Refund amount in Naira (full amount if None)
-            reason: Optional reason for refund (max 200 characters)
-
-        Returns:
-            Dict with refund details:
-            {
-                "reference": "REFUND-...",
-                "payment_reference": "ONEPAY-...",
-                "amount": 1000,
-                "status": "processing",
-                "currency": "NGN"
-            }
-
-        Raises:
-            KoraPayError: If refund initiation fails
-        """
+        """Initiate a refund for a completed payment through KoraPay API."""
         import time
 
-        # Generate refund_reference if not provided
         if refund_reference is None:
-            timestamp = int(time.time())
-            refund_reference = f"REFUND-{payment_reference}-{timestamp}"
-
-        # Validate amount if provided
+            refund_reference = f"REFUND-{payment_reference}-{int(time.time())}"
         if amount is not None and amount < 100:
-            raise KoraPayError(
-                "Refund amount must be at least ₦100", error_code="INVALID_AMOUNT"
-            )
+            raise KoraPayError("Refund amount must be at least ₦100", error_code="INVALID_AMOUNT")
 
-        # Build request body
-        body = {
-            "payment_reference": payment_reference,
-            "reference": refund_reference,
-        }
-
+        body = {"payment_reference": payment_reference, "reference": refund_reference}
         if amount is not None:
             body["amount"] = amount
-
         if reason is not None:
             body["reason"] = reason
 
-        # Make API request
-        endpoint = "/merchant/api/v1/refunds/initiate"
-        logger.info(
-            f"Initiating refund | payment_ref={payment_reference} refund_ref={refund_reference} amount={amount}"
-        )
-
-        response = self._make_request("POST", endpoint, json=body)
-
-        # Validate response structure
-        self._validate_response(
-            response,
-            [
-                "status",
-                "data",
-                "data.reference",
-                "data.payment_reference",
-                "data.amount",
-                "data.status",
-                "data.currency",
-            ],
-        )
-
-        # Extract data object
+        logger.info("Initiating refund | payment_ref=%s refund_ref=%s amount=%s",
+                    payment_reference, refund_reference, amount)
+        response = self._make_request("POST", "/merchant/api/v1/refunds/initiate", json=body)
+        self._validate_response(response, [
+            "status", "data", "data.reference", "data.payment_reference",
+            "data.amount", "data.status", "data.currency",
+        ])
         data = response["data"]
-
-        logger.info(
-            f"Refund initiated | refund_ref={data['reference']} status={data['status']}"
-        )
-
+        logger.info("Refund initiated | refund_ref=%s status=%s", data["reference"], data["status"])
         return data
 
     def query_refund(self, refund_reference: str) -> dict:

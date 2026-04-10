@@ -83,13 +83,13 @@ def client(app):
 class TestETagPresence:
     """ETag header is added to static asset responses."""
 
-    def test_etag_header_present_on_static_asset(self, client, static_file):
+    def test_etag_header_present_on_static_asset(self, client, static_file) -> None:
         """Static asset responses include an ETag header."""
         response = client.get(f"/static/{static_file}")
         assert response.status_code == 200
         assert "ETag" in response.headers
 
-    def test_etag_is_quoted_per_http_spec(self, client, static_file):
+    def test_etag_is_quoted_per_http_spec(self, client, static_file) -> None:
         """ETag header value is quoted per HTTP spec (RFC 7232)."""
         response = client.get(f"/static/{static_file}")
         etag = response.headers.get("ETag")
@@ -98,7 +98,7 @@ class TestETagPresence:
             f"ETag must be quoted, got: {etag}"
         )
 
-    def test_etag_matches_md5_of_response_data(self, client, static_file):
+    def test_etag_matches_md5_of_response_data(self, client, static_file) -> None:
         """ETag value equals the SHA-256 hash of the actual response body."""
         response = client.get(f"/static/{static_file}")
         assert response.status_code == 200
@@ -106,7 +106,7 @@ class TestETagPresence:
         expected_etag = '"' + hashlib.sha256(response.data).hexdigest()[:32] + '"'
         assert response.headers.get("ETag") == expected_etag
 
-    def test_non_static_path_has_no_etag(self, client):
+    def test_non_static_path_has_no_etag(self, client) -> None:
         """Non-static paths do not receive ETag headers."""
         response = client.get("/ping")
         assert "ETag" not in response.headers
@@ -119,7 +119,7 @@ class TestETagPresence:
 class TestConditionalRequests:
     """Conditional requests via If-None-Match are handled correctly."""
 
-    def test_matching_etag_returns_304(self, client, static_file):
+    def test_matching_etag_returns_304(self, client, static_file) -> None:
         """If-None-Match with matching ETag returns 304 Not Modified."""
         # First request to get the ETag
         r1 = client.get(f"/static/{static_file}")
@@ -131,7 +131,7 @@ class TestConditionalRequests:
         r2 = client.get(f"/static/{static_file}", headers={"If-None-Match": etag})
         assert r2.status_code == 304
 
-    def test_304_response_includes_etag_header(self, client, static_file):
+    def test_304_response_includes_etag_header(self, client, static_file) -> None:
         """304 Not Modified response still includes the ETag header."""
         r1 = client.get(f"/static/{static_file}")
         etag = r1.headers.get("ETag")
@@ -140,7 +140,7 @@ class TestConditionalRequests:
         assert r2.status_code == 304
         assert r2.headers.get("ETag") == etag
 
-    def test_non_matching_etag_returns_200(self, client, static_file):
+    def test_non_matching_etag_returns_200(self, client, static_file) -> None:
         """If-None-Match with stale ETag returns full 200 response."""
         response = client.get(
             f"/static/{static_file}",
@@ -149,7 +149,7 @@ class TestConditionalRequests:
         assert response.status_code == 200
         assert response.headers.get("ETag") is not None
 
-    def test_no_if_none_match_returns_200(self, client, static_file):
+    def test_no_if_none_match_returns_200(self, client, static_file) -> None:
         """Request without If-None-Match always returns 200."""
         response = client.get(f"/static/{static_file}")
         assert response.status_code == 200

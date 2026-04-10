@@ -19,7 +19,7 @@ from services.korapay import verify_korapay_webhook_signature
 class TestWebhookSignatureVerification:
     """Test webhook signature verification function."""
 
-    def test_verify_with_valid_signature_returns_true(self):
+    def test_verify_with_valid_signature_returns_true(self) -> None:
         """Test that valid signature returns True."""
         # Arrange
         webhook_secret = "test-webhook-secret-32-chars-long-12345"
@@ -47,7 +47,7 @@ class TestWebhookSignatureVerification:
         # Assert
         assert result is True
 
-    def test_verify_with_invalid_signature_returns_false(self):
+    def test_verify_with_invalid_signature_returns_false(self) -> None:
         """Test that invalid signature returns False."""
         # Arrange
         webhook_secret = "test-webhook-secret-32-chars-long-12345"
@@ -69,7 +69,7 @@ class TestWebhookSignatureVerification:
         # Assert
         assert result is False
 
-    def test_signature_computed_on_data_object_only(self):
+    def test_signature_computed_on_data_object_only(self) -> None:
         """Test that signature is computed on data object only, not full payload."""
         # Arrange
         webhook_secret = "test-webhook-secret-32-chars-long-12345"
@@ -106,7 +106,7 @@ class TestWebhookSignatureVerification:
             # Wrong signature (computed on full payload) should fail
             assert verify_korapay_webhook_signature(payload, wrong_signature) is False
 
-    def test_uses_hmac_compare_digest_for_constant_time_comparison(self):
+    def test_uses_hmac_compare_digest_for_constant_time_comparison(self) -> None:
         """Test that hmac.compare_digest is used for timing-safe comparison."""
         # Arrange
         webhook_secret = "test-webhook-secret-32-chars-long-12345"
@@ -137,7 +137,7 @@ class TestWebhookSignatureVerification:
             invalid_signature = "a" * 64
             assert verify_korapay_webhook_signature(payload, invalid_signature) is False
 
-    def test_handles_missing_data_object(self):
+    def test_handles_missing_data_object(self) -> None:
         """Test that missing data object returns False."""
         # Arrange
         webhook_secret = "test-webhook-secret-32-chars-long-12345"
@@ -155,7 +155,7 @@ class TestWebhookSignatureVerification:
         # Assert
         assert result is False
 
-    def test_handles_missing_signature(self):
+    def test_handles_missing_signature(self) -> None:
         """Test that missing signature (None or empty) returns False."""
         # Arrange
         webhook_secret = "test-webhook-secret-32-chars-long-12345"
@@ -176,7 +176,7 @@ class TestWebhookSignatureVerification:
             # Empty string signature
             assert verify_korapay_webhook_signature(payload, "") is False
 
-    def test_signature_verification_with_different_data_values(self):
+    def test_signature_verification_with_different_data_values(self) -> None:
         """Test that signature changes when data values change."""
         # Arrange
         webhook_secret = "test-webhook-secret-32-chars-long-12345"
@@ -215,7 +215,7 @@ class TestWebhookSignatureVerification:
             # Signature1 should NOT work for payload2 (different data)
             assert verify_korapay_webhook_signature(payload2, signature1) is False
 
-    def test_signature_verification_with_nested_data_structure(self):
+    def test_signature_verification_with_nested_data_structure(self) -> None:
         """Test signature verification with complex nested data."""
         # Arrange
         webhook_secret = "test-webhook-secret-32-chars-long-12345"

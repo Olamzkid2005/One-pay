@@ -14,7 +14,7 @@ from services.voicepay_webhook import build_voicepay_payload, generate_voicepay_
 class TestSignatureEdgeCases:
     """Test signature generation edge cases"""
 
-    def test_signature_with_special_characters(self):
+    def test_signature_with_special_characters(self) -> None:
         """Test signature generation with special characters in payload"""
         payload = {
             "description": "Payment for DSTV: Premium Package (₦9,000)",
@@ -29,7 +29,7 @@ class TestSignatureEdgeCases:
         assert len(sig) == 64
         assert all(c in '0123456789abcdef' for c in sig)
 
-    def test_signature_with_unicode(self):
+    def test_signature_with_unicode(self) -> None:
         """Test signature generation with Unicode characters"""
         payload = {
             "customer_name": "José García",
@@ -41,7 +41,7 @@ class TestSignatureEdgeCases:
         sig = generate_voicepay_signature(payload, secret)
         assert len(sig) == 64
 
-    def test_signature_with_empty_values(self):
+    def test_signature_with_empty_values(self) -> None:
         """Test signature generation with empty/null values"""
         payload = {
             "tx_ref": "VP-BILL-000",
@@ -54,7 +54,7 @@ class TestSignatureEdgeCases:
         sig = generate_voicepay_signature(payload, secret)
         assert len(sig) == 64
 
-    def test_signature_with_very_long_strings(self):
+    def test_signature_with_very_long_strings(self) -> None:
         """Test signature generation with very long string values"""
         payload = {
             "tx_ref": "VP-BILL-LONG",
@@ -66,7 +66,7 @@ class TestSignatureEdgeCases:
         sig = generate_voicepay_signature(payload, secret)
         assert len(sig) == 64
 
-    def test_signature_with_numeric_string_keys(self):
+    def test_signature_with_numeric_string_keys(self) -> None:
         """Test signature generation with numeric string keys"""
         payload = {
             "123": "value1",
@@ -82,7 +82,7 @@ class TestSignatureEdgeCases:
 class TestPayloadBuildingEdgeCases:
     """Test payload building edge cases"""
 
-    def test_build_payload_with_very_large_amount(self):
+    def test_build_payload_with_very_large_amount(self) -> None:
         """Test payload building with very large transaction amount"""
         from models.transaction import Transaction, TransactionStatus
 
@@ -104,7 +104,7 @@ class TestPayloadBuildingEdgeCases:
         assert payload["amount"] == 99999999.99
         assert isinstance(payload["amount"], float)
 
-    def test_build_payload_with_zero_amount(self):
+    def test_build_payload_with_zero_amount(self) -> None:
         """Test payload building with zero amount"""
         from models.transaction import Transaction, TransactionStatus
 
@@ -125,7 +125,7 @@ class TestPayloadBuildingEdgeCases:
         assert payload["amount"] == 0.0
         assert isinstance(payload["amount"], float)
 
-    def test_build_payload_with_special_characters_in_description(self):
+    def test_build_payload_with_special_characters_in_description(self) -> None:
         """Test payload building with special characters in description"""
         from models.transaction import Transaction, TransactionStatus
 
@@ -146,7 +146,7 @@ class TestPayloadBuildingEdgeCases:
         assert payload["description"] == "Payment for: DSTV Premium (₦5,000) - O'Brien & Co."
         assert payload["tx_ref"] == "VP-BILL-SPECIAL"
 
-    def test_build_payload_with_missing_optional_fields(self):
+    def test_build_payload_with_missing_optional_fields(self) -> None:
         """Test payload building when optional fields are None"""
         from models.transaction import Transaction, TransactionStatus
 
@@ -169,7 +169,7 @@ class TestPayloadBuildingEdgeCases:
         assert payload["customer_email"] is None
         assert payload["description"] is None
 
-    def test_build_payload_with_pending_status(self):
+    def test_build_payload_with_pending_status(self) -> None:
         """Test payload building with PENDING status"""
         from models.transaction import Transaction, TransactionStatus
 
@@ -190,7 +190,7 @@ class TestPayloadBuildingEdgeCases:
         assert payload["status"] == "pending"
         assert payload["verified_at"] is None
 
-    def test_build_payload_with_failed_status(self):
+    def test_build_payload_with_failed_status(self) -> None:
         """Test payload building with FAILED status"""
         from models.transaction import Transaction, TransactionStatus
 

@@ -11,7 +11,7 @@ import pytest
 class TestAuthenticationHeaders:
     """Test authentication header generation."""
 
-    def test_get_auth_headers_includes_bearer_token(self):
+    def test_get_auth_headers_includes_bearer_token(self) -> None:
         """Test _get_auth_headers() includes 'Authorization: Bearer {key}'."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -27,7 +27,7 @@ class TestAuthenticationHeaders:
             assert 'Authorization' in headers
             assert headers['Authorization'] == f'Bearer {valid_key}'
 
-    def test_get_auth_headers_includes_content_type_json(self):
+    def test_get_auth_headers_includes_content_type_json(self) -> None:
         """Test _get_auth_headers() includes 'Content-Type: application/json'."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -43,7 +43,7 @@ class TestAuthenticationHeaders:
             assert 'Content-Type' in headers
             assert headers['Content-Type'] == 'application/json'
 
-    def test_get_auth_headers_includes_accept_json(self):
+    def test_get_auth_headers_includes_accept_json(self) -> None:
         """Test _get_auth_headers() includes 'Accept: application/json'."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -59,7 +59,7 @@ class TestAuthenticationHeaders:
             assert 'Accept' in headers
             assert headers['Accept'] == 'application/json'
 
-    def test_get_auth_headers_includes_user_agent(self):
+    def test_get_auth_headers_includes_user_agent(self) -> None:
         """Test _get_auth_headers() includes 'User-Agent: OnePay-KoraPay/1.0'."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -75,7 +75,7 @@ class TestAuthenticationHeaders:
             assert 'User-Agent' in headers
             assert headers['User-Agent'] == 'OnePay-KoraPay/1.0'
 
-    def test_get_auth_headers_includes_request_id_uuid(self):
+    def test_get_auth_headers_includes_request_id_uuid(self) -> None:
         """Test _get_auth_headers() includes 'X-Request-ID' with UUID format."""
         import re
 
@@ -96,7 +96,7 @@ class TestAuthenticationHeaders:
             uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
             assert re.match(uuid_pattern, headers['X-Request-ID'], re.IGNORECASE)
 
-    def test_api_key_masked_in_logs(self, caplog):
+    def test_api_key_masked_in_logs(self, caplog) -> None:
         """Test API key is masked in logs."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):

@@ -18,7 +18,7 @@ from services.webhook import verify_inbound_webhook_signature
 class TestInboundWebhookSignatureVerification:
     """Test inbound webhook signature verification function."""
 
-    def test_verify_with_valid_signature_returns_true(self):
+    def test_verify_with_valid_signature_returns_true(self) -> None:
         """Test that valid signature returns True."""
         # Arrange
         webhook_secret = "test-inbound-webhook-secret-32-chars-long"
@@ -39,7 +39,7 @@ class TestInboundWebhookSignatureVerification:
         # Assert
         assert result is True
 
-    def test_verify_with_invalid_signature_returns_false(self):
+    def test_verify_with_invalid_signature_returns_false(self) -> None:
         """Test that invalid signature returns False."""
         # Arrange
         webhook_secret = "test-inbound-webhook-secret-32-chars-long"
@@ -54,7 +54,7 @@ class TestInboundWebhookSignatureVerification:
         # Assert
         assert result is False
 
-    def test_signature_without_sha256_prefix_returns_false(self):
+    def test_signature_without_sha256_prefix_returns_false(self) -> None:
         """Test that signature without 'sha256=' prefix returns False."""
         # Arrange
         webhook_secret = "test-inbound-webhook-secret-32-chars-long"
@@ -74,7 +74,7 @@ class TestInboundWebhookSignatureVerification:
         # Assert
         assert result is False
 
-    def test_uses_constant_time_comparison(self):
+    def test_uses_constant_time_comparison(self) -> None:
         """Test that hmac.compare_digest is used for timing-safe comparison."""
         # Arrange
         webhook_secret = "test-inbound-webhook-secret-32-chars-long"
@@ -96,7 +96,7 @@ class TestInboundWebhookSignatureVerification:
             invalid_signature = "sha256=" + ("a" * 64)
             assert verify_inbound_webhook_signature(payload, invalid_signature) is False
 
-    def test_handles_missing_signature(self):
+    def test_handles_missing_signature(self) -> None:
         """Test that missing signature (None or empty) returns False."""
         # Arrange
         webhook_secret = "test-inbound-webhook-secret-32-chars-long"
@@ -110,7 +110,7 @@ class TestInboundWebhookSignatureVerification:
             # Empty string signature
             assert verify_inbound_webhook_signature(payload, "") is False
 
-    def test_handles_missing_secret(self):
+    def test_handles_missing_secret(self) -> None:
         """Test that missing INBOUND_WEBHOOK_SECRET returns False."""
         # Arrange
         payload = b'{"tx_ref":"ONEPAY-TEST-123","status":"verified"}'
@@ -123,7 +123,7 @@ class TestInboundWebhookSignatureVerification:
         # Assert
         assert result is False
 
-    def test_signature_changes_with_different_payload(self):
+    def test_signature_changes_with_different_payload(self) -> None:
         """Test that signature verification fails when payload changes."""
         # Arrange
         webhook_secret = "test-inbound-webhook-secret-32-chars-long"
@@ -146,7 +146,7 @@ class TestInboundWebhookSignatureVerification:
             # Signature1 should NOT work for payload2 (different payload)
             assert verify_inbound_webhook_signature(payload2, signature1) is False
 
-    def test_extracts_signature_from_header_format(self):
+    def test_extracts_signature_from_header_format(self) -> None:
         """Test that signature is correctly extracted from 'sha256=<hex>' format."""
         # Arrange
         webhook_secret = "test-inbound-webhook-secret-32-chars-long"
@@ -171,7 +171,7 @@ class TestInboundWebhookSignatureVerification:
             assert verify_inbound_webhook_signature(payload, f"sha512={computed_sig}") is False
             assert verify_inbound_webhook_signature(payload, f"md5={computed_sig}") is False
 
-    def test_signature_verification_with_empty_payload(self):
+    def test_signature_verification_with_empty_payload(self) -> None:
         """Test signature verification with empty payload."""
         # Arrange
         webhook_secret = "test-inbound-webhook-secret-32-chars-long"
@@ -192,7 +192,7 @@ class TestInboundWebhookSignatureVerification:
         # Assert
         assert result is True
 
-    def test_signature_verification_with_special_characters(self):
+    def test_signature_verification_with_special_characters(self) -> None:
         """Test signature verification with special characters in payload."""
         # Arrange
         webhook_secret = "test-inbound-webhook-secret-32-chars-long"

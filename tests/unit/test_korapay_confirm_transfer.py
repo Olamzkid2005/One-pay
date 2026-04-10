@@ -11,7 +11,7 @@ import pytest
 class TestConfirmTransfer:
     """Test transfer status confirmation functionality."""
 
-    def test_confirm_transfer_calls_mock_in_mock_mode(self):
+    def test_confirm_transfer_calls_mock_in_mock_mode(self) -> None:
         """Test confirm_transfer calls _mock_confirm_transfer in mock mode."""
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': ''}, clear=False):
             import importlib
@@ -31,7 +31,7 @@ class TestConfirmTransfer:
             assert result["responseCode"] is not None
             assert result["transactionReference"] == tx_ref
 
-    def test_confirm_transfer_makes_get_request_in_live_mode(self):
+    def test_confirm_transfer_makes_get_request_in_live_mode(self) -> None:
         """Test confirm_transfer makes GET to /charges/{reference} in live mode."""
         from unittest.mock import Mock, patch
 
@@ -66,7 +66,7 @@ class TestConfirmTransfer:
                 assert call_args[0][0] == "GET"
                 assert "/charges/ONEPAY-TEST-12345" in call_args[0][1]
 
-    def test_confirm_transfer_maps_success_status_to_00(self):
+    def test_confirm_transfer_maps_success_status_to_00(self) -> None:
         """Test confirm_transfer maps 'success' status to responseCode '00'."""
         from unittest.mock import Mock, patch
 
@@ -95,7 +95,7 @@ class TestConfirmTransfer:
 
                 assert result["responseCode"] == "00"
 
-    def test_confirm_transfer_maps_processing_status_to_z0(self):
+    def test_confirm_transfer_maps_processing_status_to_z0(self) -> None:
         """Test confirm_transfer maps 'processing' status to responseCode 'Z0'."""
         from unittest.mock import Mock, patch
 
@@ -124,7 +124,7 @@ class TestConfirmTransfer:
 
                 assert result["responseCode"] == "Z0"
 
-    def test_confirm_transfer_maps_failed_status_to_99(self):
+    def test_confirm_transfer_maps_failed_status_to_99(self) -> None:
         """Test confirm_transfer maps 'failed' status to responseCode '99'."""
         from unittest.mock import Mock, patch
 
@@ -153,7 +153,7 @@ class TestConfirmTransfer:
 
                 assert result["responseCode"] == "99"
 
-    def test_confirm_transfer_handles_404_error(self):
+    def test_confirm_transfer_handles_404_error(self) -> None:
         """Test confirm_transfer handles 404 error (transaction not found)."""
         from unittest.mock import Mock, patch
 
@@ -173,7 +173,7 @@ class TestConfirmTransfer:
 
                 assert exc_info.value.status_code == 404
 
-    def test_confirm_transfer_handles_timeout_error(self):
+    def test_confirm_transfer_handles_timeout_error(self) -> None:
         """Test confirm_transfer handles timeout error."""
         from unittest.mock import Mock, patch
 
@@ -193,7 +193,7 @@ class TestConfirmTransfer:
 
                 assert exc_info.value.error_code == "TIMEOUT"
 
-    def test_confirm_transfer_validates_response_structure(self):
+    def test_confirm_transfer_validates_response_structure(self) -> None:
         """Test confirm_transfer validates response structure."""
         from unittest.mock import Mock, patch
 

@@ -11,7 +11,7 @@ import pytest
 class TestCreateVirtualAccount:
     """Test virtual account creation functionality."""
 
-    def test_create_virtual_account_calls_mock_in_mock_mode(self):
+    def test_create_virtual_account_calls_mock_in_mock_mode(self) -> None:
         """Test create_virtual_account calls _mock_create_virtual_account in mock mode."""
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': ''}, clear=False):
             import importlib
@@ -32,7 +32,7 @@ class TestCreateVirtualAccount:
             assert result["bankName"] == "Wema Bank (Demo)"
             assert result["responseCode"] == "Z0"
 
-    def test_create_virtual_account_makes_post_request_in_live_mode(self):
+    def test_create_virtual_account_makes_post_request_in_live_mode(self) -> None:
         """Test create_virtual_account makes POST to /charges/bank-transfer in live mode."""
         from unittest.mock import Mock, patch
 
@@ -77,7 +77,7 @@ class TestCreateVirtualAccount:
                 assert call_args[0][0] == "POST"
                 assert "/charges/bank-transfer" in call_args[0][1]
 
-    def test_create_virtual_account_converts_amount_kobo_to_naira(self):
+    def test_create_virtual_account_converts_amount_kobo_to_naira(self) -> None:
         """Test create_virtual_account converts amount_kobo to Naira (divide by 100)."""
         from decimal import Decimal
         from unittest.mock import Mock, patch
@@ -121,7 +121,7 @@ class TestCreateVirtualAccount:
                 request_body = call_args[1]['json']
                 assert request_body['amount'] == 1500
 
-    def test_create_virtual_account_includes_correct_request_body_fields(self):
+    def test_create_virtual_account_includes_correct_request_body_fields(self) -> None:
         """Test create_virtual_account includes correct request body fields."""
         from unittest.mock import Mock, patch
 
@@ -171,7 +171,7 @@ class TestCreateVirtualAccount:
                 assert 'account_name' in request_body['customer']
                 assert request_body['customer']['account_name'] == "Test Account"
 
-    def test_create_virtual_account_handles_400_error(self):
+    def test_create_virtual_account_handles_400_error(self) -> None:
         """Test create_virtual_account handles 400 error with field validation."""
         from unittest.mock import Mock, patch
 
@@ -191,7 +191,7 @@ class TestCreateVirtualAccount:
 
                 assert exc_info.value.status_code == 400
 
-    def test_create_virtual_account_handles_401_authentication_error(self):
+    def test_create_virtual_account_handles_401_authentication_error(self) -> None:
         """Test create_virtual_account handles 401 authentication error."""
         from unittest.mock import Mock, patch
 
@@ -211,7 +211,7 @@ class TestCreateVirtualAccount:
 
                 assert exc_info.value.status_code == 401
 
-    def test_create_virtual_account_handles_timeout_error(self):
+    def test_create_virtual_account_handles_timeout_error(self) -> None:
         """Test create_virtual_account handles timeout error."""
         from unittest.mock import Mock, patch
 
@@ -233,7 +233,7 @@ class TestCreateVirtualAccount:
 
                 assert exc_info.value.error_code == "TIMEOUT"
 
-    def test_create_virtual_account_validates_response_has_required_fields(self):
+    def test_create_virtual_account_validates_response_has_required_fields(self) -> None:
         """Test create_virtual_account validates response has required fields."""
         from unittest.mock import Mock, patch
 
@@ -261,7 +261,7 @@ class TestCreateVirtualAccount:
 
                 assert "missing" in str(exc_info.value).lower()
 
-    def test_create_virtual_account_normalizes_korapay_response_to_quickteller_format(self):
+    def test_create_virtual_account_normalizes_korapay_response_to_quickteller_format(self) -> None:
         """Test create_virtual_account normalizes KoraPay response to Quickteller format."""
         from unittest.mock import Mock, patch
 

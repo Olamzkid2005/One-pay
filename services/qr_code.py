@@ -26,6 +26,36 @@ class QRCodeService:
         self.default_fill_color = "black"
         self.default_back_color = "white"
 
+    def _run_with_timeout(self, fn, timeout: float = 5.0):
+        """Run fn in a thread with timeout. Returns result or raises on timeout/error."""
+        import threading
+        result = [None]
+        error = [None]
+
+        def _wrapper():
+            try:
+                result[0] = fn()
+            except Exception as e:
+                error[0] = e
+
+        t = threading.Thread(target=_wrapper, daemon=True)
+        t.start()
+        t.join(timeout=timeout)
+        if t.is_alive():
+            raise TimeoutError("QR generation timeout")
+        if error[0]:
+            raise error[0]
+        if result[0] is None:
+            raise RuntimeError("QR generation failed without error")
+        return result[0]
+
+    def _encode_to_data_uri(self, img) -> str:
+        """Convert a QR image to a base64 PNG data URI."""
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG", optimize=True)
+        buffer.seek(0)
+        return f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}"
+
     def generate_payment_qr(
         self,
         payment_url: str,
@@ -34,89 +64,28 @@ class QRCodeService:
         include_logo: bool = False,
         style: str = "standard",
     ) -> str:
-        """
-        Generate QR code for payment link.
-
-        Args:
-            payment_url: The payment URL to encode
-            amount: Optional amount to include in QR data
-            description: Optional description to include
-            include_logo: Whether to include OnePay logo (future feature)
-            style: QR code style ('standard', 'rounded')
-
-        Returns:
-            Base64-encoded PNG image data URI
-
-        VULN-009 FIX: Added timeout protection for QR generation.
-        """
-        try:
-            # VULN-009 FIX: Use threading timeout for cross-platform compatibility
-            import threading
-
-            result = [None]
-            error = [None]
-
-            def generate_qr():
-                try:
-                    # Enhanced QR data with payment information
-                    qr_data = self._build_payment_data(payment_url, amount, description)
-
-                    # Configure QR code
-                    qr = qrcode.QRCode(
-                        version=1,
-                        error_correction=qrcode.constants.ERROR_CORRECT_M,
-                        box_size=self.default_box_size,
-                        border=self.default_border,
-                    )
-
-                    qr.add_data(qr_data)
-                    qr.make(fit=True)
-
-                    # Create image with style
-                    if style == "rounded":
-                        img = qr.make_image(
-                            fill_color=self.default_fill_color,
-                            back_color=self.default_back_color,
-                            image_factory=StyledPilImage,
-                            module_drawer=RoundedModuleDrawer(),
-                        )
-                    else:
-                        img = qr.make_image(
-                            fill_color=self.default_fill_color,
-                            back_color=self.default_back_color,
-                        )
-
-                    # Convert to base64
-                    buffer = io.BytesIO()
-                    img.save(buffer, format="PNG", optimize=True)
-                    buffer.seek(0)
-
-                    img_base64 = base64.b64encode(buffer.getvalue()).decode()
-                    data_uri = f"data:image/png;base64,{img_base64}"
-
-                    result[0] = data_uri
-                except Exception as e:
-                    error[0] = e
-
-            # Run with 5 second timeout
-            thread = threading.Thread(target=generate_qr)
-            thread.daemon = True
-            thread.start()
-            thread.join(timeout=5.0)
-
-            if thread.is_alive():
-                logger.error("QR code generation timeout after 5 seconds")
-                raise TimeoutError("QR generation timeout")
-
-            if error[0]:
-                raise error[0]
-
-            if result[0]:
-                logger.debug("QR code generated successfully for payment URL")
-                return result[0]
+        """Generate QR code for payment link. Returns base64 PNG data URI."""
+        def _generate():
+            qr_data = self._build_payment_data(payment_url, amount, description)
+            qr = qrcode.QRCode(
+                version=1, error_correction=qrcode.constants.ERROR_CORRECT_M,
+                box_size=self.default_box_size, border=self.default_border,
+            )
+            qr.add_data(qr_data)
+            qr.make(fit=True)
+            if style == "rounded":
+                img = qr.make_image(
+                    fill_color=self.default_fill_color, back_color=self.default_back_color,
+                    image_factory=StyledPilImage, module_drawer=RoundedModuleDrawer(),
+                )
             else:
-                raise RuntimeError("QR generation failed without error")
+                img = qr.make_image(fill_color=self.default_fill_color, back_color=self.default_back_color)
+            return self._encode_to_data_uri(img)
 
+        try:
+            result = self._run_with_timeout(_generate)
+            logger.debug("QR code generated for payment URL")
+            return result
         except Exception as e:
             logger.error("Failed to generate QR code: %s", e)
             raise
@@ -128,81 +97,25 @@ class QRCodeService:
         account_name: str,
         amount: Optional[str] = None,
     ) -> str:
-        """
-        Generate QR code for virtual account payment.
+        """Generate QR code for virtual account payment. Returns base64 PNG data URI."""
+        def _generate():
+            qr_data = self._build_transfer_data(account_number, bank_name, account_name, amount)
+            qr = qrcode.QRCode(
+                version=1, error_correction=qrcode.constants.ERROR_CORRECT_M,
+                box_size=self.default_box_size, border=self.default_border,
+            )
+            qr.add_data(qr_data)
+            qr.make(fit=True)
+            img = qr.make_image(
+                fill_color=self.default_fill_color, back_color=self.default_back_color,
+                image_factory=StyledPilImage, module_drawer=RoundedModuleDrawer(),
+            )
+            return self._encode_to_data_uri(img)
 
-        Args:
-            account_number: Virtual account number
-            bank_name: Bank name
-            account_name: Account holder name
-            amount: Optional payment amount
-
-        Returns:
-            Base64-encoded PNG image data URI
-
-        VULN-009 FIX: Added timeout protection for QR generation.
-        """
         try:
-            # VULN-009 FIX: Use threading timeout for cross-platform compatibility
-            import threading
-
-            result = [None]
-            error = [None]
-
-            def generate_qr():
-                try:
-                    # Build transfer instruction data
-                    qr_data = self._build_transfer_data(
-                        account_number, bank_name, account_name, amount
-                    )
-
-                    qr = qrcode.QRCode(
-                        version=1,
-                        error_correction=qrcode.constants.ERROR_CORRECT_M,
-                        box_size=self.default_box_size,
-                        border=self.default_border,
-                    )
-
-                    qr.add_data(qr_data)
-                    qr.make(fit=True)
-
-                    img = qr.make_image(
-                        fill_color=self.default_fill_color,
-                        back_color=self.default_back_color,
-                        image_factory=StyledPilImage,
-                        module_drawer=RoundedModuleDrawer(),
-                    )
-
-                    buffer = io.BytesIO()
-                    img.save(buffer, format="PNG", optimize=True)
-                    buffer.seek(0)
-
-                    img_base64 = base64.b64encode(buffer.getvalue()).decode()
-                    data_uri = f"data:image/png;base64,{img_base64}"
-
-                    result[0] = data_uri
-                except Exception as e:
-                    error[0] = e
-
-            # Run with 5 second timeout
-            thread = threading.Thread(target=generate_qr)
-            thread.daemon = True
-            thread.start()
-            thread.join(timeout=5.0)
-
-            if thread.is_alive():
-                logger.error("QR code generation timeout after 5 seconds")
-                raise TimeoutError("QR generation timeout")
-
-            if error[0]:
-                raise error[0]
-
-            if result[0]:
-                logger.debug("QR code generated successfully for virtual account")
-                return result[0]
-            else:
-                raise RuntimeError("QR generation failed without error")
-
+            result = self._run_with_timeout(_generate)
+            logger.debug("QR code generated for virtual account")
+            return result
         except Exception as e:
             logger.error("Failed to generate virtual account QR code: %s", e)
             raise

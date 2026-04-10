@@ -62,7 +62,7 @@ def client(app):
 class TestCorrelationIdGeneration:
     """Test that a new UUID is generated when no X-Request-ID header is present."""
 
-    def test_generates_uuid_when_no_header(self, client):
+    def test_generates_uuid_when_no_header(self, client) -> None:
         """
         WHEN a request is received without X-Request-ID,
         THE System SHALL generate a new UUID as the correlation ID.
@@ -80,7 +80,7 @@ class TestCorrelationIdGeneration:
         parsed = uuid.UUID(correlation_id)
         assert str(parsed) == correlation_id
 
-    def test_each_request_gets_unique_id(self, client):
+    def test_each_request_gets_unique_id(self, client) -> None:
         """
         WHEN two requests are received without X-Request-ID,
         each SHALL receive a distinct correlation ID.
@@ -95,7 +95,7 @@ class TestCorrelationIdGeneration:
 
         assert id1 != id2
 
-    def test_generated_id_is_valid_uuid_format(self, client):
+    def test_generated_id_is_valid_uuid_format(self, client) -> None:
         """
         The auto-generated correlation ID SHALL be a valid UUID v4 string.
 
@@ -116,7 +116,7 @@ class TestCorrelationIdGeneration:
 class TestCorrelationIdExtraction:
     """Test that X-Request-ID header value is used as the correlation ID."""
 
-    def test_uses_x_request_id_header_when_present(self, client):
+    def test_uses_x_request_id_header_when_present(self, client) -> None:
         """
         WHEN a request includes X-Request-ID,
         THE System SHALL use that value as the correlation ID.
@@ -129,7 +129,7 @@ class TestCorrelationIdExtraction:
         assert response.status_code == 200
         assert response.headers.get("X-Correlation-ID") == custom_id
 
-    def test_x_request_id_propagated_to_response_body(self, client):
+    def test_x_request_id_propagated_to_response_body(self, client) -> None:
         """
         The correlation ID extracted from X-Request-ID SHALL be accessible
         via Flask g within the request context.
@@ -142,7 +142,7 @@ class TestCorrelationIdExtraction:
         data = response.get_json()
         assert data["correlation_id"] == custom_id
 
-    def test_empty_x_request_id_falls_back_to_generated(self, client):
+    def test_empty_x_request_id_falls_back_to_generated(self, client) -> None:
         """
         WHEN X-Request-ID header is empty,
         THE System SHALL generate a new UUID instead.
@@ -164,7 +164,7 @@ class TestCorrelationIdExtraction:
 class TestCorrelationIdResponseHeader:
     """Test that X-Correlation-ID is set on all responses."""
 
-    def test_correlation_id_header_present_on_200(self, client):
+    def test_correlation_id_header_present_on_200(self, client) -> None:
         """
         THE System SHALL return X-Correlation-ID on successful responses.
 
@@ -174,7 +174,7 @@ class TestCorrelationIdResponseHeader:
 
         assert "X-Correlation-ID" in response.headers
 
-    def test_correlation_id_header_present_on_404(self, app):
+    def test_correlation_id_header_present_on_404(self, app) -> None:
         """
         THE System SHALL return X-Correlation-ID even on 404 responses.
 
@@ -185,7 +185,7 @@ class TestCorrelationIdResponseHeader:
 
         assert "X-Correlation-ID" in response.headers
 
-    def test_correlation_id_consistent_in_header_and_body(self, client):
+    def test_correlation_id_consistent_in_header_and_body(self, client) -> None:
         """
         The X-Correlation-ID response header SHALL match the correlation ID
         available inside the request context.
@@ -202,7 +202,7 @@ class TestCorrelationIdResponseHeader:
         assert body_id == custom_id
         assert header_id == body_id
 
-    def test_correlation_id_header_non_empty(self, client):
+    def test_correlation_id_header_non_empty(self, client) -> None:
         """
         The X-Correlation-ID response header SHALL never be empty.
 
@@ -222,7 +222,7 @@ class TestCorrelationIdResponseHeader:
 class TestCorrelationIdFilter:
     """Test that CorrelationIdFilter injects correlation_id into log records."""
 
-    def test_filter_injects_correlation_id_in_request_context(self, app):
+    def test_filter_injects_correlation_id_in_request_context(self, app) -> None:
         """
         WHEN inside a Flask request context with g.correlation_id set,
         THE CorrelationIdFilter SHALL inject that value into log records.
@@ -244,7 +244,7 @@ class TestCorrelationIdFilter:
 
         assert record.correlation_id == "inject-test-id-abc"
 
-    def test_filter_uses_dash_when_outside_request_context(self):
+    def test_filter_uses_dash_when_outside_request_context(self) -> None:
         """
         WHEN outside a Flask request context,
         THE CorrelationIdFilter SHALL set correlation_id to '-'.
@@ -265,7 +265,7 @@ class TestCorrelationIdFilter:
 
         assert record.correlation_id == "-"
 
-    def test_filter_uses_dash_when_g_has_no_correlation_id(self, app):
+    def test_filter_uses_dash_when_g_has_no_correlation_id(self, app) -> None:
         """
         WHEN inside a request context but g.correlation_id is not set,
         THE CorrelationIdFilter SHALL set correlation_id to '-'.
@@ -287,7 +287,7 @@ class TestCorrelationIdFilter:
 
         assert record.correlation_id == "-"
 
-    def test_filter_returns_true(self, app):
+    def test_filter_returns_true(self, app) -> None:
         """
         THE CorrelationIdFilter.filter() SHALL always return True
         (i.e., never suppress log records).
@@ -309,7 +309,7 @@ class TestCorrelationIdFilter:
 
         assert result is True
 
-    def test_filter_correlation_id_appears_in_formatted_log(self, app):
+    def test_filter_correlation_id_appears_in_formatted_log(self, app) -> None:
         """
         WHEN a log handler uses %(correlation_id)s in its format string,
         the correlation ID SHALL appear in the formatted output.
@@ -348,7 +348,7 @@ class TestCorrelationIdFilter:
 class TestCorrelationIdConsistency:
     """Test that the correlation ID is consistent throughout the request lifecycle."""
 
-    def test_provided_id_consistent_across_request(self, client):
+    def test_provided_id_consistent_across_request(self, client) -> None:
         """
         The correlation ID provided via X-Request-ID SHALL be the same
         in the response header and in the request context.
@@ -361,7 +361,7 @@ class TestCorrelationIdConsistency:
         assert response.headers["X-Correlation-ID"] == request_id
         assert response.get_json()["correlation_id"] == request_id
 
-    def test_generated_id_consistent_across_request(self, client):
+    def test_generated_id_consistent_across_request(self, client) -> None:
         """
         The auto-generated correlation ID SHALL be the same in the response
         header and in the request context (not regenerated mid-request).

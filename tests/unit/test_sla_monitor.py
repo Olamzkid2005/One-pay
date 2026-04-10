@@ -30,7 +30,7 @@ class TestSLAMonitor:
         yield
         reset_sla_monitor()
 
-    def test_record_request_increments_success_count(self):
+    def test_record_request_increments_success_count(self) -> None:
         """Test that record_request increments success count on success."""
         monitor = get_sla_monitor()
         initial_count = monitor._success_count
@@ -39,7 +39,7 @@ class TestSLAMonitor:
 
         assert monitor._success_count == initial_count + 1
 
-    def test_record_request_increments_failure_count(self):
+    def test_record_request_increments_failure_count(self) -> None:
         """Test that record_request increments failure count on failure."""
         monitor = get_sla_monitor()
         initial_count = monitor._failure_count
@@ -48,7 +48,7 @@ class TestSLAMonitor:
 
         assert monitor._failure_count == initial_count + 1
 
-    def test_get_success_rate_with_no_requests(self):
+    def test_get_success_rate_with_no_requests(self) -> None:
         """Test success rate is 100% with no requests."""
         monitor = get_sla_monitor()
 
@@ -56,7 +56,7 @@ class TestSLAMonitor:
 
         assert rate == 100.0
 
-    def test_get_success_rate_with_all_success(self):
+    def test_get_success_rate_with_all_success(self) -> None:
         """Test success rate is 100% with all successful requests."""
         monitor = get_sla_monitor()
 
@@ -68,7 +68,7 @@ class TestSLAMonitor:
 
         assert rate == 100.0
 
-    def test_get_success_rate_with_failures(self):
+    def test_get_success_rate_with_failures(self) -> None:
         """Test success rate calculation with failures."""
         monitor = get_sla_monitor()
 
@@ -80,7 +80,7 @@ class TestSLAMonitor:
 
         assert rate == pytest.approx(66.67, rel=0.1)
 
-    def test_get_p95_response_time_no_data(self):
+    def test_get_p95_response_time_no_data(self) -> None:
         """Test p95 is 0 with no data."""
         monitor = get_sla_monitor()
 
@@ -88,7 +88,7 @@ class TestSLAMonitor:
 
         assert p95 == 0.0
 
-    def test_get_p95_response_time_with_data(self):
+    def test_get_p95_response_time_with_data(self) -> None:
         """Test p95 calculation with response time data."""
         monitor = get_sla_monitor()
 
@@ -101,7 +101,7 @@ class TestSLAMonitor:
         # p95 should be around 95-96 (0-indexed, so 95th percentile is ~95)
         assert 94 <= p95 <= 96
 
-    def test_sla_violation_detection_response_time(self):
+    def test_sla_violation_detection_response_time(self) -> None:
         """Test SLA violation detection for response time."""
         config = SLAConfig(virtual_account_creation_p95_ms=100.0)
         monitor = SLAMonitor(config)
@@ -118,7 +118,7 @@ class TestSLAMonitor:
         assert violations[0].measured_value == 500.0
         assert violations[0].threshold == 100.0
 
-    def test_sla_violation_detection_success_rate(self):
+    def test_sla_violation_detection_success_rate(self) -> None:
         """Test SLA violation detection for success rate."""
         config = SLAConfig(min_success_rate_percent=99.0)
         monitor = SLAMonitor(config)
@@ -133,7 +133,7 @@ class TestSLAMonitor:
         assert violations[0].violation_type == SLAVioLationType.SUCCESS_RATE
         assert violations[0].measured_value == 50.0
 
-    def test_no_violation_when_within_sla(self):
+    def test_no_violation_when_within_sla(self) -> None:
         """Test no violation when within SLA."""
         config = SLAConfig(
             virtual_account_creation_p95_ms=1000.0,
@@ -149,7 +149,7 @@ class TestSLAMonitor:
 
         assert len(violations) == 0
 
-    def test_consecutive_violations_increment(self):
+    def test_consecutive_violations_increment(self) -> None:
         """Test consecutive violations counter increments on violations."""
         config = SLAConfig(
             consecutive_violations_for_alert=3,
@@ -165,7 +165,7 @@ class TestSLAMonitor:
 
         assert monitor._consecutive_violations == 3
 
-    def test_consecutive_violations_reset_on_no_violation(self):
+    def test_consecutive_violations_reset_on_no_violation(self) -> None:
         """Test consecutive violations reset when no violation."""
         config = SLAConfig(
             consecutive_violations_for_alert=3,
@@ -184,7 +184,7 @@ class TestSLAMonitor:
 
         assert monitor._consecutive_violations == 0
 
-    def test_should_alert_when_consecutive_met(self):
+    def test_should_alert_when_consecutive_met(self) -> None:
         """Test alert triggered when consecutive violations met."""
         config = SLAConfig(
             consecutive_violations_for_alert=3,
@@ -200,7 +200,7 @@ class TestSLAMonitor:
 
         assert monitor.should_alert() is True
 
-    def test_should_alert_when_consecutive_not_met(self):
+    def test_should_alert_when_consecutive_not_met(self) -> None:
         """Test alert not triggered when consecutive violations not met."""
         config = SLAConfig(
             consecutive_violations_for_alert=5,
@@ -216,7 +216,7 @@ class TestSLAMonitor:
 
         assert monitor.should_alert() is False
 
-    def test_get_violations_since(self):
+    def test_get_violations_since(self) -> None:
         """Test filtering violations by time."""
         config = SLAConfig(virtual_account_creation_p95_ms=100.0)  # Set threshold below test values
         monitor = SLAMonitor(config)
@@ -234,7 +234,7 @@ class TestSLAMonitor:
 
         assert len(violations) >= 1
 
-    def test_get_metrics(self):
+    def test_get_metrics(self) -> None:
         """Test getting metrics summary."""
         monitor = get_sla_monitor()
 
@@ -256,7 +256,7 @@ class TestSLAMonitor:
         assert metrics["failed_requests"] == 5
 
     @pytest.mark.skip(reason="Background monitoring - causes timeouts in full suite")
-    def test_background_monitoring_starts(self):
+    def test_background_monitoring_starts(self) -> None:
         """Test background monitoring thread starts."""
         monitor = get_sla_monitor()
         callback = Mock()
@@ -271,7 +271,7 @@ class TestSLAMonitor:
         monitor.stop_background_monitoring()
 
     @pytest.mark.skip(reason="Background monitoring - causes timeouts in full suite")
-    def test_background_monitoring_calls_callback(self):
+    def test_background_monitoring_calls_callback(self) -> None:
         """Test background monitoring calls callback on alert."""
         config = SLAConfig(
             consecutive_violations_for_alert=1,
@@ -293,7 +293,7 @@ class TestSLAMonitor:
         # Callback should have been called
         assert callback.called or not monitor._running
 
-    def test_thread_safety(self):
+    def test_thread_safety(self) -> None:
         """Test thread-safe operations on SLA monitor."""
         import threading
 
@@ -321,7 +321,7 @@ class TestSLAMonitor:
 class TestSLAConfig:
     """Tests for SLAConfig."""
 
-    def test_default_config(self):
+    def test_default_config(self) -> None:
         """Test default SLA config values."""
         config = SLAConfig()
 
@@ -331,7 +331,7 @@ class TestSLAConfig:
         assert config.consecutive_violations_for_alert == 5
         assert config.check_interval_seconds == 60
 
-    def test_custom_config(self):
+    def test_custom_config(self) -> None:
         """Test custom SLA config values."""
         config = SLAConfig(
             virtual_account_creation_p95_ms=3000.0,
@@ -345,7 +345,7 @@ class TestSLAConfig:
 class TestSLAViolation:
     """Tests for SLAViolation."""
 
-    def test_sla_violation_creation(self):
+    def test_sla_violation_creation(self) -> None:
         """Test SLAViolation dataclass."""
         violation = SLAViolation(
             violation_type=SLAVioLationType.RESPONSE_TIME,

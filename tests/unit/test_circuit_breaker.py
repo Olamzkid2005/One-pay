@@ -20,14 +20,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 class TestCircuitBreakerBasics:
     """Basic circuit breaker tests."""
 
-    def test_circuit_breaker_starts_closed(self):
+    def test_circuit_breaker_starts_closed(self) -> None:
         """Test circuit breaker starts in CLOSED state."""
         from services.korapay import CircuitBreaker, CircuitBreakerState
 
         cb = CircuitBreaker()
         assert cb.state == CircuitBreakerState.CLOSED
 
-    def test_circuit_breaker_allows_calls_when_closed(self):
+    def test_circuit_breaker_allows_calls_when_closed(self) -> None:
         """Test circuit breaker allows calls in CLOSED state."""
         from services.korapay import CircuitBreaker
 
@@ -39,7 +39,7 @@ class TestCircuitBreakerBasics:
         result = cb.call(success_func)
         assert result == "success"
 
-    def test_circuit_breaker_records_success(self):
+    def test_circuit_breaker_records_success(self) -> None:
         """Test circuit breaker records successes."""
         from services.korapay import CircuitBreaker
 
@@ -50,7 +50,7 @@ class TestCircuitBreakerBasics:
 
         assert cb.state == "closed"
 
-    def test_circuit_breaker_opens_after_threshold(self):
+    def test_circuit_breaker_opens_after_threshold(self) -> None:
         """Test circuit breaker opens after failure threshold."""
         from services.korapay import CircuitBreaker, CircuitBreakerState
 
@@ -65,7 +65,7 @@ class TestCircuitBreakerBasics:
 
         assert cb.state == CircuitBreakerState.OPEN
 
-    def test_circuit_breaker_blocks_calls_when_open(self):
+    def test_circuit_breaker_blocks_calls_when_open(self) -> None:
         """Test circuit breaker blocks calls when OPEN."""
         from services.korapay import CircuitBreaker, CircuitBreakerState, KoraPayError
 
@@ -84,7 +84,7 @@ class TestCircuitBreakerBasics:
 
         assert exc_info.value.error_code == "CIRCUIT_OPEN"
 
-    def test_circuit_breaker_transitions_to_half_open(self):
+    def test_circuit_breaker_transitions_to_half_open(self) -> None:
         """Test circuit breaker transitions to HALF_OPEN after timeout."""
         from services.korapay import CircuitBreaker, CircuitBreakerState
 
@@ -102,7 +102,7 @@ class TestCircuitBreakerBasics:
 
         assert cb.state == CircuitBreakerState.HALF_OPEN
 
-    def test_circuit_breaker_closes_after_half_open_successes(self):
+    def test_circuit_breaker_closes_after_half_open_successes(self) -> None:
         """Test circuit breaker closes after successful half-open calls."""
         from services.korapay import CircuitBreaker, CircuitBreakerState
 
@@ -123,7 +123,7 @@ class TestCircuitBreakerBasics:
 
         assert cb.state == CircuitBreakerState.CLOSED
 
-    def test_circuit_breaker_reopens_on_half_open_failure(self):
+    def test_circuit_breaker_reopens_on_half_open_failure(self) -> None:
         """Test circuit breaker reopens on failure in HALF_OPEN state."""
         from services.korapay import CircuitBreaker, CircuitBreakerState
 
@@ -148,7 +148,7 @@ class TestCircuitBreakerBasics:
 class TestCircuitBreakerThreadSafety:
     """Thread safety tests for circuit breaker."""
 
-    def test_circuit_breaker_thread_safe(self):
+    def test_circuit_breaker_thread_safe(self) -> None:
         """Test circuit breaker handles concurrent access."""
         import threading
 

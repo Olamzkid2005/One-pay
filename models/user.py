@@ -13,6 +13,20 @@ from sqlalchemy.orm import Session
 from models.base import Base
 
 
+def generate_username_from_email(db: Session, email: str) -> str:
+    """Generate a unique username from an email address."""
+    local_part = email.split('@')[0]
+    base_username = re.sub(r'[^a-zA-Z0-9_]', '_', local_part)[:30]
+    if not db.query(User).filter(User.username == base_username).first():
+        return base_username
+    for i in range(2, 12):
+        suffix = f"_{i}"
+        username = base_username[:30 - len(suffix)] + suffix
+        if not db.query(User).filter(User.username == username).first():
+            return username
+    raise ValueError(f"Unable to generate unique username from email: {email}")
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -102,57 +116,8 @@ class User(Base):
         self.failed_2fa_attempts = 0
         self.twofa_locked_until = None
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<User(username={self.username})>"
-
-    @staticmethod
-    def generate_username_from_email(db: Session, email: str) -> str:
-        """
-        Generate a unique username from an email address.
-
-        Algorithm:
-        1. Extract local part of email (before @)
-        2. Remove non-alphanumeric characters except underscores
-        3. Truncate to 30 characters
-        4. Check for uniqueness
-        5. If not unique, append numeric suffix (e.g., john_doe_2)
-        6. Retry up to 10 times with incrementing suffix
-
-        Args:
-            db: Database session
-            email: Email address to generate username from
-
-        Returns:
-            str: Unique username
-
-        Raises:
-            ValueError: If unable to generate unique username after 10 attempts
-        """
-        # Extract local part (before @)
-        local_part = email.split('@')[0]
-
-        # Remove special characters except underscores, keep alphanumeric
-        base_username = re.sub(r'[^a-zA-Z0-9_]', '_', local_part)
-
-        # Truncate to 30 characters
-        base_username = base_username[:30]
-
-        # Try base username first
-        if not db.query(User).filter(User.username == base_username).first():
-            return base_username
-
-        # If collision, try with numeric suffix
-        for i in range(2, 12):  # Try suffixes 2-11 (10 attempts)
-            # Calculate available space for suffix
-            suffix = f"_{i}"
-            max_base_len = 30 - len(suffix)
-            username = base_username[:max_base_len] + suffix
-
-            if not db.query(User).filter(User.username == username).first():
-                return username
-
-        # If still no unique username after 10 attempts, raise error
-        raise ValueError(f"Unable to generate unique username from email: {email}")
 
     @staticmethod
     def find_by_google_id(db: Session, google_id: str) -> Optional['User']:
@@ -199,7 +164,7 @@ class User(Base):
             User: Newly created user
         """
         # Generate unique username from email
-        username = User.generate_username_from_email(db, profile['email'])
+        username = generate_username_from_email(db, profile['email'])
 
         # Create user
         user = User(
@@ -252,7 +217,7 @@ class User(Base):
     @staticmethod
     def create_from_github(db: Session, profile: dict) -> 'User':
         """Create new user from GitHub profile."""
-        username = User.generate_username_from_email(db, profile['email'])
+        username = generate_username_from_email(db, profile['email'])
 
         user = User(
             username=username,

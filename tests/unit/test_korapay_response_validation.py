@@ -11,7 +11,7 @@ import pytest
 class TestResponseValidation:
     """Test response validation for required fields."""
 
-    def test_validate_response_raises_error_when_field_missing(self):
+    def test_validate_response_raises_error_when_field_missing(self) -> None:
         """Test _validate_response raises KoraPayError when required field missing."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -37,7 +37,7 @@ class TestResponseValidation:
 
             assert "missing" in str(exc_info.value).lower()
 
-    def test_validate_response_lists_all_missing_fields(self):
+    def test_validate_response_lists_all_missing_fields(self) -> None:
         """Test _validate_response lists all missing fields in error message."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -66,7 +66,7 @@ class TestResponseValidation:
             assert "data.amount" in error_msg
             assert "data.currency" in error_msg
 
-    def test_validate_response_passes_when_all_fields_present(self):
+    def test_validate_response_passes_when_all_fields_present(self) -> None:
         """Test _validate_response passes when all required fields present."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -91,7 +91,7 @@ class TestResponseValidation:
             # Should not raise any exception
             korapay._validate_response(response, required_fields)
 
-    def test_validate_response_handles_nested_field_validation(self):
+    def test_validate_response_handles_nested_field_validation(self) -> None:
         """Test _validate_response handles nested field validation."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):

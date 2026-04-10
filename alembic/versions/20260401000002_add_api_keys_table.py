@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     """Create api_keys table for API key authentication."""
     op.create_table(
         'api_keys',
@@ -39,7 +39,7 @@ def upgrade():
     op.create_index('idx_api_keys_key_hash', 'api_keys', ['key_hash'], unique=False)
 
 
-def downgrade():
+def downgrade() -> None:
     """Drop api_keys table."""
     op.drop_index('idx_api_keys_key_hash', table_name='api_keys')
     op.drop_index('idx_api_keys_user_id', table_name='api_keys')

@@ -14,7 +14,7 @@ down_revision = '20260406000000'
 branch_labels = None
 depends_on = None
 
-def upgrade():
+def upgrade() -> None:
     # Create webhook_idempotency table
     op.create_table(
         'webhook_idempotency',
@@ -27,7 +27,7 @@ def upgrade():
     # Create index on processed_at for cleanup queries
     op.create_index('ix_webhook_idempotency_processed', 'webhook_idempotency', ['processed_at'])
 
-def downgrade():
+def downgrade() -> None:
     # Drop index first
     op.drop_index('ix_webhook_idempotency_processed', table_name='webhook_idempotency')
 

@@ -88,7 +88,7 @@ def client(db_session, monkeypatch):
     return client
 
 
-def test_list_api_keys(client, db_session, auth_user):
+def test_list_api_keys(client, db_session, auth_user) -> None:
     """Test listing API keys for authenticated user"""
     # Create test keys
     key1 = APIKey(
@@ -116,7 +116,7 @@ def test_list_api_keys(client, db_session, auth_user):
     assert data['api_keys'][1]['name'] == 'Key 2'
 
 
-def test_list_api_keys_unauthenticated(db_session, monkeypatch):
+def test_list_api_keys_unauthenticated(db_session, monkeypatch) -> None:
     """Test listing API keys without authentication"""
     from contextlib import contextmanager
 
@@ -145,13 +145,13 @@ def test_list_api_keys_unauthenticated(db_session, monkeypatch):
 
 
 # TODO: Add test for user isolation once fixture issues are resolved
-# def test_list_api_keys_only_shows_own_keys(client, db_session, auth_user):
+# def test_list_api_keys_only_shows_own_keys(client, db_session, auth_user) -> None:
 #     """Test that users only see their own API keys"""
 #     pass
 
 
 # TODO: Fix fixture isolation issues - test passes individually but fails when run with others
-# def test_generate_api_key(client, db_session, auth_user):
+# def test_generate_api_key(client, db_session, auth_user) -> None:
 #     """Test generating a new API key"""
 #     response = client.post('/api/v1/api-keys', json={'name': 'Test Key'})
 #
@@ -168,7 +168,7 @@ def test_list_api_keys_unauthenticated(db_session, monkeypatch):
 
 
 # TODO: Fix fixture isolation issues - tests pass individually but fail when run together
-# def test_generate_api_key_without_name(client, db_session, auth_user):
+# def test_generate_api_key_without_name(client, db_session, auth_user) -> None:
 #     """Test generating API key without providing a name"""
 #     response = client.post('/api/v1/api-keys', json={})
 #
@@ -178,7 +178,7 @@ def test_list_api_keys_unauthenticated(db_session, monkeypatch):
 #     assert data['api_key']['name'] == ''
 
 
-def test_generate_api_key_unauthenticated(db_session, monkeypatch):
+def test_generate_api_key_unauthenticated(db_session, monkeypatch) -> None:
     """Test generating API key without authentication"""
     from contextlib import contextmanager
 
@@ -203,7 +203,7 @@ def test_generate_api_key_unauthenticated(db_session, monkeypatch):
     assert response.status_code == 401
 
 
-def test_revoke_api_key(db_session, monkeypatch):
+def test_revoke_api_key(db_session, monkeypatch) -> None:
     """Test revoking an API key"""
     from contextlib import contextmanager
 
@@ -255,7 +255,7 @@ def test_revoke_api_key(db_session, monkeypatch):
 
 
 # TODO: Fix fixture isolation - test passes individually but fails when run with others
-# def test_revoke_api_key_not_found(db_session, monkeypatch):
+# def test_revoke_api_key_not_found(db_session, monkeypatch) -> None:
 #     """Test revoking non-existent API key"""
 #     from flask import Flask
 #     from contextlib import contextmanager
@@ -287,7 +287,7 @@ def test_revoke_api_key(db_session, monkeypatch):
 #     assert response.status_code == 404
 
 
-def test_revoke_api_key_unauthenticated(db_session, monkeypatch):
+def test_revoke_api_key_unauthenticated(db_session, monkeypatch) -> None:
     """Test revoking API key without authentication"""
     from contextlib import contextmanager
 

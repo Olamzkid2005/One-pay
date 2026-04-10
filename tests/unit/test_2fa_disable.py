@@ -36,7 +36,7 @@ def _make_session(client, user_id=1, csrf_token="test-csrf-token"):
 class TestDisable2FA:
     """Tests for the /account/2fa/disable endpoint."""
 
-    def test_disable_2fa_sets_flag_to_false(self, client):
+    def test_disable_2fa_sets_flag_to_false(self, client) -> None:
         """Disabling 2FA must set two_factor_enabled to False on the user."""
         _make_session(client)
 
@@ -69,7 +69,7 @@ class TestDisable2FA:
         # The flag must have been set to False
         assert mock_user.two_factor_enabled is False
 
-    def test_disable_2fa_returns_success_json(self, client):
+    def test_disable_2fa_returns_success_json(self, client) -> None:
         """Response must be JSON with success=True."""
         _make_session(client)
 
@@ -101,7 +101,7 @@ class TestDisable2FA:
         assert data["success"] is True
         assert "message" in data
 
-    def test_disable_2fa_requires_authentication(self, client):
+    def test_disable_2fa_requires_authentication(self, client) -> None:
         """Unauthenticated requests must be rejected."""
         with patch("blueprints.auth.current_user_id", return_value=None):
             response = client.post(
@@ -113,7 +113,7 @@ class TestDisable2FA:
         # Should return 401 (AuthenticationError)
         assert response.status_code == 401
 
-    def test_disable_2fa_requires_json_content_type(self, client):
+    def test_disable_2fa_requires_json_content_type(self, client) -> None:
         """Non-JSON content type must be rejected."""
         _make_session(client)
 
@@ -126,7 +126,7 @@ class TestDisable2FA:
 
         assert response.status_code == 400
 
-    def test_disable_2fa_requires_valid_csrf(self, client):
+    def test_disable_2fa_requires_valid_csrf(self, client) -> None:
         """Invalid CSRF token must be rejected."""
         _make_session(client)
 
@@ -142,7 +142,7 @@ class TestDisable2FA:
 
         assert response.status_code == 403
 
-    def test_disable_2fa_logs_audit_event(self, client):
+    def test_disable_2fa_logs_audit_event(self, client) -> None:
         """Disabling 2FA must log a 2fa.disabled audit event."""
         _make_session(client)
 

@@ -286,7 +286,7 @@ def reload_config():
     Reload configuration after monkeypatching environment variables.
 
     Usage::
-        def test_something(monkeypatch, reload_config):
+        def test_something(monkeypatch, reload_config) -> None:
             monkeypatch.setenv("INBOUND_WEBHOOK_SECRET", "test_secret")
             reload_config()  # Now Config.INBOUND_WEBHOOK_SECRET has the new value
     """
@@ -309,7 +309,7 @@ def make_user(db_session):
 
     Usage::
 
-        def test_something(make_user):
+        def test_something(make_user) -> None:
             user = make_user(username="alice")
     """
     from models.user import User
@@ -339,7 +339,7 @@ def make_transaction(db_session):
 
     Usage::
 
-        def test_something(make_transaction):
+        def test_something(make_transaction) -> None:
             tx = make_transaction(amount=Decimal("500.00"))
     """
     from models.transaction import Transaction, TransactionStatus

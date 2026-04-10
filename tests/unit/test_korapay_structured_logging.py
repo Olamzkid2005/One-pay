@@ -11,7 +11,7 @@ import pytest
 class TestStructuredLogging:
     """Test structured logging with transaction references and request IDs."""
 
-    def test_log_messages_include_transaction_reference(self):
+    def test_log_messages_include_transaction_reference(self) -> None:
         """Test all log messages include transaction reference."""
         import logging
         from io import StringIO
@@ -54,7 +54,7 @@ class TestStructuredLogging:
             finally:
                 logger.removeHandler(handler)
 
-    def test_log_messages_include_request_id(self):
+    def test_log_messages_include_request_id(self) -> None:
         """Test all log messages include request_id."""
         import logging
         from io import StringIO
@@ -92,7 +92,7 @@ class TestStructuredLogging:
             finally:
                 logger.removeHandler(handler)
 
-    def test_log_messages_use_key_value_format(self):
+    def test_log_messages_use_key_value_format(self) -> None:
         """Test all log messages use key=value format for structured logging."""
         import logging
         from io import StringIO
@@ -130,7 +130,7 @@ class TestStructuredLogging:
             finally:
                 logger.removeHandler(handler)
 
-    def test_request_duration_logged_in_milliseconds(self):
+    def test_request_duration_logged_in_milliseconds(self) -> None:
         """Test request duration is logged in milliseconds."""
         import logging
         from io import StringIO
@@ -168,7 +168,7 @@ class TestStructuredLogging:
             finally:
                 logger.removeHandler(handler)
 
-    def test_slow_requests_log_warning(self):
+    def test_slow_requests_log_warning(self) -> None:
         """Test slow requests (> 5s) log WARNING level."""
         import logging
         import time

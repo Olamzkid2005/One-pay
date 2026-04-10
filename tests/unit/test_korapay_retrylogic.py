@@ -11,7 +11,7 @@ import pytest
 class TestRetryLogic:
     """Test HTTP request retry logic with exponential backoff."""
 
-    def test_make_request_retries_500_errors_three_times(self):
+    def test_make_request_retries_500_errors_three_times(self) -> None:
         """Test _make_request retries 500 errors 3 times with exponential backoff."""
         from unittest.mock import Mock, patch
 
@@ -40,7 +40,7 @@ class TestRetryLogic:
                     assert mock_request.call_count == 3
                     assert 'after 3 attempts' in str(exc_info.value).lower()
 
-    def test_make_request_retries_502_errors(self):
+    def test_make_request_retries_502_errors(self) -> None:
         """Test _make_request retries 502 errors."""
         from unittest.mock import Mock, patch
 
@@ -62,7 +62,7 @@ class TestRetryLogic:
                     with pytest.raises(KoraPayError):
                         korapay._make_request('GET', '/test-endpoint')
 
-    def test_make_request_retries_503_errors(self):
+    def test_make_request_retries_503_errors(self) -> None:
         """Test _make_request retries 503 errors."""
         from unittest.mock import Mock, patch
 
@@ -84,7 +84,7 @@ class TestRetryLogic:
                     with pytest.raises(KoraPayError):
                         korapay._make_request('GET', '/test-endpoint')
 
-    def test_make_request_retries_504_errors(self):
+    def test_make_request_retries_504_errors(self) -> None:
         """Test _make_request retries 504 errors."""
         from unittest.mock import Mock, patch
 
@@ -106,7 +106,7 @@ class TestRetryLogic:
                     with pytest.raises(KoraPayError):
                         korapay._make_request('GET', '/test-endpoint')
 
-    def test_make_request_retries_timeout_errors(self):
+    def test_make_request_retries_timeout_errors(self) -> None:
         """Test _make_request retries timeout errors."""
         from unittest.mock import patch
 
@@ -128,7 +128,7 @@ class TestRetryLogic:
 
                     assert 'timeout' in str(exc_info.value).lower()
 
-    def test_make_request_retries_connection_error(self):
+    def test_make_request_retries_connection_error(self) -> None:
         """Test _make_request retries ConnectionError."""
         from unittest.mock import patch
 
@@ -150,7 +150,7 @@ class TestRetryLogic:
 
                     assert 'connection' in str(exc_info.value).lower() or 'failed' in str(exc_info.value).lower()
 
-    def test_make_request_does_not_retry_400_errors(self):
+    def test_make_request_does_not_retry_400_errors(self) -> None:
         """Test _make_request does NOT retry 400-499 errors (except 429)."""
         from unittest.mock import Mock, patch
 
@@ -178,7 +178,7 @@ class TestRetryLogic:
                     assert mock_request.call_count == 1
                     mock_request.reset_mock()
 
-    def test_make_request_retries_429_with_retry_after_header(self):
+    def test_make_request_retries_429_with_retry_after_header(self) -> None:
         """Test _make_request retries 429 with Retry-After header."""
         from unittest.mock import Mock, patch
 
@@ -207,7 +207,7 @@ class TestRetryLogic:
                     # Should use Retry-After header value
                     assert any(call[0][0] == 2 for call in mock_sleep.call_args_list)
 
-    def test_exponential_backoff_delays(self):
+    def test_exponential_backoff_delays(self) -> None:
         """Test exponential backoff delays: 1s, 2s, 4s."""
         from unittest.mock import Mock, patch
 
@@ -240,7 +240,7 @@ class TestRetryLogic:
                     # Second delay should be around 2s (2^1 + jitter)
                     assert 1.5 <= sleep_calls[1] <= 3.0
 
-    def test_max_three_retry_attempts(self):
+    def test_max_three_retry_attempts(self) -> None:
         """Test max 3 retry attempts."""
         from unittest.mock import Mock, patch
 

@@ -28,17 +28,17 @@ def _read_js(filename):
 class TestLoadingStatesModule:
     """Verify loading-states.js exists and contains required API."""
 
-    def test_file_exists(self):
+    def test_file_exists(self) -> None:
         """loading-states.js must exist as a static asset."""
         path = os.path.join(_project_root(), "static", "js", "loading-states.js")
         assert os.path.isfile(path), "static/js/loading-states.js must exist"
 
-    def test_file_not_empty(self):
+    def test_file_not_empty(self) -> None:
         """loading-states.js must not be empty."""
         path = os.path.join(_project_root(), "static", "js", "loading-states.js")
         assert os.path.getsize(path) > 0
 
-    def test_contains_disable_button(self):
+    def test_contains_disable_button(self) -> None:
         """
         disableButton must be present — disables submit and shows spinner.
         Requirement 15.1: disable submit button and show loading indicator.
@@ -46,7 +46,7 @@ class TestLoadingStatesModule:
         content = _read_js("loading-states.js")
         assert "disableButton" in content
 
-    def test_contains_enable_button(self):
+    def test_contains_enable_button(self) -> None:
         """
         enableButton must be present — re-enables button on error.
         Requirement 15.3: re-enable submit button on failure.
@@ -54,7 +54,7 @@ class TestLoadingStatesModule:
         content = _read_js("loading-states.js")
         assert "enableButton" in content
 
-    def test_contains_attach_to_form(self):
+    def test_contains_attach_to_form(self) -> None:
         """
         attachToForm must be present — attaches loading state to a form.
         Requirement 15.5: apply loading states to all forms making HTTP requests.
@@ -62,12 +62,12 @@ class TestLoadingStatesModule:
         content = _read_js("loading-states.js")
         assert "attachToForm" in content
 
-    def test_contains_with_loading(self):
+    def test_contains_with_loading(self) -> None:
         """withLoading must be present for AJAX button wrapping."""
         content = _read_js("loading-states.js")
         assert "withLoading" in content
 
-    def test_double_submission_prevention(self):
+    def test_double_submission_prevention(self) -> None:
         """
         _submitting WeakSet must be present to track and prevent double submission.
         Requirement 15.4: prevent double submission by tracking submission state.
@@ -75,7 +75,7 @@ class TestLoadingStatesModule:
         content = _read_js("loading-states.js")
         assert "_submitting" in content
 
-    def test_re_enable_on_error_in_with_loading(self):
+    def test_re_enable_on_error_in_with_loading(self) -> None:
         """
         withLoading must call enableButton in the catch block.
         Requirement 15.3: re-enable button when submission fails.
@@ -88,7 +88,7 @@ class TestLoadingStatesModule:
             "enableButton must be called inside a catch block in withLoading"
         )
 
-    def test_prevent_double_submission_logic(self):
+    def test_prevent_double_submission_logic(self) -> None:
         """
         attachToForm must check _submitting before proceeding.
         Requirement 15.4: prevent double submission.
@@ -102,7 +102,7 @@ class TestLoadingStatesModule:
 class TestLoginJsLoadingStates:
     """Verify login.js references LoadingStates for the login form."""
 
-    def test_login_js_references_loading_states(self):
+    def test_login_js_references_loading_states(self) -> None:
         """
         login.js must reference LoadingStates to apply loading state on submit.
         Requirements 15.1, 15.2, 15.3.
@@ -112,14 +112,14 @@ class TestLoginJsLoadingStates:
             "login.js must reference LoadingStates"
         )
 
-    def test_login_js_attaches_to_form(self):
+    def test_login_js_attaches_to_form(self) -> None:
         """login.js must call attachToForm for the login form."""
         content = _read_js("login.js")
         assert "attachToForm" in content, (
             "login.js must call LoadingStates.attachToForm"
         )
 
-    def test_login_js_uses_signing_in_text(self):
+    def test_login_js_uses_signing_in_text(self) -> None:
         """login.js should use a meaningful loading text for the login action."""
         content = _read_js("login.js")
         assert "Signing in" in content, (
@@ -132,7 +132,7 @@ class TestLoginJsLoadingStates:
 class TestDashboardJsLoadingStates:
     """Verify dashboard.js references LoadingStates for payment forms."""
 
-    def test_dashboard_js_references_loading_states(self):
+    def test_dashboard_js_references_loading_states(self) -> None:
         """
         dashboard.js must reference LoadingStates.
         Requirement 15.5: apply loading states to all forms making HTTP requests.
@@ -142,12 +142,12 @@ class TestDashboardJsLoadingStates:
             "dashboard.js must reference LoadingStates"
         )
 
-    def test_dashboard_js_uses_disable_button(self):
+    def test_dashboard_js_uses_disable_button(self) -> None:
         """dashboard.js must call LoadingStates.disableButton for AJAX operations."""
         content = _read_js("dashboard.js")
         assert "LoadingStates.disableButton" in content
 
-    def test_dashboard_js_uses_enable_button(self):
+    def test_dashboard_js_uses_enable_button(self) -> None:
         """
         dashboard.js must call LoadingStates.enableButton to re-enable on error.
         Requirement 15.3: re-enable button on failure.
@@ -155,7 +155,7 @@ class TestDashboardJsLoadingStates:
         content = _read_js("dashboard.js")
         assert "LoadingStates.enableButton" in content
 
-    def test_dashboard_js_guards_with_typeof_check(self):
+    def test_dashboard_js_guards_with_typeof_check(self) -> None:
         """
         dashboard.js must guard LoadingStates usage with typeof check
         for graceful degradation when the module is not loaded.

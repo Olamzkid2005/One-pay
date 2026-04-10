@@ -27,19 +27,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 class TestAmountEdgeCases:
     """Tests for amount edge cases."""
 
-    def test_decimal_to_int_conversion(self):
+    def test_decimal_to_int_conversion(self) -> None:
         """Test decimal to integer conversion works."""
         amount_naira = Decimal("100.50")
         amount_kobo = int(amount_naira * 100)
         assert amount_kobo == 10050
 
-    def test_kobo_to_naira_conversion(self):
+    def test_kobo_to_naira_conversion(self) -> None:
         """Test kobo to Naira conversion."""
         amount_kobo = 10050
         amount_naira = Decimal(amount_kobo) / 100
         assert amount_naira == Decimal("100.50")
 
-    def test_minimum_amount_in_kobo(self):
+    def test_minimum_amount_in_kobo(self) -> None:
         """Test minimum amount in kobo (100 kobo = 1 Naira)."""
         min_kobo = 100
         max_kobo = 99999999999
@@ -47,37 +47,37 @@ class TestAmountEdgeCases:
         assert max_kobo == 99999999999
 
     @pytest.mark.skip(reason="validate_amount function not yet implemented")
-    def test_minimum_amount_one_kobo(self):
+    def test_minimum_amount_one_kobo(self) -> None:
         """Test minimum amount ₦1.00 (100 kobo) is accepted."""
         pass
 
     @pytest.mark.skip(reason="validate_amount function not yet implemented")
-    def test_minimum_amount_zero_rejected(self):
+    def test_minimum_amount_zero_rejected(self) -> None:
         """Test zero amounts are rejected."""
         pass
 
     @pytest.mark.skip(reason="validate_amount function not yet implemented")
-    def test_negative_amount_rejected(self):
+    def test_negative_amount_rejected(self) -> None:
         """Test negative amounts are rejected."""
         pass
 
     @pytest.mark.skip(reason="validate_amount function not yet implemented")
-    def test_maximum_amount_accepted(self):
+    def test_maximum_amount_accepted(self) -> None:
         """Test maximum amount ₦999,999,999.99 is accepted."""
         pass
 
     @pytest.mark.skip(reason="validate_amount function not yet implemented")
-    def test_exceeds_maximum_rejected(self):
+    def test_exceeds_maximum_rejected(self) -> None:
         """Test amounts exceeding maximum are rejected."""
         pass
 
     @pytest.mark.skip(reason="validate_amount function not yet implemented")
-    def test_infinite_amount_rejected(self):
+    def test_infinite_amount_rejected(self) -> None:
         """Test infinite amounts are rejected."""
         pass
 
     @pytest.mark.skip(reason="validate_amount function not yet implemented")
-    def test_nan_amount_rejected(self):
+    def test_nan_amount_rejected(self) -> None:
         """Test NaN amounts are rejected."""
         pass
 
@@ -85,7 +85,7 @@ class TestAmountEdgeCases:
 class TestTransactionReferenceEdgeCases:
     """Tests for transaction reference edge cases."""
 
-    def test_tx_reference_format(self):
+    def test_tx_reference_format(self) -> None:
         """Test transaction reference follows expected format."""
         from services.security import generate_tx_reference
 
@@ -93,7 +93,7 @@ class TestTransactionReferenceEdgeCases:
         assert ref.startswith("ONEPAY-")
         assert len(ref) == 23
 
-    def test_tx_reference_uniqueness(self):
+    def test_tx_reference_uniqueness(self) -> None:
         """Test transaction references are unique."""
         from services.security import generate_tx_reference
 
@@ -101,27 +101,27 @@ class TestTransactionReferenceEdgeCases:
         assert len(set(refs)) == 100
 
     @pytest.mark.skip(reason="validate_tx_reference function not yet implemented")
-    def test_valid_tx_reference(self):
+    def test_valid_tx_reference(self) -> None:
         """Test valid transaction reference is accepted."""
         pass
 
     @pytest.mark.skip(reason="normalize_tx_reference function not yet implemented")
-    def test_lowercase_normalized_to_uppercase(self):
+    def test_lowercase_normalized_to_uppercase(self) -> None:
         """Test lowercase hex digits are normalized to uppercase."""
         pass
 
     @pytest.mark.skip(reason="validate_tx_reference function not yet implemented")
-    def test_invalid_prefix_rejected(self):
+    def test_invalid_prefix_rejected(self) -> None:
         """Test wrong prefix is rejected."""
         pass
 
     @pytest.mark.skip(reason="validate_tx_reference function not yet implemented")
-    def test_wrong_length_rejected(self):
+    def test_wrong_length_rejected(self) -> None:
         """Test wrong length references are rejected."""
         pass
 
     @pytest.mark.skip(reason="validate_tx_reference function not yet implemented")
-    def test_invalid_characters_rejected(self):
+    def test_invalid_characters_rejected(self) -> None:
         """Test invalid characters are rejected."""
         pass
 
@@ -129,7 +129,7 @@ class TestTransactionReferenceEdgeCases:
 class TestConcurrencyEdgeCases:
     """Tests for concurrency edge cases."""
 
-    def test_concurrent_payment_link_creation(self):
+    def test_concurrent_payment_link_creation(self) -> None:
         """Test 10 concurrent payment link creations succeed."""
         from services.korapay import KoraPayService
 
@@ -157,7 +157,7 @@ class TestConcurrencyEdgeCases:
 
         assert len(errors) == 0, f"Errors occurred: {errors}"
 
-    def test_concurrent_status_polls_same_transaction(self):
+    def test_concurrent_status_polls_same_transaction(self) -> None:
         """Test 10 concurrent status polls for same transaction."""
         from services.korapay import KoraPayService
 
@@ -185,12 +185,12 @@ class TestConcurrencyEdgeCases:
         assert len(errors) == 0, f"Errors occurred: {errors}"
 
     @pytest.mark.skip(reason="handle_deadlock function not yet implemented")
-    def test_database_deadlock_retry(self):
+    def test_database_deadlock_retry(self) -> None:
         """Test database deadlock handling with retry logic."""
         pass
 
     @pytest.mark.skip(reason="handle_optimistic_lock function not yet implemented")
-    def test_optimistic_locking_failure_retry(self):
+    def test_optimistic_locking_failure_retry(self) -> None:
         """Test optimistic locking failure retry logic."""
         pass
 
@@ -198,7 +198,7 @@ class TestConcurrencyEdgeCases:
 class TestNetworkEdgeCases:
     """Tests for network edge cases."""
 
-    def test_timeout_error_raises_korapay_error(self):
+    def test_timeout_error_raises_korapay_error(self) -> None:
         """Test connection timeout raises KoraPayError."""
         from services.korapay import KoraPayError, KoraPayService
 
@@ -213,7 +213,7 @@ class TestNetworkEdgeCases:
 
             assert exc_info.value.error_code == "TIMEOUT"
 
-    def test_connection_error_raises_korapay_error(self):
+    def test_connection_error_raises_korapay_error(self) -> None:
         """Test connection error raises KoraPayError."""
         from services.korapay import KoraPayError, KoraPayService
 
@@ -228,7 +228,7 @@ class TestNetworkEdgeCases:
 
             assert exc_info.value.error_code == "CONNECTION_ERROR"
 
-    def test_ssl_error_raises_korapay_error(self):
+    def test_ssl_error_raises_korapay_error(self) -> None:
         """Test SSL errors raise KoraPayError."""
         from services.korapay import KoraPayError, KoraPayService
 
@@ -243,7 +243,7 @@ class TestNetworkEdgeCases:
 
             assert exc_info.value.error_code == "SSL_ERROR"
 
-    def test_invalid_json_raises_korapay_error(self):
+    def test_invalid_json_raises_korapay_error(self) -> None:
         """Test invalid JSON response raises KoraPayError."""
         from services.korapay import KoraPayError, KoraPayService
 

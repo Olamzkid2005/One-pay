@@ -2,95 +2,51 @@
 OnePay — Security Monitoring Service
 VULN-011 FIX: Detects and alerts on suspicious activity patterns.
 """
+
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from models.audit_log import AuditLog
 
 logger = logging.getLogger(__name__)
 
 
+def _check_threshold(
+    db, event: str, since, threshold: int, severity: str, title: str, unit: str, now
+) -> Optional[dict]:
+    """Count audit events since `since` and return an alert dict if threshold exceeded."""
+    count = db.query(AuditLog).filter(AuditLog.event == event, AuditLog.created_at >= since).count()
+    if count > threshold:
+        return {
+            "severity": severity,
+            "title": title,
+            "message": f"{count} {unit} in 1 hour",
+            "timestamp": now.isoformat(),
+        }
+    return None
+
+
 def detect_suspicious_activity(db) -> list[dict]:
-    """
-    Analyze recent activity for suspicious patterns.
-
-    Args:
-        db: Database session
-
-    Returns:
-        List of detected suspicious activities
-    """
+    """Analyze recent activity for suspicious patterns. Returns list of alert dicts."""
     alerts = []
     now = datetime.now(timezone.utc)
     last_hour = now - timedelta(hours=1)
 
+    checks = [
+        ("merchant.login_failed", 50, "high", "Distributed brute force detected", "failed logins"),
+        ("link.created", 1000, "medium", "Unusual link creation volume", "links created"),
+        ("webhook.failed", 100, "medium", "High webhook failure rate", "webhook failures"),
+        ("rate_limit.exceeded", 500, "medium", "Excessive rate limit violations", "rate limit hits"),
+    ]
+
     try:
-        # Check for distributed brute force
-        failed_logins = db.query(AuditLog).filter(
-            AuditLog.event == "merchant.login_failed",
-            AuditLog.created_at >= last_hour
-        ).count()
-
-        if failed_logins > 50:
-            alert = {
-                "severity": "high",
-                "title": "Distributed brute force detected",
-                "message": f"{failed_logins} failed logins in 1 hour",
-                "timestamp": now.isoformat()
-            }
-            alerts.append(alert)
-            alert_security_team(alert["title"], alert["message"])
-
-        # Check for payment link spam
-        links_created = db.query(AuditLog).filter(
-            AuditLog.event == "link.created",
-            AuditLog.created_at >= last_hour
-        ).count()
-
-        if links_created > 1000:
-            alert = {
-                "severity": "medium",
-                "title": "Unusual link creation volume",
-                "message": f"{links_created} links created in 1 hour",
-                "timestamp": now.isoformat()
-            }
-            alerts.append(alert)
-            alert_security_team(alert["title"], alert["message"])
-
-        # Check for webhook delivery failures
-        webhook_failures = db.query(AuditLog).filter(
-            AuditLog.event == "webhook.failed",
-            AuditLog.created_at >= last_hour
-        ).count()
-
-        if webhook_failures > 100:
-            alert = {
-                "severity": "medium",
-                "title": "High webhook failure rate",
-                "message": f"{webhook_failures} webhook failures in 1 hour",
-                "timestamp": now.isoformat()
-            }
-            alerts.append(alert)
-            alert_security_team(alert["title"], alert["message"])
-
-        # Check for rate limit violations
-        rate_limit_hits = db.query(AuditLog).filter(
-            AuditLog.event == "rate_limit.exceeded",
-            AuditLog.created_at >= last_hour
-        ).count()
-
-        if rate_limit_hits > 500:
-            alert = {
-                "severity": "medium",
-                "title": "Excessive rate limit violations",
-                "message": f"{rate_limit_hits} rate limit hits in 1 hour",
-                "timestamp": now.isoformat()
-            }
-            alerts.append(alert)
-            alert_security_team(alert["title"], alert["message"])
-
+        for event, threshold, severity, title, unit in checks:
+            alert = _check_threshold(db, event, last_hour, threshold, severity, title, unit, now)
+            if alert:
+                alerts.append(alert)
+                alert_security_team(alert["title"], alert["message"])
         return alerts
-
     except Exception as e:
         logger.error("Security monitoring error: %s", e)
         return []

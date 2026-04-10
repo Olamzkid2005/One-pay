@@ -19,7 +19,7 @@ from services.webhook import verify_inbound_webhook_signature
 class TestInboundWebhookIntegration:
     """Integration tests for inbound webhook signature verification."""
 
-    def test_realistic_webhook_payload_verification(self):
+    def test_realistic_webhook_payload_verification(self) -> None:
         """Test signature verification with realistic webhook payload."""
         # Arrange - simulate a real webhook from payment provider
         webhook_secret = "prod-webhook-secret-32-chars-long-abc123"
@@ -53,7 +53,7 @@ class TestInboundWebhookIntegration:
         # Assert
         assert result is True
 
-    def test_tampered_payload_fails_verification(self):
+    def test_tampered_payload_fails_verification(self) -> None:
         """Test that tampered payload fails signature verification."""
         # Arrange - original payload
         webhook_secret = "prod-webhook-secret-32-chars-long-abc123"
@@ -88,7 +88,7 @@ class TestInboundWebhookIntegration:
         # Assert - verification should fail
         assert result is False
 
-    def test_replay_attack_with_different_secret_fails(self):
+    def test_replay_attack_with_different_secret_fails(self) -> None:
         """Test that replay attack with different secret fails."""
         # Arrange - attacker captures webhook from different merchant
         merchant1_secret = "merchant1-secret-32-chars-long-abc123"
@@ -116,7 +116,7 @@ class TestInboundWebhookIntegration:
         # Assert - verification should fail
         assert result is False
 
-    def test_multiple_webhooks_with_same_secret(self):
+    def test_multiple_webhooks_with_same_secret(self) -> None:
         """Test that multiple webhooks can be verified with same secret."""
         # Arrange
         webhook_secret = "prod-webhook-secret-32-chars-long-abc123"
@@ -141,7 +141,7 @@ class TestInboundWebhookIntegration:
                 result = verify_inbound_webhook_signature(payload_bytes, signature_header)
                 assert result is True, f"Failed to verify webhook: {webhook['tx_ref']}"
 
-    def test_unicode_characters_in_payload(self):
+    def test_unicode_characters_in_payload(self) -> None:
         """Test signature verification with unicode characters in payload."""
         # Arrange
         webhook_secret = "prod-webhook-secret-32-chars-long-abc123"
@@ -170,7 +170,7 @@ class TestInboundWebhookIntegration:
         # Assert
         assert result is True
 
-    def test_large_payload_verification(self):
+    def test_large_payload_verification(self) -> None:
         """Test signature verification with large payload."""
         # Arrange
         webhook_secret = "prod-webhook-secret-32-chars-long-abc123"

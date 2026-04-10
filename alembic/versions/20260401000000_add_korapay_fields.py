@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     """Add KoraPay-specific fields to transactions table."""
     # Add KoraPay-specific columns (all nullable for backward compatibility)
     op.add_column('transactions', sa.Column('payment_provider_reference', sa.String(length=100), nullable=True))
@@ -34,7 +34,7 @@ def upgrade():
     op.create_index('idx_provider_transaction_date', 'transactions', ['provider_transaction_date'], unique=False)
 
 
-def downgrade():
+def downgrade() -> None:
     """Remove KoraPay-specific fields from transactions table."""
     # Drop indexes first
     op.drop_index('idx_provider_transaction_date', table_name='transactions')

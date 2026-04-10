@@ -15,7 +15,7 @@ import pytest
 class TestWebhookIdempotencyFunctions:
     """Test webhook idempotency check and store functions."""
 
-    def test_check_webhook_idempotency_returns_false_for_new_webhook(self):
+    def test_check_webhook_idempotency_returns_false_for_new_webhook(self) -> None:
         """
         Test that check_webhook_idempotency returns False for new webhook.
 
@@ -34,7 +34,7 @@ class TestWebhookIdempotencyFunctions:
         # Assert
         assert result is False
 
-    def test_check_webhook_idempotency_returns_true_for_duplicate_webhook(self):
+    def test_check_webhook_idempotency_returns_true_for_duplicate_webhook(self) -> None:
         """
         Test that check_webhook_idempotency returns True for duplicate webhook.
 
@@ -59,7 +59,7 @@ class TestWebhookIdempotencyFunctions:
         # Assert
         assert result is True
 
-    def test_store_webhook_idempotency_creates_record(self):
+    def test_store_webhook_idempotency_creates_record(self) -> None:
         """
         Test that store_webhook_idempotency creates a new record.
 
@@ -84,7 +84,7 @@ class TestWebhookIdempotencyFunctions:
         assert added_record.source == "korapay"
         assert added_record.tx_ref == "ONEPAY-TEST-123"
 
-    def test_store_webhook_idempotency_without_tx_ref(self):
+    def test_store_webhook_idempotency_without_tx_ref(self) -> None:
         """
         Test that store_webhook_idempotency works without tx_ref.
         """
@@ -106,7 +106,7 @@ class TestWebhookIdempotencyFunctions:
         assert added_record.source == "voicepay"
         assert added_record.tx_ref is None
 
-    def test_check_webhook_idempotency_filters_by_source(self):
+    def test_check_webhook_idempotency_filters_by_source(self) -> None:
         """
         Test that check_webhook_idempotency filters by both id and source.
 
@@ -135,7 +135,7 @@ class TestWebhookIdempotencyIntegration:
     # Full end-to-end tests with signature verification are covered in
     # tests/integration/test_webhook_endpoint.py
 
-    def test_idempotency_functions_work_together(self):
+    def test_idempotency_functions_work_together(self) -> None:
         """
         Test that check and store idempotency functions work together.
 
@@ -174,7 +174,7 @@ class TestWebhookIdempotencyIntegration:
 class TestWebhookIdempotencyEdgeCases:
     """Test edge cases for webhook idempotency."""
 
-    def test_same_webhook_id_different_sources_are_independent(self):
+    def test_same_webhook_id_different_sources_are_independent(self) -> None:
         """
         Test that same webhook ID from different sources are treated independently.
 
@@ -200,7 +200,7 @@ class TestWebhookIdempotencyEdgeCases:
         mock_db.query().filter().filter().first.return_value = korapay_record
         assert check_webhook_idempotency(mock_db, webhook_id, "korapay") is True
 
-    def test_store_webhook_idempotency_with_empty_string_tx_ref(self):
+    def test_store_webhook_idempotency_with_empty_string_tx_ref(self) -> None:
         """
         Test that store_webhook_idempotency handles empty string tx_ref.
 
@@ -221,7 +221,7 @@ class TestWebhookIdempotencyEdgeCases:
         assert added_record.source == "korapay"
         assert added_record.tx_ref == ""
 
-    def test_check_webhook_idempotency_with_special_characters(self):
+    def test_check_webhook_idempotency_with_special_characters(self) -> None:
         """
         Test that webhook IDs with special characters are handled correctly.
 
@@ -243,7 +243,7 @@ class TestWebhookIdempotencyEdgeCases:
         # Verify the function completed without errors (special characters handled)
         mock_db.query.assert_called()
 
-    def test_store_webhook_idempotency_records_timestamp(self):
+    def test_store_webhook_idempotency_records_timestamp(self) -> None:
         """
         Test that store_webhook_idempotency creates record with timestamp.
 
@@ -273,7 +273,7 @@ class TestWebhookIdempotencyEdgeCases:
 class TestWebhookIdempotencyRecordExpiration:
     """Test webhook idempotency record expiration (Requirement 2.3)."""
 
-    def test_cleanup_respects_minimum_24_hour_retention(self):
+    def test_cleanup_respects_minimum_24_hour_retention(self) -> None:
         """
         Test that cleanup function respects 24-hour minimum retention.
 
@@ -306,7 +306,7 @@ class TestWebhookIdempotencyRecordExpiration:
         # We can't check the exact time, but we can verify the filter was called
         mock_query.filter.assert_called_once()
 
-    def test_cleanup_allows_custom_retention_period(self):
+    def test_cleanup_allows_custom_retention_period(self) -> None:
         """
         Test that cleanup function allows custom retention periods.
 
@@ -331,7 +331,7 @@ class TestWebhookIdempotencyRecordExpiration:
         assert deleted_count == 2
         mock_db.commit.assert_called_once()
 
-    def test_cleanup_handles_database_errors_gracefully(self):
+    def test_cleanup_handles_database_errors_gracefully(self) -> None:
         """
         Test that cleanup function handles database errors without crashing.
 

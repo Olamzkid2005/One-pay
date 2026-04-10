@@ -11,7 +11,7 @@ import pytest
 class TestHealthMetrics:
     """Test health metrics collection for monitoring KoraPay API performance."""
 
-    def test_get_health_metrics_returns_success_rate(self):
+    def test_get_health_metrics_returns_success_rate(self) -> None:
         """Test get_health_metrics() returns success_rate as percentage."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -31,7 +31,7 @@ class TestHealthMetrics:
             assert isinstance(metrics["success_rate"], (int, float))
             assert 0 <= metrics["success_rate"] <= 100
 
-    def test_get_health_metrics_returns_avg_response_time(self):
+    def test_get_health_metrics_returns_avg_response_time(self) -> None:
         """Test get_health_metrics() returns avg_response_time in milliseconds."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -50,7 +50,7 @@ class TestHealthMetrics:
             assert isinstance(metrics["avg_response_time"], (int, float))
             assert metrics["avg_response_time"] >= 0
 
-    def test_get_health_metrics_returns_failures_last_hour(self):
+    def test_get_health_metrics_returns_failures_last_hour(self) -> None:
         """Test get_health_metrics() returns failures_last_hour count."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -69,7 +69,7 @@ class TestHealthMetrics:
             assert isinstance(metrics["failures_last_hour"], int)
             assert metrics["failures_last_hour"] >= 0
 
-    def test_metrics_track_success_and_failure_counts(self):
+    def test_metrics_track_success_and_failure_counts(self) -> None:
         """Test metrics track success/failure counts separately."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -95,7 +95,7 @@ class TestHealthMetrics:
             assert "successful_requests" in metrics
             assert "failed_requests" in metrics
 
-    def test_metrics_use_rolling_window_for_response_times(self):
+    def test_metrics_use_rolling_window_for_response_times(self) -> None:
         """Test metrics use rolling window (last 100 requests) for response times."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -111,7 +111,7 @@ class TestHealthMetrics:
             assert hasattr(korapay._response_times, 'maxlen')
             assert korapay._response_times.maxlen == 100
 
-    def test_metrics_are_thread_safe(self):
+    def test_metrics_are_thread_safe(self) -> None:
         """Test metrics use lock for thread-safe access."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -126,7 +126,7 @@ class TestHealthMetrics:
             assert hasattr(korapay, '_metrics_lock')
 
     @pytest.mark.skip(reason="Module reload causes singleton recreation - metrics state not preserved across reloads")
-    def test_metrics_update_after_successful_request(self):
+    def test_metrics_update_after_successful_request(self) -> None:
         """Test metrics are updated after successful API request."""
         import threading
         import time
@@ -163,7 +163,7 @@ class TestHealthMetrics:
             assert korapay._metrics["successful_requests"] >= 1
 
     @pytest.mark.skip(reason="Module reload causes singleton recreation - metrics state not preserved across reloads")
-    def test_metrics_update_after_failed_request(self):
+    def test_metrics_update_after_failed_request(self) -> None:
         """Test metrics are updated after failed API request."""
         from unittest.mock import Mock, patch
 

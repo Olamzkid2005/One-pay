@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     """Create webhook_blacklist table for SSRF protection."""
     op.create_table(
         'webhook_blacklist',
@@ -31,7 +31,7 @@ def upgrade():
     op.create_index('ix_webhook_blacklist_blacklisted_at', 'webhook_blacklist', ['blacklisted_at'])
 
 
-def downgrade():
+def downgrade() -> None:
     """Drop webhook_blacklist table."""
     op.drop_index('ix_webhook_blacklist_blacklisted_at', table_name='webhook_blacklist')
     op.drop_table('webhook_blacklist')

@@ -35,7 +35,7 @@ def client(app):
     return app.test_client()
 
 
-def test_korapay_webhook_forwards_to_voicepay(client, app, monkeypatch):
+def test_korapay_webhook_forwards_to_voicepay(client, app, monkeypatch) -> None:
     """Test that KoraPay webhook triggers VoicePay webhook"""
     from datetime import datetime, timedelta, timezone
 
@@ -102,7 +102,7 @@ def test_korapay_webhook_forwards_to_voicepay(client, app, monkeypatch):
     assert voicepay_calls[0]["payload"]["amount"] == 9000.00
 
 
-def test_non_voicepay_transaction_no_webhook(client, app, monkeypatch):
+def test_non_voicepay_transaction_no_webhook(client, app, monkeypatch) -> None:
     """Test that non-VoicePay transactions don't trigger VoicePay webhook"""
     from datetime import datetime, timedelta, timezone
 
@@ -160,7 +160,7 @@ def test_non_voicepay_transaction_no_webhook(client, app, monkeypatch):
     assert len(webhook_calls) == 0
 
 
-def test_voicepay_webhook_disabled_no_forwarding(client, app, monkeypatch):
+def test_voicepay_webhook_disabled_no_forwarding(client, app, monkeypatch) -> None:
     """Test that webhooks are not forwarded when VoicePay is disabled"""
     from datetime import datetime, timedelta, timezone
 

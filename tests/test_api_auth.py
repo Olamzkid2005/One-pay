@@ -36,7 +36,7 @@ def db_session():
     session.close()
 
 
-def test_api_key_model_creation():
+def test_api_key_model_creation() -> None:
     """Test that APIKey model can be created with required fields"""
     from models.api_key import APIKey
 
@@ -53,7 +53,7 @@ def test_api_key_model_creation():
 
 
 
-def test_generate_api_key_format():
+def test_generate_api_key_format() -> None:
     """Test that generated API keys have the correct format"""
     from core.api_auth import generate_api_key
 
@@ -67,7 +67,7 @@ def test_generate_api_key_format():
 
 
 
-def test_hash_api_key():
+def test_hash_api_key() -> None:
     """Test that API key hashing is consistent and secure"""
     from core.api_auth import hash_api_key
 
@@ -82,7 +82,7 @@ def test_hash_api_key():
 
 
 
-def test_validate_api_key_valid(db_session, monkeypatch):
+def test_validate_api_key_valid(db_session, monkeypatch) -> None:
     """Test that valid API keys are accepted"""
     from contextlib import contextmanager
 
@@ -113,7 +113,7 @@ def test_validate_api_key_valid(db_session, monkeypatch):
     assert user_id == 1
 
 
-def test_validate_api_key_invalid(db_session, monkeypatch):
+def test_validate_api_key_invalid(db_session, monkeypatch) -> None:
     """Test that invalid API keys are rejected"""
     from contextlib import contextmanager
 
@@ -137,7 +137,7 @@ def test_validate_api_key_invalid(db_session, monkeypatch):
     assert user_id is None
 
 
-def test_validate_api_key_inactive(db_session, monkeypatch):
+def test_validate_api_key_inactive(db_session, monkeypatch) -> None:
     """Test that inactive API keys are rejected"""
     from contextlib import contextmanager
 
@@ -169,7 +169,7 @@ def test_validate_api_key_inactive(db_session, monkeypatch):
 
 
 
-def test_is_api_key_authenticated():
+def test_is_api_key_authenticated() -> None:
     """Test the is_api_key_authenticated helper function"""
     from flask import Flask, g
 

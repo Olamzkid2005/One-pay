@@ -11,7 +11,7 @@ import pytest
 class TestRefundStatusQuery:
     """Test refund status query functionality."""
 
-    def test_query_refund_makes_get_to_refunds_reference(self):
+    def test_query_refund_makes_get_to_refunds_reference(self) -> None:
         """Test query_refund makes GET to /refunds/{reference} endpoint."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -46,7 +46,7 @@ class TestRefundStatusQuery:
             assert call_args[0][0] == "GET"
             assert "/refunds/REFUND-TEST-123" in call_args[0][1]
 
-    def test_query_refund_parses_response_correctly(self):
+    def test_query_refund_parses_response_correctly(self) -> None:
         """Test parses response correctly with all required fields."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):
@@ -82,7 +82,7 @@ class TestRefundStatusQuery:
             assert result["status"] == "success"
             assert result["currency"] == "NGN"
 
-    def test_query_refund_handles_404_not_found(self):
+    def test_query_refund_handles_404_not_found(self) -> None:
         """Test handles 404 error when refund not found."""
         valid_key = 'sk_test_' + 'a' * 40
         with patch.dict(os.environ, {'KORAPAY_SECRET_KEY': valid_key}, clear=False):

@@ -30,84 +30,55 @@ _cache_cleanup_last = time.time()
 _KEY_PATTERN = re.compile(r'^[a-zA-Z0-9:._-]{1,255}$')
 
 
+def _validate_rate_limit_key(key: str) -> bool:
+    """Return True if key is valid for rate limiting, False otherwise."""
+    if not key or not isinstance(key, str):
+        logger.warning("Invalid rate limit key type: %s", type(key))
+        return False
+    if len(key) > 255:
+        logger.warning("Rate limit key too long: %d chars", len(key))
+        return False
+    if not _KEY_PATTERN.match(key):
+        logger.warning("Invalid rate limit key format: %s", key[:50])
+        return False
+    return True
+
+
 def check_rate_limit(db, key: str, limit: int, window_secs: int = 60, critical: bool = False) -> bool:
     """
     Return True if the request is allowed, False if rate-limited.
-
     Uses a fixed-window counter stored in the DB with in-memory fallback.
-    The window resets every `window_secs` seconds.
-
-    Args:
-        db:          SQLAlchemy session (already open)
-        key:         Unique string identifying the bucket, e.g. "login:1.2.3.4"
-                     Max 255 chars, sanitized to prevent injection
-        limit:       Max requests allowed in the window
-        window_secs: Window duration in seconds. Note: because this uses a
-                     fixed window (not sliding), up to 2× `limit` requests
-                     can burst across a window boundary — e.g. `limit` at the
-                     end of one window and `limit` at the start of the next.
-        critical:    If True, fail closed (deny) on DB errors. If False, use
-                     in-memory fallback and fail open.
     """
-    # Sanitize key to prevent SQL injection and enforce length limit
-    if not key or not isinstance(key, str):
-        logger.warning("Invalid rate limit key type: %s", type(key))
-        return True  # fail open
+    if not _validate_rate_limit_key(key):
+        return True  # fail open on invalid key
 
-    # Length check BEFORE regex (faster, prevents ReDoS)
-    if len(key) > 255:
-        logger.warning("Rate limit key too long: %d chars", len(key))
-        return True  # fail open
-
-    # Use pre-compiled regex to prevent ReDoS
-    if not _KEY_PATTERN.match(key):
-        logger.warning("Invalid rate limit key format: %s", key[:50])
-        return True  # fail open
-
-    # Remove any null bytes
     key = key.replace('\x00', '')
-
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(seconds=window_secs)
 
     try:
-        # Use a savepoint to prevent concurrent RateLimit inserts from poisoning the parent transaction
-        # if an IntegrityError occurs (e.g. race condition on first request in window)
         with db.begin_nested():
             record = (
                 db.query(RateLimit)
-                .filter(
-                    RateLimit.key == key,
-                    RateLimit.window_start >= window_start,
-                )
-                .with_for_update()  # Lock the row to prevent races if it exists
+                .filter(RateLimit.key == key, RateLimit.window_start >= window_start)
+                .with_for_update()
                 .first()
             )
-
             if record is None:
-                # First request in this window
-                record = RateLimit(key=key, window_start=now, count=1)
-                db.add(record)
+                db.add(RateLimit(key=key, window_start=now, count=1))
                 db.flush()
                 return True
-
             if record.count >= limit:
                 logger.warning("Rate limit exceeded | key=%s count=%d limit=%d", key, record.count, limit)
                 return False
-
             record.count += 1
             db.flush()
             return True
-
     except Exception as e:
         logger.error("Rate limiter DB error: %s", e)
-
-        # For critical endpoints, fail closed (deny request)
         if critical:
             logger.warning("Rate limiter failing closed for critical endpoint | key=%s", key)
             return False
-
-        # For non-critical endpoints, use in-memory fallback
         return _check_rate_limit_memory(key, limit, window_secs)
 
 

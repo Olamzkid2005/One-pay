@@ -40,7 +40,7 @@ def client(app):
 class TestWebhookSignatureFailureHandling:
     """Test webhook signature failure handling (Requirement 1.3)."""
 
-    def test_invalid_signature_returns_401(self, client):
+    def test_invalid_signature_returns_401(self, client) -> None:
         """
         Test that invalid signature returns HTTP 401.
 
@@ -73,7 +73,7 @@ class TestWebhookSignatureFailureHandling:
             assert data['error_code'] == 'AUTHENTICATION_ERROR'
             assert 'signature' in data['message'].lower()
 
-    def test_missing_signature_returns_401(self, client):
+    def test_missing_signature_returns_401(self, client) -> None:
         """
         Test that missing signature returns HTTP 401.
 
@@ -101,7 +101,7 @@ class TestWebhookSignatureFailureHandling:
             assert data['success'] is False
             assert data['error_code'] == 'AUTHENTICATION_ERROR'
 
-    def test_signature_failure_logs_client_ip(self, client):
+    def test_signature_failure_logs_client_ip(self, client) -> None:
         """
         Test that signature failure logs client IP address.
 
@@ -138,7 +138,7 @@ class TestWebhookSignatureFailureHandling:
                     assert 'Invalid webhook signature' in log_call_args[0][0]
                     assert '192.168.1.100' in str(log_call_args)
 
-    def test_valid_signature_does_not_return_401(self, client):
+    def test_valid_signature_does_not_return_401(self, client) -> None:
         """
         Test that valid signature does NOT return HTTP 401.
 

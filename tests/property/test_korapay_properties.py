@@ -16,7 +16,7 @@ from hypothesis import strategies as st
 # Validates: Requirements 2.37, 6.9, 6.10, 26.1, 26.2, 26.3
 
 @given(st.decimals(min_value=1.00, max_value=999999999.99, places=2))
-def test_amount_conversion_round_trip(amount_naira):
+def test_amount_conversion_round_trip(amount_naira) -> None:
     """
     Property 1: Amount Conversion Round-Trip
 
@@ -42,7 +42,7 @@ def test_amount_conversion_round_trip(amount_naira):
 
 @settings(deadline=None)  # Disable deadline due to module reloading overhead
 @given(st.text(min_size=8, max_size=50, alphabet=st.characters(min_codepoint=33, max_codepoint=126)))
-def test_mock_account_determinism(transaction_reference):
+def test_mock_account_determinism(transaction_reference) -> None:
     """
     Property 2: Mock Mode Account Number Determinism
 
@@ -81,7 +81,7 @@ def test_mock_account_determinism(transaction_reference):
 
 @settings(deadline=None)  # Disable deadline due to module reloading overhead
 @given(st.text(min_size=8, max_size=50, alphabet=st.characters(min_codepoint=33, max_codepoint=126)))
-def test_mock_polling_sequence(transaction_reference):
+def test_mock_polling_sequence(transaction_reference) -> None:
     """
     Property 3: Mock Mode Polling Sequence
 
@@ -130,7 +130,7 @@ def test_mock_polling_sequence(transaction_reference):
     amount_kobo=st.integers(min_value=100, max_value=99999999999),
     account_name=st.text(min_size=1, max_size=100)
 )
-def test_virtual_account_idempotency(tx_ref, amount_kobo, account_name):
+def test_virtual_account_idempotency(tx_ref, amount_kobo, account_name) -> None:
     """
     Property 4: Virtual Account Creation Idempotency
 
@@ -188,7 +188,7 @@ def test_virtual_account_idempotency(tx_ref, amount_kobo, account_name):
     status=st.sampled_from(["success", "processing", "failed"]),
     amount=st.integers(min_value=100, max_value=99999999999)
 )
-def test_webhook_signature_on_data_object_only(webhook_secret, ref, status, amount):
+def test_webhook_signature_on_data_object_only(webhook_secret, ref, status, amount) -> None:
     """
     Property 5: Webhook Signature Verification on Data Object Only
 
@@ -252,7 +252,7 @@ def test_webhook_signature_on_data_object_only(webhook_secret, ref, status, amou
     tx_ref=st.text(min_size=8, max_size=50, alphabet=st.characters(min_codepoint=33, max_codepoint=126)),
     validity_mins=st.integers(min_value=1, max_value=1440)
 )
-def test_virtual_account_round_trip(account_number, bank_name, account_name, amount_kobo, tx_ref, validity_mins):
+def test_virtual_account_round_trip(account_number, bank_name, account_name, amount_kobo, tx_ref, validity_mins) -> None:
     """
     Property 6: VirtualAccount Parser Round-Trip
 
@@ -299,7 +299,7 @@ def test_virtual_account_round_trip(account_number, bank_name, account_name, amo
     tx_ref=st.text(min_size=8, max_size=50, alphabet=st.characters(min_codepoint=33, max_codepoint=126)),
     status=st.sampled_from(["00", "Z0", "99"])
 )
-def test_transfer_status_round_trip(tx_ref, status):
+def test_transfer_status_round_trip(tx_ref, status) -> None:
     """
     Property 7: TransferStatus Parser Round-Trip
 
@@ -331,7 +331,7 @@ def test_transfer_status_round_trip(tx_ref, status):
     status=st.sampled_from(["success", "failed", "processing"]),
     amount=st.integers(min_value=100, max_value=99999999999)
 )
-def test_webhook_event_round_trip(event_type, ref, status, amount):
+def test_webhook_event_round_trip(event_type, ref, status, amount) -> None:
     """
     Property 8: WebhookEvent Parser Round-Trip
 
@@ -365,7 +365,7 @@ def test_webhook_event_round_trip(event_type, ref, status, amount):
 
 @settings(deadline=None)
 @given(amount=st.decimals(min_value=1.00, max_value=999999999.99, places=9))
-def test_amount_rounding_consistency(amount):
+def test_amount_rounding_consistency(amount) -> None:
     """
     Property 15: Amount Rounding Consistency
 
@@ -391,7 +391,7 @@ def test_amount_rounding_consistency(amount):
 
 @settings(deadline=None)
 @given(status=st.sampled_from(["success", "processing", "failed"]))
-def test_status_code_mapping_consistency(status):
+def test_status_code_mapping_consistency(status) -> None:
     """
     Property 16: Status Code Mapping Consistency
 
@@ -432,7 +432,7 @@ def test_status_code_mapping_consistency(status):
     fee=st.integers(min_value=0, max_value=99999999999),
     vat=st.integers(min_value=0, max_value=99999999999)
 )
-def test_fee_calculation_sanity(fee, vat, amount):
+def test_fee_calculation_sanity(fee, vat, amount) -> None:
     """
     Property 18: Fee Calculation Sanity Check
 
@@ -455,7 +455,7 @@ def test_fee_calculation_sanity(fee, vat, amount):
 
 @settings(deadline=None)
 @given(tx_ref=st.text(min_size=8, max_size=50, alphabet=st.characters(min_codepoint=33, max_codepoint=126)))
-def test_mock_poll_counter_cleanup(tx_ref):
+def test_mock_poll_counter_cleanup(tx_ref) -> None:
     """
     Property 17: Mock Mode Poll Counter Cleanup
 

@@ -47,7 +47,7 @@ class TestPaymentLinkRoutes:
 
         return mock_db
 
-    def test_payment_link_requires_authentication(self, client):
+    def test_payment_link_requires_authentication(self, client) -> None:
         """
         Test that creating a link returns 401 unauthenticated when no session.
         """
@@ -58,7 +58,7 @@ class TestPaymentLinkRoutes:
             )
             assert response.status_code == 401
 
-    def test_payment_link_requires_application_json(self, client):
+    def test_payment_link_requires_application_json(self, client) -> None:
         """
         Test that creating a link strictly requires Content-Type application/json.
         """
@@ -70,7 +70,7 @@ class TestPaymentLinkRoutes:
                 )
                 assert response.status_code == 415
 
-    def test_payment_link_rejects_negative_amounts(self, client):
+    def test_payment_link_rejects_negative_amounts(self, client) -> None:
         """
         Test edge case rejecting negative amounts.
         """
@@ -91,7 +91,7 @@ class TestPaymentLinkRoutes:
                     data = json.loads(response.data)
                     assert "positive finite number" in data.get("message", "")
 
-    def test_payment_link_rejects_too_high_amounts(self, client):
+    def test_payment_link_rejects_too_high_amounts(self, client) -> None:
         """
         Test edge case rejecting amounts over 100 million.
         """
@@ -110,7 +110,7 @@ class TestPaymentLinkRoutes:
 
                     assert response.status_code == 400
 
-    def test_payment_link_happy_path_success(self, client):
+    def test_payment_link_happy_path_success(self, client) -> None:
         """
         Test generating a payment link works and creates DB records correctly.
         """
@@ -146,7 +146,7 @@ class TestPaymentLinkRoutes:
                         assert transaction_arg.description == "Test integration item"
                         assert transaction_arg.customer_email == "test@onepay.com"
 
-    def test_payment_link_idempotency(self, client):
+    def test_payment_link_idempotency(self, client) -> None:
         """
         Test that supplying the same idempotency key returns the existing transaction.
         """

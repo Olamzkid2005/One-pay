@@ -140,7 +140,7 @@ class TestSelectinloadPresence:
     Requirements: 9.1, 9.2
     """
 
-    def test_transaction_history_uses_selectinload(self):
+    def test_transaction_history_uses_selectinload(self) -> None:
         """blueprints/payments.py transaction_history must use selectinload."""
         import blueprints.payments as payments_module
         src = inspect.getsource(payments_module.transaction_history)
@@ -149,7 +149,7 @@ class TestSelectinloadPresence:
             "when accessing Transaction.invoice"
         )
 
-    def test_transaction_history_loads_invoice_relationship(self):
+    def test_transaction_history_loads_invoice_relationship(self) -> None:
         """transaction_history must eager-load the invoice relationship."""
         import blueprints.payments as payments_module
         src = inspect.getsource(payments_module.transaction_history)
@@ -157,7 +157,7 @@ class TestSelectinloadPresence:
             "transaction_history() must eager-load the invoice relationship"
         )
 
-    def test_get_invoice_history_uses_selectinload(self):
+    def test_get_invoice_history_uses_selectinload(self) -> None:
         """services/invoice.py get_invoice_history must use selectinload."""
         from services.invoice import InvoiceService
         src = inspect.getsource(InvoiceService.get_invoice_history)
@@ -166,7 +166,7 @@ class TestSelectinloadPresence:
             "when accessing Invoice.transaction"
         )
 
-    def test_get_invoice_history_loads_transaction_relationship(self):
+    def test_get_invoice_history_loads_transaction_relationship(self) -> None:
         """get_invoice_history must eager-load the transaction relationship."""
         from services.invoice import InvoiceService
         src = inspect.getsource(InvoiceService.get_invoice_history)
@@ -215,7 +215,7 @@ class TestTransactionHistoryQueryCount:
             _ = tx.invoice
         return transactions, total
 
-    def test_query_count_5_transactions(self, db_session, query_counter):
+    def test_query_count_5_transactions(self, db_session, query_counter) -> None:
         """Loading 5 transactions should issue a constant number of queries."""
         _make_user(db_session, user_id=10)
         for i in range(5):
@@ -235,7 +235,7 @@ class TestTransactionHistoryQueryCount:
             f"Statements: {query_counter.statements}"
         )
 
-    def test_query_count_10_transactions(self, db_session, query_counter):
+    def test_query_count_10_transactions(self, db_session, query_counter) -> None:
         """Loading 10 transactions should issue the same number of queries as 5."""
         _make_user(db_session, user_id=20)
         for i in range(10):
@@ -253,7 +253,7 @@ class TestTransactionHistoryQueryCount:
             f"Statements: {query_counter.statements}"
         )
 
-    def test_query_count_is_constant_across_page_sizes(self, db_session, query_counter):
+    def test_query_count_is_constant_across_page_sizes(self, db_session, query_counter) -> None:
         """
         The query count must be the same for page_size=5 and page_size=10.
         This is the core N+1 prevention assertion (Requirement 9.2, 9.4).
@@ -280,7 +280,7 @@ class TestTransactionHistoryQueryCount:
             "This indicates an N+1 query problem."
         )
 
-    def test_no_n1_without_invoices(self, db_session, query_counter):
+    def test_no_n1_without_invoices(self, db_session, query_counter) -> None:
         """Transactions without invoices should also use a constant query count."""
         _make_user(db_session, user_id=40)
         for i in range(8):
@@ -326,7 +326,7 @@ class TestInvoiceHistoryQueryCount:
             _ = inv.transaction
         return invoices, total
 
-    def test_query_count_5_invoices(self, db_session, query_counter):
+    def test_query_count_5_invoices(self, db_session, query_counter) -> None:
         """Loading 5 invoices should issue ≤3 queries."""
         _make_user(db_session, user_id=50)
         for i in range(5):
@@ -343,7 +343,7 @@ class TestInvoiceHistoryQueryCount:
             f"Expected ≤3 queries for 5 invoices, got {count_5}"
         )
 
-    def test_query_count_10_invoices(self, db_session, query_counter):
+    def test_query_count_10_invoices(self, db_session, query_counter) -> None:
         """Loading 10 invoices should issue the same number of queries as 5."""
         _make_user(db_session, user_id=60)
         for i in range(10):
@@ -362,7 +362,7 @@ class TestInvoiceHistoryQueryCount:
 
     def test_invoice_query_count_is_constant_across_page_sizes(
         self, db_session, query_counter
-    ):
+    ) -> None:
         """
         Query count must be the same for page_size=5 and page_size=10.
         Requirements: 9.2, 9.4

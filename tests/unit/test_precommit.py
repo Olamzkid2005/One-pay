@@ -14,12 +14,12 @@ def load_config():
         return yaml.safe_load(f)
 
 
-def test_precommit_config_exists():
+def test_precommit_config_exists() -> None:
     """Verify .pre-commit-config.yaml exists."""
     assert os.path.isfile(CONFIG_PATH), ".pre-commit-config.yaml not found"
 
 
-def test_precommit_config_contains_ruff():
+def test_precommit_config_contains_ruff() -> None:
     """Verify ruff linting and formatting hooks are configured."""
     config = load_config()
     hook_ids = [
@@ -31,7 +31,7 @@ def test_precommit_config_contains_ruff():
     assert "ruff-format" in hook_ids, "ruff-format hook not found"
 
 
-def test_precommit_config_contains_trailing_whitespace():
+def test_precommit_config_contains_trailing_whitespace() -> None:
     """Verify trailing-whitespace check is configured."""
     config = load_config()
     hook_ids = [
@@ -42,7 +42,7 @@ def test_precommit_config_contains_trailing_whitespace():
     assert "trailing-whitespace" in hook_ids, "trailing-whitespace hook not found"
 
 
-def test_setup_sh_references_precommit():
+def test_setup_sh_references_precommit() -> None:
     """Verify scripts/setup.sh references pre-commit installation."""
     assert os.path.isfile(SETUP_SH_PATH), "scripts/setup.sh not found"
     with open(SETUP_SH_PATH) as f:

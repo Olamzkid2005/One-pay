@@ -59,24 +59,24 @@ class TestUserModel2FAMethods:
 
     # ── is_2fa_locked ──────────────────────────────────────────────────────
 
-    def test_is_2fa_locked_returns_false_when_no_lockout(self):
+    def test_is_2fa_locked_returns_false_when_no_lockout(self) -> None:
         """is_2fa_locked() is False when twofa_locked_until is None."""
         user = self._make_user()
         assert user.is_2fa_locked() is False
 
-    def test_is_2fa_locked_returns_true_when_locked_in_future(self):
+    def test_is_2fa_locked_returns_true_when_locked_in_future(self) -> None:
         """is_2fa_locked() is True when lockout expires in the future."""
         user = self._make_user()
         user.twofa_locked_until = datetime.now(timezone.utc) + timedelta(minutes=10)
         assert user.is_2fa_locked() is True
 
-    def test_is_2fa_locked_returns_false_when_lockout_expired(self):
+    def test_is_2fa_locked_returns_false_when_lockout_expired(self) -> None:
         """is_2fa_locked() is False when lockout time has already passed."""
         user = self._make_user()
         user.twofa_locked_until = datetime.now(timezone.utc) - timedelta(seconds=1)
         assert user.is_2fa_locked() is False
 
-    def test_is_2fa_locked_handles_naive_datetime(self):
+    def test_is_2fa_locked_handles_naive_datetime(self) -> None:
         """is_2fa_locked() handles naive datetimes by treating them as UTC."""
         user = self._make_user()
         # Naive datetime in the future
@@ -85,27 +85,27 @@ class TestUserModel2FAMethods:
 
     # ── record_failed_2fa ──────────────────────────────────────────────────
 
-    def test_record_failed_2fa_increments_counter(self):
+    def test_record_failed_2fa_increments_counter(self) -> None:
         """record_failed_2fa() increments failed_2fa_attempts by 1."""
         user = self._make_user()
         user.record_failed_2fa()
         assert user.failed_2fa_attempts == 1
 
-    def test_record_failed_2fa_increments_multiple_times(self):
+    def test_record_failed_2fa_increments_multiple_times(self) -> None:
         """record_failed_2fa() accumulates across multiple calls."""
         user = self._make_user()
         for _ in range(3):
             user.record_failed_2fa()
         assert user.failed_2fa_attempts == 3
 
-    def test_record_failed_2fa_no_lockout_below_threshold(self):
+    def test_record_failed_2fa_no_lockout_below_threshold(self) -> None:
         """No lockout is set when attempts are below the threshold (default 5)."""
         user = self._make_user()
         for _ in range(4):
             user.record_failed_2fa()
         assert user.twofa_locked_until is None
 
-    def test_record_failed_2fa_locks_at_threshold(self):
+    def test_record_failed_2fa_locks_at_threshold(self) -> None:
         """Account is locked when failed attempts reach the threshold (default 5)."""
         user = self._make_user()
         for _ in range(5):
@@ -113,7 +113,7 @@ class TestUserModel2FAMethods:
         assert user.twofa_locked_until is not None
         assert user.is_2fa_locked() is True
 
-    def test_record_failed_2fa_lockout_duration(self):
+    def test_record_failed_2fa_lockout_duration(self) -> None:
         """Lockout duration is approximately window_secs (default 900s = 15 min)."""
         user = self._make_user()
         before = datetime.now(timezone.utc)
@@ -129,7 +129,7 @@ class TestUserModel2FAMethods:
         assert locked_until >= before + timedelta(seconds=890)
         assert locked_until <= after + timedelta(seconds=910)
 
-    def test_record_failed_2fa_custom_threshold(self):
+    def test_record_failed_2fa_custom_threshold(self) -> None:
         """Custom max_attempts parameter is respected."""
         user = self._make_user()
         user.record_failed_2fa(max_attempts=3)
@@ -138,7 +138,7 @@ class TestUserModel2FAMethods:
         user.record_failed_2fa(max_attempts=3)
         assert user.is_2fa_locked() is True
 
-    def test_record_failed_2fa_custom_window(self):
+    def test_record_failed_2fa_custom_window(self) -> None:
         """Custom window_secs parameter sets the lockout duration."""
         user = self._make_user()
         before = datetime.now(timezone.utc)
@@ -155,14 +155,14 @@ class TestUserModel2FAMethods:
 
     # ── record_successful_2fa ──────────────────────────────────────────────
 
-    def test_record_successful_2fa_resets_counter(self):
+    def test_record_successful_2fa_resets_counter(self) -> None:
         """record_successful_2fa() resets failed_2fa_attempts to 0."""
         user = self._make_user()
         user.failed_2fa_attempts = 3
         user.record_successful_2fa()
         assert user.failed_2fa_attempts == 0
 
-    def test_record_successful_2fa_clears_lockout(self):
+    def test_record_successful_2fa_clears_lockout(self) -> None:
         """record_successful_2fa() clears twofa_locked_until."""
         user = self._make_user()
         user.twofa_locked_until = datetime.now(timezone.utc) + timedelta(minutes=10)
@@ -170,7 +170,7 @@ class TestUserModel2FAMethods:
         assert user.twofa_locked_until is None
         assert user.is_2fa_locked() is False
 
-    def test_record_successful_2fa_idempotent_on_clean_state(self):
+    def test_record_successful_2fa_idempotent_on_clean_state(self) -> None:
         """record_successful_2fa() is safe to call when no lockout is active."""
         user = self._make_user()
         user.record_successful_2fa()
@@ -193,7 +193,7 @@ class TestLoginRedirectsTo2FA:
         mock_db.query.return_value.filter.return_value.first.return_value = user
         return mock_db
 
-    def test_login_redirects_to_verify_2fa_when_enabled(self, client):
+    def test_login_redirects_to_verify_2fa_when_enabled(self, client) -> None:
         """POST /api/v1/login with valid credentials and two_factor_enabled=True redirects to verify-2fa."""
         mock_user = MagicMock()
         mock_user.id = 1
@@ -221,7 +221,7 @@ class TestLoginRedirectsTo2FA:
         assert response.status_code == 302
         assert "verify-2fa" in response.headers["Location"]
 
-    def test_login_does_not_redirect_to_2fa_when_disabled(self, client):
+    def test_login_does_not_redirect_to_2fa_when_disabled(self, client) -> None:
         """POST /api/v1/login with two_factor_enabled=False must NOT redirect to verify-2fa."""
         mock_user = MagicMock()
         mock_user.id = 2
@@ -249,7 +249,7 @@ class TestLoginRedirectsTo2FA:
         assert response.status_code == 302
         assert "verify-2fa" not in response.headers["Location"]
 
-    def test_login_stores_pre_2fa_user_id_in_session(self, client):
+    def test_login_stores_pre_2fa_user_id_in_session(self, client) -> None:
         """pre_2fa_user_id must be stored in session when 2FA is required."""
         mock_user = MagicMock()
         mock_user.id = 42
@@ -292,7 +292,7 @@ class TestFailedAttemptCounter:
         mock_db.query.return_value.filter.return_value.first.return_value = user
         return mock_db
 
-    def test_wrong_code_calls_record_failed_2fa(self, client):
+    def test_wrong_code_calls_record_failed_2fa(self, client) -> None:
         """Submitting a wrong code must call user.record_failed_2fa()."""
         _set_pre_2fa_session(client, user_id=1)
 
@@ -322,7 +322,7 @@ class TestFailedAttemptCounter:
 
         mock_user.record_failed_2fa.assert_called_once()
 
-    def test_correct_code_calls_record_successful_2fa(self, client):
+    def test_correct_code_calls_record_successful_2fa(self, client) -> None:
         """Submitting the correct code must call user.record_successful_2fa()."""
         _set_pre_2fa_session(client, user_id=1)
 
@@ -353,7 +353,7 @@ class TestFailedAttemptCounter:
 
         mock_user.record_successful_2fa.assert_called_once()
 
-    def test_wrong_code_returns_error_page(self, client):
+    def test_wrong_code_returns_error_page(self, client) -> None:
         """Wrong code must return 200 with the verify_2fa template (not a redirect)."""
         _set_pre_2fa_session(client, user_id=1)
 
@@ -399,7 +399,7 @@ class TestAccountLockout:
         mock_db.query.return_value.filter.return_value.first.return_value = user
         return mock_db
 
-    def test_locked_user_cannot_verify_2fa(self, client):
+    def test_locked_user_cannot_verify_2fa(self, client) -> None:
         """A locked user must see an error and not be allowed to verify."""
         _set_pre_2fa_session(client, user_id=1)
 
@@ -430,7 +430,7 @@ class TestAccountLockout:
         # record_failed_2fa must NOT be called when already locked
         mock_user.record_failed_2fa.assert_not_called()
 
-    def test_lockout_triggered_after_5_failed_attempts(self):
+    def test_lockout_triggered_after_5_failed_attempts(self) -> None:
         """User model locks after exactly 5 failed attempts (Req 4.3)."""
         from models.user import User
         user = User()
@@ -444,7 +444,7 @@ class TestAccountLockout:
         user.record_failed_2fa()  # 5th attempt
         assert user.is_2fa_locked() is True
 
-    def test_lockout_lasts_15_minutes(self):
+    def test_lockout_lasts_15_minutes(self) -> None:
         """Lockout window is 15 minutes (900 seconds) by default."""
         from models.user import User
         user = User()
@@ -463,7 +463,7 @@ class TestAccountLockout:
         delta = (locked_until - before).total_seconds()
         assert 890 <= delta <= 910
 
-    def test_locked_user_get_request_shows_error(self, client):
+    def test_locked_user_get_request_shows_error(self, client) -> None:
         """GET /api/v1/verify-2fa for a locked user must show the locked error message."""
         _set_pre_2fa_session(client, user_id=1)
 
