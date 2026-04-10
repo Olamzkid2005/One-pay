@@ -1,0 +1,96 @@
+{% extends "dashboard_base.html" %}
+
+{% block title %}Invoice Templates - OnePay{% endblock %}
+
+{% block dashboard_content %}
+<div class="px-12 max-w-7xl mx-auto w-full">
+    <!-- Header Section -->
+    <header class="mb-12 flex justify-between items-start">
+        <div>
+            <h2 class="text-4xl font-headline font-extrabold tracking-tight text-gray-800 dark:text-primary mb-2">Invoice Templates</h2>
+            <p class="text-gray-700 dark:text-on-surface-variant text-lg max-w-2xl font-body">Create and manage custom invoice templates.</p>
+        </div>
+        <button onclick="showCreateModal()" class="flex items-center gap-2 px-6 py-3 bg-primary text-on-primary-container rounded-xl font-medium hover:bg-primary/90 transition-colors">
+            <span class="material-symbols-outlined text-sm">add</span>
+            New Template
+        </button>
+    </header>
+    
+    <!-- Templates Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% if templates %}
+            {% for template in templates %}
+                <div class="bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-shadow">
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="text-lg font-bold text-on-surface">{{ template.name }}</h3>
+                        <div class="flex gap-2">
+                            <button onclick="editTemplate({{ template.id }})" class="p-2 hover:bg-surface-container-highest rounded-lg transition-colors" title="Edit">
+                                <span class="material-symbols-outlined text-sm text-on-surface">edit</span>
+                            </button>
+                            <button onclick="deleteTemplate({{ template.id }})" class="p-2 hover:bg-surface-container-highest rounded-lg transition-colors" title="Delete">
+                                <span class="material-symbols-outlined text-sm text-error">delete</span>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-sm text-on-surface-variant mb-4">{{ template.description or 'No description' }}</p>
+                    <div class="text-xs text-outline">
+                        Created: {{ template.created_at.strftime('%b %d, %Y') if template.created_at else '' }}
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-span-full bg-surface-container-low border border-outline-variant/10 rounded-2xl p-12 text-center shadow-xl">
+                <span class="material-symbols-outlined text-6xl text-outline/30 mb-4">description</span>
+                <h3 class="text-lg font-bold text-on-surface mb-2">No Templates Found</h3>
+                <p class="text-sm text-outline mb-4">Create your first custom invoice template.</p>
+                <button onclick="showCreateModal()" class="px-6 py-3 bg-primary text-on-primary-container rounded-xl font-medium hover:bg-primary/90 transition-colors">
+                    Create Template
+                </button>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Create/Edit Modal -->
+<div id="templateModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-surface-container-low rounded-2xl p-6 shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
+            <h3 id="modalTitle" class="text-xl font-bold text-on-surface">Create Template</h3>
+            <button onclick="closeModal()" class="p-2 hover:bg-surface-container-highest rounded-lg transition-colors">
+                <span class="material-symbols-outlined text-sm text-on-surface">close</span>
+            </button>
+        </div>
+        <form id="templateForm">
+            <input type="hidden" id="templateId">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-on-surface mb-2">Name</label>
+                    <input type="text" id="templateName" required class="w-full bg-surface-container-high border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary text-on-surface" placeholder="Template name">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-on-surface mb-2">Description</label>
+                    <input type="text" id="templateDescription" class="w-full bg-surface-container-high border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary text-on-surface" placeholder="Template description">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-on-surface mb-2">HTML Template</label>
+                    <textarea id="templateHtml" required rows="10" class="w-full bg-surface-container-high border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary text-on-surface font-mono" placeholder="HTML template code"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-on-surface mb-2">CSS Styles (optional)</label>
+                    <textarea id="templateCss" rows="5" class="w-full bg-surface-container-high border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary text-on-surface font-mono" placeholder="CSS styles"></textarea>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end gap-3">
+                <button type="button" onclick="closeModal()" class="px-6 py-3 bg-surface-container-high text-on-surface rounded-xl font-medium hover:bg-surface-container-highest transition-colors">
+                    Cancel
+                </button>
+                <button type="submit" class="px-6 py-3 bg-primary text-on-primary-container rounded-xl font-medium hover:bg-primary/90 transition-colors">
+                    Save Template
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="/static/js/invoice_templates.js"></script>
+{% endblock %}

@@ -31,10 +31,12 @@ from core.responses import error, rate_limited, unauthenticated
 from database import get_db
 from models.audit_log import AuditLog
 from models.invoice import InvoiceSettings
+from models.refund import Refund, RefundStatus
 from models.transaction import Transaction, TransactionStatus
 from models.user import User
 from services.cache import cache_delete, cache_get, cache_set
 from services.email import send_invoice_email
+from services.exchange_rate import get_supported_currencies
 from services.invoice import invoice_service
 from services.korapay import KoraPayError, korapay
 from services.qr_code import qr_service
@@ -606,12 +608,18 @@ def _build_payment_link_transaction(db, data: dict, amount, idempotency_key) -> 
     if description and len(description) > 255:
         raise ValidationError("Description too long (max 255 characters)")
 
+    # Validate and normalize currency
+    currency = str(data.get("currency", "NGN")).upper()[:3]
+    supported_currencies = get_supported_currencies()
+    if currency not in supported_currencies:
+        raise ValidationError(f"Unsupported currency. Supported currencies: {', '.join(supported_currencies)}")
+
     transaction = Transaction(
         tx_ref=tx_ref,
         idempotency_key=idempotency_key,
         user_id=current_user_id(),
         amount=amount,
-        currency=str(data.get("currency", "NGN")).upper()[:3],
+        currency=currency,
         description=description,
         customer_email=_safe_email(data.get("customer_email")),
         customer_phone=_safe_phone(data.get("customer_phone")),
@@ -876,5 +884,196 @@ def reissue_payment_link(tx_ref):
             "virtual_bank_name": new_transaction.virtual_bank_name,
             "virtual_account_name": new_transaction.virtual_account_name,
         }), 201
+
+
+# ── Refund Management ──────────────────────────────────────────────────────────
+
+
+@payments_bp.route("/refunds")
+def refunds():
+    """List all refunds for current user."""
+    if not current_user_id():
+        return login_required_redirect()
+
+    with get_db() as db:
+        user = db.query(User).filter(User.id == current_user_id()).first()
+        profile_picture = user.profile_picture_url if user else None
+
+        refunds = db.query(Refund).join(Transaction).filter(
+            Transaction.user_id == current_user_id()
+        ).order_by(Refund.created_at.desc()).all()
+
+    return render_template(
+        "refund.html",
+        username=current_username(),
+        profile_picture=profile_picture,
+        csrf_token=get_csrf_token(),
+        refunds=refunds,
+        active_page="refunds",
+    )
+
+
+@payments_bp.route("/refunds/create", methods=["POST"])
+def create_refund():
+    """Create a new refund."""
+    if not current_user_id():
+        return unauthenticated()
+
+    # Validate CSRF for non-API requests
+    from core.api_auth import is_api_key_authenticated
+    if not is_api_key_authenticated():
+        csrf_header = request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token")
+        if not is_valid_csrf_token(csrf_header):
+            raise AuthorizationError("CSRF validation failed")
+
+    tx_ref = request.form.get("tx_ref") if request.form else request.get_json().get("tx_ref")
+    amount = request.form.get("amount") if request.form else request.get_json().get("amount")
+    reason = request.form.get("reason") if request.form else request.get_json().get("reason")
+
+    if not tx_ref or not amount:
+        raise ValidationError("tx_ref and amount are required")
+
+    try:
+        amount = Decimal(str(amount))
+    except (ValueError, TypeError):
+        raise ValidationError("Invalid amount format")
+
+    with get_db() as db:
+        tx = db.query(Transaction).filter_by(tx_ref=tx_ref).first()
+        if not tx or tx.user_id != current_user_id():
+            raise ValidationError("Transaction not found")
+
+        if tx.status != TransactionStatus.VERIFIED:
+            raise ValidationError("Can only refund verified transactions")
+
+        # Check if refund already exists for this transaction
+        existing_refund = db.query(Refund).filter(
+            Refund.transaction_id == tx.id,
+            Refund.status.in_([RefundStatus.PROCESSING, RefundStatus.SUCCESS])
+        ).first()
+        if existing_refund:
+            raise ValidationError("A refund is already in progress or completed for this transaction")
+
+        # Generate unique refund reference
+        import time
+        refund_reference = f"REFUND-{tx_ref}-{int(time.time())}"
+
+        refund = Refund(
+            transaction_id=tx.id,
+            refund_reference=refund_reference,
+            amount=amount,
+            currency=tx.currency,
+            status=RefundStatus.PROCESSING,
+            reason=reason
+        )
+        db.add(refund)
+        db.flush()
+
+        # Call KoraPay refund API
+        try:
+            result = korapay.initiate_refund(
+                payment_reference=tx.korapay_merchant_ref or tx_ref,
+                refund_reference=refund_reference,
+                amount=int(float(amount) * 100),  # Convert to kobo
+                reason=reason
+            )
+            refund.provider_refund_id = result.get("reference")
+            refund.status = RefundStatus.PROCESSING
+            logger.info("Refund initiated via KoraPay | refund_ref=%s tx_ref=%s", refund_reference, tx_ref)
+        except KoraPayError as e:
+            refund.status = RefundStatus.FAILED
+            refund.failure_reason = str(e)
+            logger.error("Refund initiation failed | refund_ref=%s error=%s", refund_reference, e)
+        except Exception as e:
+            refund.status = RefundStatus.FAILED
+            refund.failure_reason = str(e)
+            logger.error("Unexpected error during refund initiation | refund_ref=%s error=%s", refund_reference, e)
+
+        db.commit()
+
+        log_event(
+            db,
+            "refund.created",
+            user_id=current_user_id(),
+            tx_ref=tx_ref,
+            ip_address=client_ip(),
+            detail={"refund_reference": refund_reference, "amount": str(amount), "reason": reason}
+        )
+
+        if request.is_json:
+            return jsonify({
+                "success": True,
+                "message": "Refund initiated successfully",
+                "refund_reference": refund_reference,
+                "status": refund.status.value
+            })
+
+        from flask import flash
+        if refund.status == RefundStatus.FAILED:
+            flash(f"Refund failed: {refund.failure_reason}", "error")
+        else:
+            flash("Refund initiated successfully", "success")
+        return redirect(url_for("payments.refunds"))
+
+
+# ── Payment Analytics Dashboard ───────────────────────────────────────────────
+
+
+@payments_bp.route("/analytics")
+def analytics():
+    """Display payment analytics dashboard."""
+    if not current_user_id():
+        return login_required_redirect()
+
+    with get_db() as db:
+        user = db.query(User).filter(User.id == current_user_id()).first()
+        profile_picture = user.profile_picture_url if user else None
+
+        # Revenue by day (last 30 days)
+        revenue_by_day = db.query(
+            func.date(Transaction.created_at).label('date'),
+            func.sum(Transaction.amount).label('revenue')
+        ).filter(
+            Transaction.user_id == current_user_id(),
+            Transaction.status == TransactionStatus.VERIFIED,
+            Transaction.created_at >= datetime.now(timezone.utc) - timedelta(days=30)
+        ).group_by(func.date(Transaction.created_at)).all()
+
+        # Transaction status distribution
+        status_distribution = db.query(
+            Transaction.status,
+            func.count(Transaction.id).label('count')
+        ).filter(
+            Transaction.user_id == current_user_id()
+        ).group_by(Transaction.status).all()
+
+        # Top payment amounts
+        top_payments = db.query(Transaction).filter(
+            Transaction.user_id == current_user_id(),
+            Transaction.status == TransactionStatus.VERIFIED
+        ).order_by(Transaction.amount.desc()).limit(10).all()
+
+        # Conversion rate
+        total_pending = db.query(Transaction).filter(
+            Transaction.user_id == current_user_id(),
+            Transaction.status == TransactionStatus.PENDING
+        ).count()
+        total_verified = db.query(Transaction).filter(
+            Transaction.user_id == current_user_id(),
+            Transaction.status == TransactionStatus.VERIFIED
+        ).count()
+        conversion_rate = (total_verified / (total_pending + total_verified) * 100) if (total_pending + total_verified) > 0 else 0
+
+    return render_template(
+        "analytics.html",
+        username=current_username(),
+        profile_picture=profile_picture,
+        csrf_token=get_csrf_token(),
+        revenue_by_day=revenue_by_day,
+        status_distribution=status_distribution,
+        top_payments=top_payments,
+        conversion_rate=round(conversion_rate, 2),
+        active_page="analytics",
+    )
 
 

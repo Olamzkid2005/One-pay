@@ -20,6 +20,7 @@ from services.email_templates import (
     build_invoice_email,
     build_merchant_notification_email,
     build_password_reset_email,
+    build_payment_reminder_email,
 )
 
 logger = logging.getLogger(__name__)
@@ -209,4 +210,39 @@ def send_2fa_code(to_email: str, code: str) -> bool:
     else:
         logger.error("Failed to send 2FA email to %s", to_email)
         logger.info("Fallback 2FA Code for %s: %s", to_email, code)
+    return success
+
+
+def send_payment_reminder_email(
+    to_email: str,
+    invoice,
+    reminder_type: str,
+    days: int,
+    merchant_name: str
+) -> bool:
+    """Send a payment reminder email for an unpaid invoice."""
+    if not _validate_email_address(to_email):
+        logger.error("Invalid email for reminder: %s", to_email[:50])
+        return False
+
+    if not Config.MAIL_USERNAME:
+        logger.info("Payment reminder (dev mode) | invoice=%s to=%s", invoice.invoice_number, to_email)
+        return True
+
+    text_body, html_body = build_payment_reminder_email(invoice, reminder_type, days, merchant_name)
+
+    def _send() -> None:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"Payment Reminder - Invoice {invoice.invoice_number}"
+        msg["From"] = Config.MAIL_FROM
+        msg["To"] = to_email
+        msg.attach(MIMEText(text_body, "plain"))
+        msg.attach(MIMEText(html_body, "html"))
+        _smtp_send(msg)
+
+    success = _retry_send(_send, f"payment reminder {invoice.invoice_number}", max_attempts=1)
+    if success:
+        logger.info("Payment reminder sent | invoice=%s to=%s", invoice.invoice_number, to_email)
+    else:
+        logger.error("Failed to send payment reminder | invoice=%s", invoice.invoice_number)
     return success

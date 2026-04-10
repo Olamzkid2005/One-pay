@@ -1,5 +1,98 @@
 # OnePay Changelog
 
+## Version 2.0.0 - April 10, 2026
+
+### ✨ Phase 3 Features - New Functionality
+
+Complete implementation of 6 new features for enhanced payment management and automation.
+
+#### FEAT-001: Refund Management UI
+- Added refund routes to `blueprints/payments.py` (`/refunds`, `/refunds/create`)
+- Created `templates/refund.html` with refund list and creation form
+- Created `static/js/refund.js` for form submission and clipboard copy
+- Integrated with KoraPay refund API for refund initiation
+- Refund status tracking in database with error handling
+
+#### FEAT-002: Payment Analytics Dashboard
+- Added analytics route with aggregated queries (revenue by day, status distribution, top payments, conversion rate)
+- Created `templates/analytics.html` with Chart.js visualization
+- Created `static/js/analytics.js` for chart rendering
+- Summary cards showing key metrics
+- Responsive design for mobile
+
+#### FEAT-003: Multi-Currency Support
+- Added supported currencies to `config.py` (NGN, USD, EUR)
+- Added currency symbols configuration
+- Created `ExchangeRate` model with caching
+- Created `services/exchange_rate.py` with rate fetching and conversion
+- Added currency validation to payment link creation
+- Mock API integration for demonstration
+
+#### FEAT-004: Invoice Template Customization
+- Created `InvoiceTemplate` model with HTML/CSS content storage
+- Added template CRUD routes to `blueprints/invoices.py`
+- Created `templates/invoice_templates.html` with modal editor
+- Created `static/js/invoice_templates.js` for template management
+- Database migration for invoice_templates table
+
+#### FEAT-005: Invoice Scheduling
+- Created `RecurringInvoice` model with schedule fields
+- Added recurring invoice CRUD routes
+- Created background task `generate_recurring_invoices()` in `services/task_queue.py`
+- Added `_calculate_next_invoice_date()` helper for frequency calculations
+- Support for daily, weekly, biweekly, monthly, quarterly, yearly frequencies
+- Database migration for recurring_invoices table
+
+#### FEAT-006: Invoice Payment Reminders
+- Added reminder fields to `InvoiceSettings` model (reminder_enabled, reminder_days_before_due, reminder_days_overdue, reminder_max_attempts)
+- Created background task `send_invoice_reminders()` in `services/task_queue.py`
+- Added `send_payment_reminder_email()` to `services/email.py`
+- Added `build_payment_reminder_email()` to `services/email_templates.py`
+- Updated invoice settings routes to handle reminder configuration
+- Database migration for reminder settings
+
+#### Database Migrations
+- `20260410000001_add_refunds_table.py` - Refunds table
+- `20260410000002_add_exchange_rates_table.py` - Exchange rates table
+- `20260410000003_add_invoice_templates_table.py` - Invoice templates table
+- `20260410000004_add_recurring_invoices_table.py` - Recurring invoices table
+- `20260410000005_add_invoice_reminder_settings.py` - Reminder settings
+
+#### Files Modified
+- `blueprints/payments.py` - Added refund and analytics routes, currency validation
+- `blueprints/invoices.py` - Added template and recurring invoice CRUD routes, reminder settings
+- `config.py` - Added currency configuration
+- `models/invoice.py` - Added reminder fields to InvoiceSettings
+- `models/__init__.py` - Added new model imports
+- `services/email.py` - Added payment reminder email function
+- `services/email_templates.py` - Added payment reminder email template
+- `services/task_queue.py` - Added recurring invoice and reminder tasks
+- `services/exchange_rate.py` - Created exchange rate service
+
+#### Files Created
+- `models/refund.py` - Refund model
+- `models/exchange_rate.py` - ExchangeRate model
+- `models/invoice_template.py` - InvoiceTemplate model
+- `models/recurring_invoice.py` - RecurringInvoice model
+- `services/exchange_rate.py` - Exchange rate service
+- `templates/refund.html` - Refund management UI
+- `templates/analytics.html` - Analytics dashboard
+- `templates/invoice_templates.html` - Template customization UI
+- `static/js/refund.js` - Refund JavaScript
+- `static/js/analytics.js` - Analytics JavaScript
+- `static/js/invoice_templates.js` - Template JavaScript
+- `test_phase3_checkpoint.py` - Phase 3 verification script
+
+#### Test Results
+- Phase 3 checkpoint: 6/6 tests passed
+- All features verified and functional
+
+#### Code Quality
+- Ruff linting: 0 errors
+- All code quality checks passed
+
+---
+
 ## Version 1.9.0 - April 10, 2026
 
 ### 🔒 Phase 1 Security Enhancements

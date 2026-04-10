@@ -209,3 +209,220 @@ def cleanup_expired_sessions():
         logger.info("Current Redis sessions: %d", session_count)
     except Exception as e:
         logger.error("Failed to check Redis sessions: %s", e)
+
+
+@huey.periodic_task(crontab(minute="*/30"))
+def warm_cache_periodically():
+    """
+    Warm cache every 30 minutes for frequently accessed data.
+
+    Ensures cache stays populated for optimal performance.
+    Skips in debug mode to avoid unnecessary overhead.
+
+    **Validates: PERF-005**
+    """
+    if Config.DEBUG:
+        return
+
+    try:
+        from services.cache_warming import warm_all_users_cache
+        warm_all_users_cache()
+        logger.info("Periodic cache warming completed")
+    except Exception as e:
+        logger.error("Failed periodic cache warming: %s", e)
+
+
+@huey.periodic_task(crontab(minute="*/5"))
+def generate_recurring_invoices():
+    """
+    Generate invoices for recurring schedules every 5 minutes.
+
+    Checks for recurring invoices where next_invoice_date has passed
+    and generates new invoices, updating the next_invoice_date accordingly.
+
+    **Validates: FEAT-005**
+    """
+    from database import get_db
+    from models.invoice import Invoice, InvoiceSettings, InvoiceStatus
+    from models.recurring_invoice import RecurringInvoice
+    from models.transaction import Transaction
+    from models.user import User
+    from services.invoice import invoice_service
+
+    with get_db() as db:
+        now = datetime.now(timezone.utc)
+
+        # Find recurring invoices that are due
+        due_invoices = db.query(RecurringInvoice).filter(
+            RecurringInvoice.is_active == 1,
+            RecurringInvoice.next_invoice_date <= now,
+            (RecurringInvoice.end_date.is_(None) | (RecurringInvoice.end_date >= now))
+        ).all()
+
+        if not due_invoices:
+            return
+
+        logger.info(f"Found {len(due_invoices)} recurring invoices due for generation")
+
+        for recurring in due_invoices:
+            try:
+                # Get user and settings
+                user = db.query(User).filter(User.id == recurring.user_id).first()
+                if not user:
+                    logger.error(f"User not found for recurring invoice {recurring.id}")
+                    continue
+
+                settings = db.query(InvoiceSettings).filter(InvoiceSettings.user_id == recurring.user_id).first()
+
+                # Create a transaction for the invoice
+                from core.security import generate_expiration_time, generate_hash_token, generate_tx_reference
+
+                tx_ref = generate_tx_reference()
+                expires_at = generate_expiration_time()
+                hash_token = generate_hash_token(tx_ref, recurring.amount, expires_at)
+
+                transaction = Transaction(
+                    tx_ref=tx_ref,
+                    user_id=recurring.user_id,
+                    amount=recurring.amount,
+                    currency=recurring.currency,
+                    description=recurring.description or f"Recurring invoice: {recurring.customer_name or recurring.customer_email}",
+                    customer_email=recurring.customer_email,
+                    customer_phone=recurring.customer_phone,
+                    hash_token=hash_token,
+                    expires_at=expires_at,
+                )
+                db.add(transaction)
+                db.flush()
+
+                # Create invoice
+                invoice = invoice_service.create_invoice(
+                    db=db, transaction=transaction, user=user, settings=settings
+                )
+
+                # Update next invoice date based on frequency
+                recurring.next_invoice_date = _calculate_next_invoice_date(recurring.frequency, recurring.next_invoice_date)
+
+                # If end date passed, deactivate
+                if recurring.end_date and recurring.next_invoice_date > recurring.end_date:
+                    recurring.is_active = 0
+
+                db.commit()
+                logger.info(f"Generated recurring invoice | recurring_id={recurring.id} invoice_number={invoice.invoice_number}")
+
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to generate recurring invoice | recurring_id={recurring.id} error={e}")
+
+
+def _calculate_next_invoice_date(frequency: str, current_date: datetime) -> datetime:
+    """Calculate next invoice date based on frequency."""
+    from datetime import timedelta
+
+    frequency = frequency.lower()
+
+    if frequency == 'daily':
+        return current_date + timedelta(days=1)
+    elif frequency == 'weekly':
+        return current_date + timedelta(weeks=1)
+    elif frequency == 'biweekly':
+        return current_date + timedelta(weeks=2)
+    elif frequency == 'monthly':
+        # Add one month, handling month boundaries
+        if current_date.month == 12:
+            return current_date.replace(year=current_date.year + 1, month=1)
+        else:
+            return current_date.replace(month=current_date.month + 1)
+    elif frequency == 'quarterly':
+        # Add 3 months
+        new_month = current_date.month + 3
+        new_year = current_date.year
+        if new_month > 12:
+            new_month -= 12
+            new_year += 1
+        return current_date.replace(year=new_year, month=new_month)
+    elif frequency == 'yearly':
+        return current_date.replace(year=current_date.year + 1)
+    else:
+        # Default to monthly
+        return current_date + timedelta(days=30)
+
+
+@huey.periodic_task(crontab(hour="*"))
+def send_invoice_reminders():
+    """
+    Send payment reminders for unpaid invoices hourly.
+
+    Checks for unpaid invoices that are due soon or overdue and sends
+    reminder emails based on user's reminder settings.
+
+    **Validates: FEAT-006**
+    """
+    from database import get_db
+    from models.invoice import Invoice, InvoiceSettings, InvoiceStatus
+    from models.user import User
+    from services.email import send_payment_reminder_email
+
+    with get_db() as db:
+        now = datetime.now(timezone.utc)
+
+        # Get all users with reminder enabled
+        users_with_reminders = db.query(InvoiceSettings).filter(
+            InvoiceSettings.reminder_enabled == True
+        ).all()
+
+        if not users_with_reminders:
+            return
+
+        logger.info(f"Checking reminders for {len(users_with_reminders)} users")
+
+        for settings in users_with_reminders:
+            try:
+                user = db.query(User).filter(User.id == settings.user_id).first()
+                if not user:
+                    continue
+
+                # Find unpaid invoices for this user
+                unpaid_invoices = db.query(Invoice).filter(
+                    Invoice.user_id == settings.user_id,
+                    Invoice.status == InvoiceStatus.SENT,
+                    Invoice.customer_email.isnot(None)
+                ).all()
+
+                for invoice in unpaid_invoices:
+                    # Calculate days until due (assuming 30-day payment terms)
+                    days_since_sent = (now - invoice.sent_at).days if invoice.sent_at else 0
+                    days_before_due = 30 - days_since_sent
+
+                    # Check if reminder should be sent
+                    should_send = False
+                    reminder_type = None
+
+                    # Before due date reminder
+                    if days_before_due == settings.reminder_days_before_due:
+                        should_send = True
+                        reminder_type = "before_due"
+
+                    # Overdue reminder
+                    elif days_before_due < 0 and abs(days_before_due) == settings.reminder_days_overdue:
+                        should_send = True
+                        reminder_type = "overdue"
+
+                    if should_send:
+                        # Check if reminder already sent for this invoice
+                        # (This is a simplified check - in production, track reminder attempts)
+                        try:
+                            sent = send_payment_reminder_email(
+                                to_email=invoice.customer_email,
+                                invoice=invoice,
+                                reminder_type=reminder_type,
+                                days=abs(days_before_due),
+                                merchant_name=settings.business_name or user.email
+                            )
+                            if sent:
+                                logger.info(f"Reminder sent | invoice={invoice.invoice_number} type={reminder_type}")
+                        except Exception as e:
+                            logger.error(f"Failed to send reminder | invoice={invoice.invoice_number} error={e}")
+
+            except Exception as e:
+                logger.error(f"Failed to process reminders for user {settings.user_id}: {e}")

@@ -5,8 +5,11 @@ so database.init_db() only needs to import here.
 """
 from models.audit_log import AuditLog  # noqa: F401
 from models.base import Base  # noqa: F401
+from models.exchange_rate import ExchangeRate  # noqa: F401
 from models.invoice import Invoice, InvoiceSettings, InvoiceStatus  # noqa: F401
+from models.invoice_template import InvoiceTemplate  # noqa: F401
 from models.rate_limit import RateLimit  # noqa: F401
+from models.recurring_invoice import RecurringInvoice  # noqa: F401
 from models.refund import Refund, RefundStatus  # noqa: F401
 from models.transaction import Transaction, TransactionStatus  # noqa: F401
 from models.user import User  # noqa: F401
@@ -23,8 +26,11 @@ __all__ = [
     "Invoice",
     "InvoiceSettings",
     "InvoiceStatus",
+    "InvoiceTemplate",
+    "RecurringInvoice",
     "WebhookBlacklist",
     "WebhookIdempotency",
     "Refund",
     "RefundStatus",
+    "ExchangeRate",
 ]

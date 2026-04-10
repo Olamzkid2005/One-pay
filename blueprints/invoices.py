@@ -16,6 +16,8 @@ from core.auth import (
 from core.exceptions import AuthenticationError, ProviderError, ValidationError
 from core.responses import error, rate_limited, unauthenticated
 from database import get_db
+from models.invoice_template import InvoiceTemplate
+from models.recurring_invoice import RecurringInvoice
 from models.user import User
 from services.rate_limiter import check_rate_limit
 from services.validators import validate_email, validate_phone
@@ -512,11 +514,16 @@ def _upsert_invoice_settings(db, settings, data: dict, fields: dict):
             business_logo_url=fields.get("business_logo_url"),
             default_payment_terms=fields.get("default_payment_terms") or "Payment due upon receipt",
             auto_send_email=fields.get("auto_send_email") or False,
+            reminder_enabled=fields.get("reminder_enabled") or False,
+            reminder_days_before_due=fields.get("reminder_days_before_due") or 3,
+            reminder_days_overdue=fields.get("reminder_days_overdue") or 7,
+            reminder_max_attempts=fields.get("reminder_max_attempts") or 3,
         )
         db.add(settings)
     else:
         for key in ("business_name", "business_address", "business_tax_id",
-                    "business_logo_url", "default_payment_terms", "auto_send_email"):
+                    "business_logo_url", "default_payment_terms", "auto_send_email",
+                    "reminder_enabled", "reminder_days_before_due", "reminder_days_overdue", "reminder_max_attempts"):
             if fields.get(key) is not None:
                 setattr(settings, key, fields[key])
     return settings
@@ -562,6 +569,10 @@ def update_invoice_settings():
             "business_logo_url": business_logo_url,
             "default_payment_terms": _safe_settings_field(data.get("default_payment_terms"), 500),
             "auto_send_email": auto_send_email,
+            "reminder_enabled": data.get("reminder_enabled", False) if data.get("reminder_enabled") is not None else None,
+            "reminder_days_before_due": data.get("reminder_days_before_due", 3) if data.get("reminder_days_before_due") is not None else None,
+            "reminder_days_overdue": data.get("reminder_days_overdue", 7) if data.get("reminder_days_overdue") is not None else None,
+            "reminder_max_attempts": data.get("reminder_max_attempts", 3) if data.get("reminder_max_attempts") is not None else None,
         }
 
         settings = db.query(InvoiceSettings).filter(InvoiceSettings.user_id == current_user_id()).first()
@@ -578,3 +589,465 @@ def update_invoice_settings():
             logger.error("Invoice settings update failed | user_id=%d error=%s", current_user_id(), e)
             from core.exceptions import OnePayError
             raise OnePayError("Unable to update settings. Please try again later.", "SETTINGS_ERROR", 500)
+
+
+# ── Invoice Templates ───────────────────────────────────────────────────────────
+
+
+@invoices_bp.route("/invoice-templates", methods=["GET"])
+def list_invoice_templates():
+    """List all invoice templates for current user."""
+    if not current_user_id():
+        return unauthenticated()
+
+    with get_db() as db:
+        user = db.query(User).filter(User.id == current_user_id()).first()
+        profile_picture = user.profile_picture_url if user else None
+
+        templates = db.query(InvoiceTemplate).filter(
+            InvoiceTemplate.user_id == current_user_id()
+        ).order_by(InvoiceTemplate.created_at.desc()).all()
+
+    return render_template(
+        "invoice_templates.html",
+        username=current_username(),
+        profile_picture=profile_picture,
+        csrf_token=get_csrf_token(),
+        templates=templates,
+        active_page="invoice_templates",
+    )
+
+
+@invoices_bp.route("/invoice-templates/create", methods=["POST"])
+def create_invoice_template():
+    """Create a new invoice template."""
+    if not current_user_id():
+        return unauthenticated()
+
+    if request.content_type != "application/json":
+        raise ValidationError("Content-Type must be application/json")
+
+    from core.auth import is_valid_csrf_token
+    csrf_header = request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token")
+    if not is_valid_csrf_token(csrf_header):
+        raise ValidationError("CSRF validation failed")
+
+    with get_db() as db:
+        if not check_rate_limit(db, f"template_create:{current_user_id()}", limit=10, window_secs=60):
+            return rate_limited()
+
+        data = request.get_json(silent=True) or {}
+        name = data.get("name")
+        description = data.get("description")
+        html_template = data.get("html_template")
+        css_styles = data.get("css_styles")
+
+        if not name or not html_template:
+            raise ValidationError("name and html_template are required")
+
+        template = InvoiceTemplate(
+            user_id=current_user_id(),
+            name=name,
+            description=description,
+            html_template=html_template,
+            css_styles=css_styles,
+            is_default=0
+        )
+        db.add(template)
+        db.commit()
+        db.refresh(template)
+
+        logger.info("Invoice template created | template_id=%s user_id=%d", template.id, current_user_id())
+
+        return jsonify({
+            "success": True,
+            "message": "Template created successfully",
+            "template": {
+                "id": template.id,
+                "name": template.name,
+                "description": template.description,
+                "created_at": template.created_at.isoformat() if template.created_at else None
+            }
+        }), 201
+
+
+@invoices_bp.route("/invoice-templates/<int:template_id>", methods=["GET"])
+def get_invoice_template(template_id):
+    """Get invoice template details."""
+    if not current_user_id():
+        return unauthenticated()
+
+    with get_db() as db:
+        template = db.query(InvoiceTemplate).filter(
+            InvoiceTemplate.id == template_id,
+            InvoiceTemplate.user_id == current_user_id()
+        ).first()
+
+        if not template:
+            raise ValidationError("Template not found")
+
+        return jsonify({
+            "success": True,
+            "template": {
+                "id": template.id,
+                "name": template.name,
+                "description": template.description,
+                "html_template": template.html_template,
+                "css_styles": template.css_styles,
+                "is_default": template.is_default,
+                "created_at": template.created_at.isoformat() if template.created_at else None,
+                "updated_at": template.updated_at.isoformat() if template.updated_at else None
+            }
+        }), 200
+
+
+@invoices_bp.route("/invoice-templates/<int:template_id>", methods=["PUT"])
+def update_invoice_template(template_id):
+    """Update an invoice template."""
+    if not current_user_id():
+        return unauthenticated()
+
+    if request.content_type != "application/json":
+        raise ValidationError("Content-Type must be application/json")
+
+    from core.auth import is_valid_csrf_token
+    csrf_header = request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token")
+    if not is_valid_csrf_token(csrf_header):
+        raise ValidationError("CSRF validation failed")
+
+    with get_db() as db:
+        if not check_rate_limit(db, f"template_update:{current_user_id()}", limit=20, window_secs=60):
+            return rate_limited()
+
+        template = db.query(InvoiceTemplate).filter(
+            InvoiceTemplate.id == template_id,
+            InvoiceTemplate.user_id == current_user_id()
+        ).first()
+
+        if not template:
+            raise ValidationError("Template not found")
+
+        data = request.get_json(silent=True) or {}
+
+        if data.get("name"):
+            template.name = data["name"]
+        if data.get("description") is not None:
+            template.description = data["description"]
+        if data.get("html_template"):
+            template.html_template = data["html_template"]
+        if data.get("css_styles") is not None:
+            template.css_styles = data["css_styles"]
+
+        db.commit()
+        db.refresh(template)
+
+        logger.info("Invoice template updated | template_id=%s user_id=%d", template.id, current_user_id())
+
+        return jsonify({
+            "success": True,
+            "message": "Template updated successfully",
+            "template": {
+                "id": template.id,
+                "name": template.name,
+                "description": template.description,
+                "updated_at": template.updated_at.isoformat() if template.updated_at else None
+            }
+        }), 200
+
+
+@invoices_bp.route("/invoice-templates/<int:template_id>", methods=["DELETE"])
+def delete_invoice_template(template_id):
+    """Delete an invoice template."""
+    if not current_user_id():
+        return unauthenticated()
+
+    from core.auth import is_valid_csrf_token
+    csrf_header = request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token")
+    if not is_valid_csrf_token(csrf_header):
+        raise ValidationError("CSRF validation failed")
+
+    with get_db() as db:
+        template = db.query(InvoiceTemplate).filter(
+            InvoiceTemplate.id == template_id,
+            InvoiceTemplate.user_id == current_user_id()
+        ).first()
+
+        if not template:
+            raise ValidationError("Template not found")
+
+        db.delete(template)
+        db.commit()
+
+        logger.info("Invoice template deleted | template_id=%s user_id=%d", template.id, current_user_id())
+
+        return jsonify({
+            "success": True,
+            "message": "Template deleted successfully"
+        }), 200
+
+
+# ── Recurring Invoices ──────────────────────────────────────────────────────────
+
+
+@invoices_bp.route("/recurring-invoices", methods=["GET"])
+def list_recurring_invoices():
+    """List all recurring invoices for current user."""
+    if not current_user_id():
+        return unauthenticated()
+
+    with get_db() as db:
+        user = db.query(User).filter(User.id == current_user_id()).first()
+        profile_picture = user.profile_picture_url if user else None
+
+        recurring_invoices = db.query(RecurringInvoice).filter(
+            RecurringInvoice.user_id == current_user_id()
+        ).order_by(RecurringInvoice.created_at.desc()).all()
+
+    return render_template(
+        "recurring_invoices.html",
+        username=current_username(),
+        profile_picture=profile_picture,
+        csrf_token=get_csrf_token(),
+        recurring_invoices=recurring_invoices,
+        active_page="recurring_invoices",
+    )
+
+
+@invoices_bp.route("/recurring-invoices/create", methods=["POST"])
+def create_recurring_invoice():
+    """Create a new recurring invoice schedule."""
+    if not current_user_id():
+        return unauthenticated()
+
+    if request.content_type != "application/json":
+        raise ValidationError("Content-Type must be application/json")
+
+    from core.auth import is_valid_csrf_token
+    csrf_header = request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token")
+    if not is_valid_csrf_token(csrf_header):
+        raise ValidationError("CSRF validation failed")
+
+    with get_db() as db:
+        if not check_rate_limit(db, f"recurring_create:{current_user_id()}", limit=10, window_secs=60):
+            return rate_limited()
+
+        from datetime import datetime, timezone
+
+        data = request.get_json(silent=True) or {}
+        customer_email = data.get("customer_email")
+        customer_name = data.get("customer_name")
+        customer_phone = data.get("customer_phone")
+        amount = data.get("amount")
+        currency = data.get("currency", "NGN")
+        description = data.get("description")
+        frequency = data.get("frequency")
+        start_date = data.get("start_date")
+        end_date = data.get("end_date")
+        notes = data.get("notes")
+
+        if not customer_email or not amount or not frequency or not start_date:
+            raise ValidationError("customer_email, amount, frequency, and start_date are required")
+
+        # Validate email
+        validated_email = validate_email(customer_email)
+        if not validated_email:
+            raise ValidationError("Invalid email address")
+
+        # Validate phone if provided
+        validated_phone = validate_phone(customer_phone) if customer_phone else None
+
+        # Parse amount
+        try:
+            from decimal import Decimal
+            amount_decimal = Decimal(str(amount))
+            if amount_decimal <= 0:
+                raise ValidationError("Amount must be greater than 0")
+        except (ValueError, TypeError):
+            raise ValidationError("Invalid amount")
+
+        # Validate frequency
+        valid_frequencies = ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]
+        if frequency not in valid_frequencies:
+            raise ValidationError(f"Invalid frequency. Must be one of: {', '.join(valid_frequencies)}")
+
+        # Parse dates
+        try:
+            start_dt = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            raise ValidationError("Invalid start_date format")
+
+        end_dt = None
+        if end_date:
+            try:
+                end_dt = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                raise ValidationError("Invalid end_date format")
+
+        recurring = RecurringInvoice(
+            user_id=current_user_id(),
+            customer_email=validated_email,
+            customer_name=customer_name,
+            customer_phone=validated_phone,
+            amount=amount_decimal,
+            currency=currency.upper()[:3],
+            description=description,
+            frequency=frequency.lower(),
+            start_date=start_dt,
+            end_date=end_dt,
+            next_invoice_date=start_dt,
+            notes=notes,
+            is_active=1
+        )
+        db.add(recurring)
+        db.commit()
+        db.refresh(recurring)
+
+        logger.info("Recurring invoice created | recurring_id=%s user_id=%d", recurring.id, current_user_id())
+
+        return jsonify({
+            "success": True,
+            "message": "Recurring invoice schedule created successfully",
+            "recurring_invoice": {
+                "id": recurring.id,
+                "customer_email": recurring.customer_email,
+                "amount": str(recurring.amount),
+                "frequency": recurring.frequency,
+                "start_date": recurring.start_date.isoformat() if recurring.start_date else None,
+                "next_invoice_date": recurring.next_invoice_date.isoformat() if recurring.next_invoice_date else None
+            }
+        }), 201
+
+
+@invoices_bp.route("/recurring-invoices/<int:recurring_id>", methods=["GET"])
+def get_recurring_invoice(recurring_id):
+    """Get recurring invoice details."""
+    if not current_user_id():
+        return unauthenticated()
+
+    with get_db() as db:
+        recurring = db.query(RecurringInvoice).filter(
+            RecurringInvoice.id == recurring_id,
+            RecurringInvoice.user_id == current_user_id()
+        ).first()
+
+        if not recurring:
+            raise ValidationError("Recurring invoice not found")
+
+        return jsonify({
+            "success": True,
+            "recurring_invoice": {
+                "id": recurring.id,
+                "customer_email": recurring.customer_email,
+                "customer_name": recurring.customer_name,
+                "customer_phone": recurring.customer_phone,
+                "amount": str(recurring.amount),
+                "currency": recurring.currency,
+                "description": recurring.description,
+                "frequency": recurring.frequency,
+                "start_date": recurring.start_date.isoformat() if recurring.start_date else None,
+                "end_date": recurring.end_date.isoformat() if recurring.end_date else None,
+                "next_invoice_date": recurring.next_invoice_date.isoformat() if recurring.next_invoice_date else None,
+                "is_active": recurring.is_active,
+                "notes": recurring.notes,
+                "created_at": recurring.created_at.isoformat() if recurring.created_at else None
+            }
+        }), 200
+
+
+@invoices_bp.route("/recurring-invoices/<int:recurring_id>", methods=["PUT"])
+def update_recurring_invoice(recurring_id):
+    """Update a recurring invoice schedule."""
+    if not current_user_id():
+        return unauthenticated()
+
+    if request.content_type != "application/json":
+        raise ValidationError("Content-Type must be application/json")
+
+    from core.auth import is_valid_csrf_token
+    csrf_header = request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token")
+    if not is_valid_csrf_token(csrf_header):
+        raise ValidationError("CSRF validation failed")
+
+    with get_db() as db:
+        if not check_rate_limit(db, f"recurring_update:{current_user_id}", limit=20, window_secs=60):
+            return rate_limited()
+
+        recurring = db.query(RecurringInvoice).filter(
+            RecurringInvoice.id == recurring_id,
+            RecurringInvoice.user_id == current_user_id()
+        ).first()
+
+        if not recurring:
+            raise ValidationError("Recurring invoice not found")
+
+        data = request.get_json(silent=True) or {}
+
+        if data.get("customer_email"):
+            validated_email = validate_email(data["customer_email"])
+            if not validated_email:
+                raise ValidationError("Invalid email address")
+            recurring.customer_email = validated_email
+
+        if data.get("customer_name") is not None:
+            recurring.customer_name = data["customer_name"]
+        if data.get("customer_phone") is not None:
+            recurring.customer_phone = validate_phone(data["customer_phone"]) if data["customer_phone"] else None
+        if data.get("amount"):
+            from decimal import Decimal
+            recurring.amount = Decimal(str(data["amount"]))
+        if data.get("description") is not None:
+            recurring.description = data["description"]
+        if data.get("frequency"):
+            valid_frequencies = ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]
+            if data["frequency"] not in valid_frequencies:
+                raise ValidationError(f"Invalid frequency. Must be one of: {', '.join(valid_frequencies)}")
+            recurring.frequency = data["frequency"].lower()
+        if data.get("is_active") is not None:
+            recurring.is_active = 1 if data["is_active"] else 0
+        if data.get("notes") is not None:
+            recurring.notes = data["notes"]
+
+        db.commit()
+        db.refresh(recurring)
+
+        logger.info("Recurring invoice updated | recurring_id=%s user_id=%d", recurring.id, current_user_id())
+
+        return jsonify({
+            "success": True,
+            "message": "Recurring invoice updated successfully",
+            "recurring_invoice": {
+                "id": recurring.id,
+                "updated_at": recurring.updated_at.isoformat() if recurring.updated_at else None
+            }
+        }), 200
+
+
+@invoices_bp.route("/recurring-invoices/<int:recurring_id>", methods=["DELETE"])
+def delete_recurring_invoice(recurring_id):
+    """Delete a recurring invoice schedule."""
+    if not current_user_id():
+        return unauthenticated()
+
+    from core.auth import is_valid_csrf_token
+    csrf_header = request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token")
+    if not is_valid_csrf_token(csrf_header):
+        raise ValidationError("CSRF validation failed")
+
+    with get_db() as db:
+        recurring = db.query(RecurringInvoice).filter(
+            RecurringInvoice.id == recurring_id,
+            RecurringInvoice.user_id == current_user_id()
+        ).first()
+
+        if not recurring:
+            raise ValidationError("Recurring invoice not found")
+
+        db.delete(recurring)
+        db.commit()
+
+        logger.info("Recurring invoice deleted | recurring_id=%s user_id=%d", recurring.id, current_user_id())
+
+        return jsonify({
+            "success": True,
+            "message": "Recurring invoice deleted successfully"
+        }), 200

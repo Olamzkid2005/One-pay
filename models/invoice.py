@@ -160,6 +160,12 @@ class InvoiceSettings(Base):
     default_payment_terms = Column(Text, default="Payment due upon receipt")
     auto_send_email = Column(Boolean, default=False)
 
+    # Reminder settings
+    reminder_enabled = Column(Boolean, default=False)
+    reminder_days_before_due = Column(Integer, default=3)  # Send reminder X days before due
+    reminder_days_overdue = Column(Integer, default=7)  # Send reminder X days after overdue
+    reminder_max_attempts = Column(Integer, default=3)  # Maximum reminder attempts
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
@@ -177,6 +183,10 @@ class InvoiceSettings(Base):
             "business_logo_url": self.business_logo_url,
             "default_payment_terms": self.default_payment_terms,
             "auto_send_email": self.auto_send_email,
+            "reminder_enabled": self.reminder_enabled,
+            "reminder_days_before_due": self.reminder_days_before_due,
+            "reminder_days_overdue": self.reminder_days_overdue,
+            "reminder_max_attempts": self.reminder_max_attempts,
         }
 
     def __repr__(self):

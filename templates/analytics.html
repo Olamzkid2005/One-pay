@@ -1,0 +1,99 @@
+{% extends "dashboard_base.html" %}
+
+{% block title %}Payment Analytics - OnePay{% endblock %}
+
+{% block dashboard_content %}
+<div class="px-12 max-w-7xl mx-auto w-full">
+    <!-- Header Section -->
+    <header class="mb-12">
+        <h2 class="text-4xl font-headline font-extrabold tracking-tight text-gray-800 dark:text-primary mb-2">Payment Analytics</h2>
+        <p class="text-gray-700 dark:text-on-surface-variant text-lg max-w-2xl font-body">Track your payment performance and revenue trends.</p>
+    </header>
+    
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 shadow-xl">
+            <div class="flex items-center justify-between mb-4">
+                <span class="material-symbols-outlined text-3xl text-primary">payments</span>
+                <span class="text-xs font-bold text-outline uppercase tracking-widest">30-Day Revenue</span>
+            </div>
+            <p class="text-3xl font-bold text-on-surface">₦ {{ revenue_by_day | sum(attribute='revenue') | default(0) | round(2) }}</p>
+        </div>
+        
+        <div class="bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 shadow-xl">
+            <div class="flex items-center justify-between mb-4">
+                <span class="material-symbols-outlined text-3xl text-primary">trending_up</span>
+                <span class="text-xs font-bold text-outline uppercase tracking-widest">Conversion Rate</span>
+            </div>
+            <p class="text-3xl font-bold text-on-surface">{{ conversion_rate }}%</p>
+        </div>
+        
+        <div class="bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 shadow-xl">
+            <div class="flex items-center justify-between mb-4">
+                <span class="material-symbols-outlined text-3xl text-primary">check_circle</span>
+                <span class="text-xs font-bold text-outline uppercase tracking-widest">Verified</span>
+            </div>
+            <p class="text-3xl font-bold text-on-surface">{{ status_distribution | selectattr('status', 'equal', 'verified') | map(attribute='count') | sum | default(0) }}</p>
+        </div>
+        
+        <div class="bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 shadow-xl">
+            <div class="flex items-center justify-between mb-4">
+                <span class="material-symbols-outlined text-3xl text-primary">pending</span>
+                <span class="text-xs font-bold text-outline uppercase tracking-widest">Pending</span>
+            </div>
+            <p class="text-3xl font-bold text-on-surface">{{ status_distribution | selectattr('status', 'equal', 'pending') | map(attribute='count') | sum | default(0) }}</p>
+        </div>
+    </div>
+    
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Revenue Chart -->
+        <div class="bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 shadow-xl">
+            <h3 class="text-lg font-bold text-on-surface mb-4">Revenue Trend (Last 30 Days)</h3>
+            <canvas id="revenueChart" height="200"></canvas>
+        </div>
+        
+        <!-- Status Distribution Chart -->
+        <div class="bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 shadow-xl">
+            <h3 class="text-lg font-bold text-on-surface mb-4">Transaction Status Distribution</h3>
+            <canvas id="statusChart" height="200"></canvas>
+        </div>
+    </div>
+    
+    <!-- Top Payments Table -->
+    <div class="bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 shadow-xl">
+        <h3 class="text-lg font-bold text-on-surface mb-4">Top 10 Payments</h3>
+        <div class="overflow-hidden">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-surface-container-highest/30 border-b border-outline-variant/10">
+                        <th class="px-4 py-3 text-[11px] font-bold text-outline uppercase tracking-widest">Reference</th>
+                        <th class="px-4 py-3 text-[11px] font-bold text-outline uppercase tracking-widest">Amount</th>
+                        <th class="px-4 py-3 text-[11px] font-bold text-outline uppercase tracking-widest">Description</th>
+                        <th class="px-4 py-3 text-[11px] font-bold text-outline uppercase tracking-widest">Date</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-outline-variant/5">
+                    {% if top_payments %}
+                        {% for payment in top_payments %}
+                            <tr class="hover:bg-surface-container-highest/20 transition-colors">
+                                <td class="px-4 py-3 font-mono text-sm text-on-surface">{{ payment.tx_ref }}</td>
+                                <td class="px-4 py-3 font-label font-bold text-on-surface">₦ {{ payment.amount }}</td>
+                                <td class="px-4 py-3 text-sm text-on-surface-variant max-w-xs truncate">{{ payment.description or 'No description' }}</td>
+                                <td class="px-4 py-3 font-label text-xs text-outline">{{ payment.created_at.strftime('%b %d, %Y') if payment.created_at else '' }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="4" class="px-4 py-8 text-center text-sm text-outline">No payments found</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/static/js/analytics.js"></script>
+{% endblock %}

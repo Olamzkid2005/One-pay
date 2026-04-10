@@ -169,3 +169,65 @@ def build_2fa_email(code: str) -> tuple[str, str]:
         f"</body></html>"
     )
     return text, html
+
+
+def build_payment_reminder_email(
+    invoice,
+    reminder_type: str,
+    days: int,
+    merchant_name: str
+) -> tuple[str, str]:
+    """Build payment reminder email body."""
+    if reminder_type == "before_due":
+        text = (
+            f"\nHello,\n\nThis is a friendly reminder that invoice {invoice.invoice_number} "
+            f"for {invoice.currency} {invoice.amount} is due in {days} day(s).\n\n"
+            f"Description: {invoice.description or 'N/A'}\n\n"
+            f"Please ensure payment is made before the due date to avoid any late fees.\n\n"
+            f"Thank you!\n— {merchant_name}\n"
+        )
+        html = (
+            f'<!DOCTYPE html>\n<html><head><meta charset="utf-8">'
+            f"<style>{_CSS_INVOICE}</style></head>\n"
+            f'<body><div class="container">\n'
+            f'<div class="header"><h1 style="margin:0">{merchant_name}</h1></div>\n'
+            f'<div class="content">\n'
+            f"<h2>Payment Due in {days} Day(s)</h2>\n"
+            f'<div style="background:white;padding:20px;border-radius:6px;border:1px solid #d0d7de">\n'
+            f'<div class="row"><span>Invoice:</span><span>{invoice.invoice_number}</span></div>\n'
+            f'<div class="row"><span>Description:</span><span>{invoice.description or "N/A"}</span></div>\n'
+            f'<div class="row"><span>Amount:</span><span>{invoice.currency} {invoice.amount}</span></div>\n'
+            f"</div>\n"
+            f"<p>Please ensure payment is made before the due date to avoid any late fees.</p>\n"
+            f"</div>\n"
+            f'<div style="text-align:center;color:#57606a;font-size:12px;margin-top:20px">\n'
+            f"<p>{merchant_name} — Powered by OnePay</p>\n"
+            f"</div></div></body></html>"
+        )
+    else:  # overdue
+        text = (
+            f"\nHello,\n\nThis is a reminder that invoice {invoice.invoice_number} "
+            f"for {invoice.currency} {invoice.amount} is overdue by {days} day(s).\n\n"
+            f"Description: {invoice.description or 'N/A'}\n\n"
+            f"Please make payment as soon as possible to avoid any further late fees.\n\n"
+            f"Thank you!\n— {merchant_name}\n"
+        )
+        html = (
+            f'<!DOCTYPE html>\n<html><head><meta charset="utf-8">'
+            f"<style>{_CSS_INVOICE}</style></head>\n"
+            f'<body><div class="container">\n'
+            f'<div class="header"><h1 style="margin:0">{merchant_name}</h1></div>\n'
+            f'<div class="content">\n'
+            f"<h2>Payment Overdue by {days} Day(s)</h2>\n"
+            f'<div style="background:white;padding:20px;border-radius:6px;border:1px solid #d0d7de">\n'
+            f'<div class="row"><span>Invoice:</span><span>{invoice.invoice_number}</span></div>\n'
+            f'<div class="row"><span>Description:</span><span>{invoice.description or "N/A"}</span></div>\n'
+            f'<div class="row"><span>Amount:</span><span>{invoice.currency} {invoice.amount}</span></div>\n'
+            f"</div>\n"
+            f"<p>Please make payment as soon as possible to avoid any further late fees.</p>\n"
+            f"</div>\n"
+            f'<div style="text-align:center;color:#57606a;font-size:12px;margin-top:20px">\n'
+            f"<p>{merchant_name} — Powered by OnePay</p>\n"
+            f"</div></div></body></html>"
+        )
+    return text, html

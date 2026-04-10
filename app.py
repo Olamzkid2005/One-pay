@@ -184,13 +184,22 @@ def create_app() -> Flask:
         app.config["SESSION_COOKIE_SECURE"] = Config.SESSION_COOKIE_SECURE
         app.config["SESSION_COOKIE_SAMESITE"] = Config.SESSION_COOKIE_SAMESITE
 
-        # Initialize Redis client for Flask-Session
-        import redis
-        app.config["SESSION_REDIS"] = redis.from_url(Config.SESSION_REDIS)
+        # Initialize Redis client for Flask-Session (optional)
+        try:
+            import redis
+            app.config["SESSION_REDIS"] = redis.from_url(Config.SESSION_REDIS)
+        except ImportError:
+            logger.warning("Redis not installed, using filesystem session fallback")
+            app.config["SESSION_TYPE"] = "filesystem"
+            import tempfile
+            app.config["SESSION_FILE_DIR"] = tempfile.mkdtemp()
 
-        # Initialize Flask-Session
-        from flask_session import Session
-        Session(app)
+        # Initialize Flask-Session (optional)
+        try:
+            from flask_session import Session
+            Session(app)
+        except ImportError:
+            logger.warning("Flask-Session not installed, using default Flask sessions")
 
     Config.validate()
     app.config["BOOT_TIME"] = datetime.now(timezone.utc).isoformat()
@@ -218,6 +227,23 @@ def create_app() -> Flask:
     _shutdown_event = threading.Event()
     app._shutdown_event = _shutdown_event
     start_background_threads(_shutdown_event)
+
+    # Warm cache on startup (production only)
+    if not Config.DEBUG and not Config.TESTING:
+        try:
+            from services.cache_warming import warm_all_users_cache
+            warm_all_users_cache()
+            logger.info("Cache warming completed on startup")
+        except Exception as e:
+            logger.warning(f"Cache warming failed on startup: {e}")
+
+    # Register cache invalidation listeners
+    try:
+        from models.transaction import register_cache_listeners
+        register_cache_listeners()
+        logger.info("Cache invalidation listeners registered")
+    except Exception as e:
+        logger.warning(f"Failed to register cache listeners: {e}")
 
     return app
 

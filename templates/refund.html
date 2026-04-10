@@ -1,0 +1,92 @@
+{% extends "dashboard_base.html" %}
+
+{% block title %}Refund Management - OnePay{% endblock %}
+
+{% block dashboard_content %}
+<div class="px-12 max-w-7xl mx-auto w-full">
+    <!-- Header Section -->
+    <header class="mb-12">
+        <h2 class="text-4xl font-headline font-extrabold tracking-tight text-gray-800 dark:text-primary mb-2">Refund Management</h2>
+        <p class="text-gray-700 dark:text-on-surface-variant text-lg max-w-2xl font-body">Initiate and track refunds for your verified transactions.</p>
+    </header>
+    
+    <!-- Refund Form -->
+    <div class="mb-8 bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 shadow-xl">
+        <h3 class="text-lg font-bold text-on-surface mb-4">Initiate New Refund</h3>
+        <form id="refundForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-on-surface mb-2">Transaction Reference</label>
+                <input type="text" id="txRef" required class="w-full bg-surface-container-high border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary text-on-surface" placeholder="e.g., ONEPAY-123456">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-on-surface mb-2">Amount</label>
+                <input type="number" id="amount" step="0.01" min="0.01" required class="w-full bg-surface-container-high border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary text-on-surface" placeholder="e.g., 1000.00">
+            </div>
+            <div class="md:col-span-2">
+                <label class="block text-sm font-medium text-on-surface mb-2">Reason</label>
+                <input type="text" id="reason" class="w-full bg-surface-container-high border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary text-on-surface" placeholder="e.g., Customer request">
+            </div>
+            <div class="md:col-span-2">
+                <button type="submit" class="px-6 py-3 bg-primary text-on-primary-container rounded-xl font-medium hover:bg-primary/90 transition-colors">
+                    Initiate Refund
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Refunds Table -->
+    <div class="overflow-hidden border border-outline-variant/10 rounded-2xl bg-surface-container-low shadow-xl">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="bg-surface-container-highest/30 border-b border-outline-variant/10">
+                    <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Status</th>
+                    <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Refund Reference</th>
+                    <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Transaction Reference</th>
+                    <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Amount</th>
+                    <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Reason</th>
+                    <th class="px-6 py-5 text-[11px] font-bold text-outline uppercase tracking-widest">Created</th>
+                </tr>
+            </thead>
+            <tbody id="refundsBody" class="divide-y divide-outline-variant/5">
+                {% if refunds %}
+                    {% for refund in refunds %}
+                        <tr class="hover:bg-surface-container-highest/20 transition-colors">
+                            <td class="px-6 py-4">
+                                {% if refund.status.value == 'success' %}
+                                    <span style="display:inline-block;padding:.2rem .65rem;border-radius:9999px;font-size:.7rem;font-weight:700;background:rgba(170,199,255,.15);color:#aac7ff;border:1px solid rgba(170,199,255,.3)">Success</span>
+                                {% elif refund.status.value == 'processing' %}
+                                    <span style="display:inline-block;padding:.2rem .65rem;border-radius:9999px;font-size:.7rem;font-weight:700;background:rgba(193,199,208,.12);color:#c1c7d0;border:1px solid rgba(193,199,208,.25)">Processing</span>
+                                {% elif refund.status.value == 'failed' %}
+                                    <span style="display:inline-block;padding:.2rem .65rem;border-radius:9999px;font-size:.7rem;font-weight:700;background:rgba(255,180,171,.12);color:#ffb4ab;border:1px solid rgba(255,180,171,.25)">Failed</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono text-sm text-on-surface">{{ refund.refund_reference }}</span>
+                                    <button onclick="copyToClipboard('{{ refund.refund_reference }}')" class="material-symbols-outlined text-[14px] text-outline opacity-0 group-hover:opacity-100 cursor-pointer hover:text-primary transition-all">content_copy</button>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="font-mono text-sm text-on-surface-variant">{{ refund.transaction.tx_ref }}</span>
+                            </td>
+                            <td class="px-6 py-4 font-label font-bold text-on-surface">₦ {{ refund.amount }}</td>
+                            <td class="px-6 py-4 text-sm text-on-surface-variant max-w-xs truncate">{{ refund.reason or 'No reason provided' }}</td>
+                            <td class="px-6 py-4 font-label text-xs text-outline">{{ refund.created_at.strftime('%b %d, %Y %H:%M') if refund.created_at else '' }}</td>
+                        </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="px-6 py-12 text-center">
+                            <span class="material-symbols-outlined text-6xl text-outline/30 mb-4">refund</span>
+                            <h3 class="text-lg font-bold text-on-surface mb-2">No Refunds Found</h3>
+                            <p class="text-sm text-outline">Initiate your first refund using the form above.</p>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="/static/js/refund.js"></script>
+{% endblock %}

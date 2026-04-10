@@ -25,6 +25,13 @@ class BaseConfig:
         "postgresql://onepay_user:onepay_pass@localhost:5432/onepay",
     )
 
+    # ── Database Connection Pooling ────────────────────────────────────────
+    DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "20"))
+    DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "40"))
+    DB_POOL_PRE_PING = os.getenv("DB_POOL_PRE_PING", "true").lower() == "true"
+    DB_POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "3600"))
+    DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+
     # ── Task Queue ───────────────────────────────────────────────────────────
     HUEY_DB_PATH = os.getenv("HUEY_DB_PATH", "huey.db")
 
@@ -119,6 +126,10 @@ class BaseConfig:
     SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
     SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 
+    # ── Redis Cluster Configuration ─────────────────────────────────────────────
+    REDIS_CLUSTER_ENABLED = os.getenv("REDIS_CLUSTER_ENABLED", "false").lower() == "true"
+    REDIS_CLUSTER_NODES = os.getenv("REDIS_CLUSTER_NODES", "")
+
     # ── HTTPS ─────────────────────────────────────────────────────────────────
     ENFORCE_HTTPS = os.getenv("ENFORCE_HTTPS", "false").lower() == "true"
 
@@ -132,6 +143,8 @@ class BaseConfig:
 
     # ── Development Query Monitoring ─────────────────────────────────────────
     QUERY_COUNT_WARN_THRESHOLD = int(os.getenv("QUERY_COUNT_WARN_THRESHOLD", "10"))
+    SQLALCHEMY_ECHO = os.getenv("SQLALCHEMY_ECHO", "false").lower() == "true"
+    SQLALCHEMY_RECORD_QUERIES = os.getenv("SQLALCHEMY_RECORD_QUERIES", "false").lower() == "true"
 
     # ── VoicePay Integration ──────────────────────────────────────────────────
     VOICEPAY_WEBHOOK_URL = os.getenv("VOICEPAY_WEBHOOK_URL", "")
@@ -141,6 +154,16 @@ class BaseConfig:
     # Sandbox configuration
     VOICEPAY_WEBHOOK_URL_SANDBOX = os.getenv("VOICEPAY_WEBHOOK_URL_SANDBOX", "")
     VOICEPAY_WEBHOOK_SECRET_SANDBOX = os.getenv("VOICEPAY_WEBHOOK_SECRET_SANDBOX", "")
+
+    # ── Multi-Currency Support ─────────────────────────────────────────────────
+    SUPPORTED_CURRENCIES = ["NGN", "USD", "EUR"]
+    DEFAULT_CURRENCY = os.getenv("DEFAULT_CURRENCY", "NGN")
+    CURRENCY_SYMBOLS = {
+        "NGN": "₦",
+        "USD": "$",
+        "EUR": "€"
+    }
+    EXCHANGE_RATE_CACHE_TTL = int(os.getenv("EXCHANGE_RATE_CACHE_TTL", "3600"))  # 1 hour
 
     # Webhook timeout and retry settings
     VOICEPAY_WEBHOOK_TIMEOUT_SECS = int(

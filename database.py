@@ -30,14 +30,40 @@ if "sqlite" in Config.DATABASE_URL:
     _engine_kwargs["pool_size"] = 5
     # Note: max_overflow not supported with SQLite's SingletonThreadPool
 else:
-    # Postgres / MySQL — sensible pool defaults
-    _engine_kwargs["pool_size"] = 10
-    _engine_kwargs["max_overflow"] = 20
-    _engine_kwargs["pool_pre_ping"] = True  # detect stale connections
-    _engine_kwargs["pool_recycle"] = 3600  # recycle connections after 1 hour
-    _engine_kwargs["pool_timeout"] = 30  # wait max 30s for connection
+    # Postgres / MySQL — use configurable pool settings
+    _engine_kwargs["pool_size"] = Config.DB_POOL_SIZE
+    _engine_kwargs["max_overflow"] = Config.DB_MAX_OVERFLOW
+    _engine_kwargs["pool_pre_ping"] = Config.DB_POOL_PRE_PING
+    _engine_kwargs["pool_recycle"] = Config.DB_POOL_RECYCLE
+    _engine_kwargs["pool_timeout"] = Config.DB_POOL_TIMEOUT
 
 engine = create_engine(Config.DATABASE_URL, **_engine_kwargs)
+
+# Slow query logging for development
+if Config.DEBUG or Config.SQLALCHEMY_ECHO:
+    import time as _time
+
+    @_sa_event.listens_for(engine, "before_cursor_execute")
+    def _log_slow_query_before(conn, cursor, statement, parameters, context, executemany):
+        conn.info.setdefault('query_start_time', []).append(_time.time())
+
+    @_sa_event.listens_for(engine, "after_cursor_execute")
+    def _log_slow_query_after(conn, cursor, statement, parameters, context, executemany):
+        total = _time.time() - conn.info['query_start_time'].pop(-1)
+        if total > 0.1:  # Log queries slower than 100ms
+            logger.warning(f"Slow query ({total:.2f}s): {statement[:200]}")
+
+# Connection pool monitoring
+if Config.DEBUG:
+    @_sa_event.listens_for(engine, "connect")
+    def on_connect(dbapi_conn, connection_record):
+        pool = engine.pool
+        logger.debug(f"New DB connection created. Pool size: {pool.size()}, Checked out: {pool.checkedout()}")
+
+    @_sa_event.listens_for(engine, "close")
+    def on_close(dbapi_conn, connection_record):
+        pool = engine.pool
+        logger.debug(f"DB connection closed. Pool size: {pool.size()}, Checked out: {pool.checkedout()}")
 
 # SQLite pragmas: WAL mode + foreign keys
 if "sqlite" in Config.DATABASE_URL:

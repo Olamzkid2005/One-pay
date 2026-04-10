@@ -164,3 +164,36 @@ class Transaction(Base):
         if exp_utc is None:
             return True
         return now > exp_utc
+
+
+# ── Cache invalidation event listeners ────────────────────────────────────────
+
+def register_cache_listeners():
+    """Register SQLAlchemy event listeners for cache invalidation."""
+    from sqlalchemy import event
+
+    from services.cache import get_cache
+
+    @event.listens_for(Transaction, 'after_update')
+    def on_transaction_update(mapper, connection, target):
+        """Invalidate user cache when transaction is updated."""
+        if target.user_id:
+            try:
+                cache = get_cache()
+                if hasattr(cache, 'invalidate_user_cache'):
+                    cache.invalidate_user_cache(target.user_id)
+            except Exception:
+                # Cache failures should not break database operations
+                pass
+
+    @event.listens_for(Transaction, 'after_insert')
+    def on_transaction_insert(mapper, connection, target):
+        """Invalidate user cache when transaction is created."""
+        if target.user_id:
+            try:
+                cache = get_cache()
+                if hasattr(cache, 'invalidate_user_cache'):
+                    cache.invalidate_user_cache(target.user_id)
+            except Exception:
+                # Cache failures should not break database operations
+                pass
