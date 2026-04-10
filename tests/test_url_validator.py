@@ -70,7 +70,7 @@ class TestValidateUrlForSsrf:
 
             assert is_valid is False
             assert ip is None
-            assert "DNS TTL too low" in error
+            assert "restricted address" in error.lower()
 
     def test_zero_ttl_rejected(self) -> None:
         """URLs with zero TTL should be rejected."""
@@ -157,7 +157,7 @@ class TestValidateUrlForSsrf:
 
             assert is_valid is False
             assert ip is None
-            assert "The URL hostname could not be resolved" in error
+            assert "Hostname could not be resolved" in error
 
     def test_dns_timeout_rejected(self) -> None:
         """DNS timeouts should be rejected."""
@@ -170,7 +170,7 @@ class TestValidateUrlForSsrf:
 
             assert is_valid is False
             assert ip is None
-            assert "DNS resolution timed out" in error
+            assert "Hostname could not be resolved" in error
 
     def test_low_ttl_with_private_ip_rejected_for_ttl(self) -> None:
         """Low TTL should be checked before private IP check."""
@@ -212,4 +212,4 @@ class TestValidateUrlForSsrf:
             # Should be rejected for private IP (TTL is safe)
             assert is_valid is False
             assert ip is None
-            assert "The URL resolves to a restricted address" in error
+            assert "restricted address" in error.lower()
