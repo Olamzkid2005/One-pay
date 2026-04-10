@@ -31,6 +31,22 @@ opentelemetry-instrumentation-requests>=0.43b0
 # Task queue
 huey>=2.5.0
 
+# CAPTCHA for password reset
+hcaptcha==0.1.0
+
+# Flask-Session with Redis
+Flask-Session==0.5.0
+redis==5.0.0
+
+# Alert integration for security monitoring
+slack-sdk==3.26.0
+sendgrid==6.10.0
+
+# Security scanning for CI/CD
+bandit[toml]==1.7.5
+safety==2.3.5
+trivy==0.40.0
+
 # Testing dependencies
 pytest>=7.0.0
 pytest-mock>=3.10.0

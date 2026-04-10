@@ -8,6 +8,7 @@ import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
+import requests
 from flask import (
     Blueprint,
     flash,
@@ -264,7 +265,7 @@ def logout():
     logger.info("Merchant logged out: %s", username)
     flash("You have been logged out.", "info")
     response = make_response(redirect(url_for("auth.login_page")))
-    response.headers["Clear-Site-Data"] = '"cache", "cookies", "storage"'
+    response.headers["Clear-Site-Data"] = "cache, cookies, storage, executionContexts"
     return response
 
 
@@ -346,6 +347,23 @@ def forgot_password():
 # ── Reset password ─────────────────────────────────────────────────────────────
 
 
+def verify_captcha(token: str) -> bool:
+    """Verify hCaptcha token."""
+    if not Config.HCAPTCHA_SECRET_KEY:
+        logger.warning("HCAPTCHA_SECRET_KEY not configured, skipping verification")
+        return True
+    try:
+        response = requests.post(
+            "https://hcaptcha.com/siteverify",
+            data={"secret": Config.HCAPTCHA_SECRET_KEY, "response": token},
+            timeout=10
+        )
+        return response.json().get("success", False)
+    except Exception as e:
+        logger.error("CAPTCHA verification failed: %s", e)
+        return False
+
+
 def _get_valid_reset_user(db, token: str):
     """Return user if reset token is valid and not expired, else None."""
     user = db.query(User).filter(User.reset_token == token).first()
@@ -379,6 +397,13 @@ def reset_password(token: str):
     if not is_valid_csrf_token(request.form.get("csrf_token")):
         flash("Session expired — please refresh and try again.", "error")
         return render_template("reset_password.html", token=token, csrf_token=get_csrf_token())
+
+    # Verify CAPTCHA if enabled
+    if Config.HCAPTCHA_ENABLED:
+        captcha_token = request.form.get("h-captcha-response")
+        if not captcha_token or not verify_captcha(captcha_token):
+            flash("CAPTCHA verification failed. Please try again.", "error")
+            return render_template("reset_password.html", token=token, csrf_token=get_csrf_token())
 
     password = request.form.get("password") or ""
     password2 = request.form.get("password2") or ""

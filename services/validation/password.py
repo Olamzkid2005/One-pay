@@ -3,11 +3,13 @@ OnePay — Password strength validator.
 """
 
 import logging
+import os
 import re
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# Base common passwords (will be expanded from file)
 COMMON_PASSWORDS = {
     "password",
     "password123",
@@ -65,6 +67,30 @@ COMMON_PASSWORDS = {
     "demo",
     "demo123",
 }
+
+
+def load_common_passwords_from_file(filepath: str) -> int:
+    """Load common passwords from file."""
+    global COMMON_PASSWORDS
+    try:
+        with open(filepath, encoding="utf-8") as f:
+            loaded = {line.strip().lower() for line in f if line.strip()}
+        COMMON_PASSWORDS.update(loaded)
+        logger.info("Loaded %d common passwords from %s", len(loaded), filepath)
+        return len(loaded)
+    except FileNotFoundError:
+        logger.warning("Common passwords file not found: %s", filepath)
+        return 0
+    except Exception as e:
+        logger.error("Error loading common passwords: %s", e)
+        return 0
+
+
+# Load common passwords from file on module import
+COMMON_PASSWORDS_FILE = os.getenv("COMMON_PASSWORDS_FILE", "services/validation/common_passwords.txt")
+if os.path.exists(COMMON_PASSWORDS_FILE):
+    load_count = load_common_passwords_from_file(COMMON_PASSWORDS_FILE)
+    logger.info("Loaded %d additional common passwords from %s", load_count, COMMON_PASSWORDS_FILE)
 
 
 def is_common_password(password: str) -> bool:

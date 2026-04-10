@@ -67,6 +67,16 @@ def register():
     return redirect("/api/v1/register", code=301)
 
 
+# ── security.txt route (RFC 9116) ───────────────────────────────────────────────────
+
+
+@public_bp.route("/.well-known/security.txt")
+def security_txt():
+    """Serve security.txt file for RFC 9116 compliance."""
+    from flask import send_from_directory
+    return send_from_directory("static/.well-known", "security.txt")
+
+
 # ── Google OAuth route aliases ─────────────────────────────────────────────────
 
 

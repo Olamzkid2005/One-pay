@@ -1,0 +1,73 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM UTC
+
+jobs:
+  dependency-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install safety
+      - name: Run Safety
+        run: |
+          safety check --json > safety-report.json || true
+      - name: Upload Safety Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: safety-report
+          path: safety-report.json
+      - name: Fail on high/critical vulnerabilities
+        run: |
+          safety check
+
+  sast-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install bandit[toml]
+      - name: Run Bandit
+        run: |
+          bandit -r . -f json -o bandit-report.json || true
+      - name: Upload Bandit Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: bandit-report
+          path: bandit-report.json
+      - name: Fail on high/critical issues
+        run: |
+          bandit -r . -f screen
+
+  container-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build Docker Image
+        run: docker build -t onepay:latest .
+      - name: Run Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'onepay:latest'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      - name: Upload Trivy Results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'

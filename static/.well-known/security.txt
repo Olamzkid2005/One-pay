@@ -1,0 +1,7 @@
+Contact: mailto:security@yourdomain.com
+Expires: 2027-04-10T23:00:00.000Z
+Encryption: https://yourdomain.com/pgp-key.txt
+Acknowledgments: https://yourdomain.com/hall-of-fame
+Preferred-Languages: en
+Policy: https://yourdomain.com/security-policy
+Hiring: https://yourdomain.com/jobs

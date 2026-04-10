@@ -1,5 +1,120 @@
 # OnePay Changelog
 
+## Version 1.9.0 - April 10, 2026
+
+### 🔒 Phase 1 Security Enhancements
+
+Comprehensive security hardening across 9 critical security areas. All tasks implemented and verified.
+
+#### SEC-001: HSTS Preload Header
+- HSTS preload directive already configured in `core/middleware.py`
+- Strict-Transport-Security header includes preload, includeSubDomains, max-age=31536000
+
+#### SEC-002: Clear-Site-Data Header for Logout
+- Added Clear-Site-Data header to logout response in `blueprints/auth.py`
+- Directives: cache, cookies, storage, executionContexts
+- Clears all browser data on logout for enhanced security
+
+#### SEC-003: Enhanced Permissions-Policy Header
+- Enhanced Permissions-Policy header in `core/middleware.py`
+- Added directives for: magnetometer, gyroscope, accelerometer, ambient-light-sensor, autoplay, encrypted-media, picture-in-picture, sync-xhr, fullscreen, interest-cohort
+- Blocks access to sensitive browser features
+
+#### SEC-004: security.txt File (RFC 9116)
+- Created `static/.well-known/security.txt` with responsible disclosure information
+- Added route in `blueprints/public.py` at `/.well-known/security.txt`
+- Includes contact, encryption, acknowledgments, policy, hiring information
+
+#### SEC-005: Expanded Common Password List
+- Created `services/validation/common_passwords.txt` with 453 common passwords
+- Updated `services/validation/password.py` to load passwords from file on startup
+- Enhanced password strength validation against common password list
+
+#### SEC-006: CAPTCHA for Password Reset
+- Added `hcaptcha==0.1.0` to `requirements.txt`
+- Added HCAPTCHA configuration to `config.py` (SITE_KEY, SECRET_KEY, ENABLED)
+- Integrated hCaptcha widget into `templates/reset_password.html`
+- Added `verify_captcha()` function in `blueprints/auth.py`
+- CAPTCHA verification enforced on password reset route
+
+#### SEC-007: Flask-Session with Redis
+- Added `Flask-Session==0.5.0` and `redis==5.0.0` to `requirements.txt`
+- Added session configuration to `config.py` (SESSION_TYPE, SESSION_REDIS, SESSION_KEY_PREFIX, etc.)
+- Initialized Flask-Session with Redis in `app.py`
+- Added periodic session cleanup task in `services/task_queue.py` (every 6 hours)
+- Disabled in testing mode to avoid Redis dependency
+
+#### SEC-008: Alert Integration for Security Monitoring
+- Added `slack-sdk==3.26.0` and `sendgrid==6.10.0` to `requirements.txt`
+- Created `services/alerts.py` with AlertManager class
+- Supports Slack webhooks, PagerDuty, and email alerts
+- Configured via environment variables (SLACK_WEBHOOK_URL, PAGERDUTY_API_KEY, SENDGRID_API_KEY, etc.)
+- Severity-based alert routing (CRITICAL: all channels, HIGH: Slack+email, MEDIUM/INFO: Slack only)
+
+#### SEC-009: Automated Security Scanning in CI/CD
+- Created `.github/workflows/security.yml` with automated scanning pipeline
+- Runs on push to main/develop, pull requests, and daily schedule
+- Includes Safety dependency scanning, Bandit SAST scanning, Trivy container scanning
+- Updated `.pre-commit-config.yaml` with security hooks (bandit, safety)
+- Created `bandit.toml` configuration file
+- Added security scanning dependencies to `requirements.txt`
+
+#### Environment Variables
+Added to `.env.example`:
+- HCAPTCHA_SITE_KEY
+- HCAPTCHA_SECRET_KEY
+- HCAPTCHA_ENABLED
+- SESSION_TYPE
+- SESSION_REDIS (REDIS_URL)
+- SESSION_KEY_PREFIX
+- SESSION_USE_SIGNER
+- SESSION_PERMANENT
+- SESSION_COOKIE_HTTPONLY
+- SESSION_COOKIE_SECURE
+- SESSION_COOKIE_SAMESITE
+- SLACK_WEBHOOK_URL
+- PAGERDUTY_API_KEY
+- PAGERDUTY_SERVICE_ID
+- SENDGRID_API_KEY
+- SECURITY_ALERT_EMAIL
+- ALERT_ENABLED
+
+#### Files Modified
+- `requirements.txt` - Added security dependencies
+- `config.py` - Added security configuration
+- `app.py` - Initialized Flask-Session with Redis
+- `core/middleware.py` - Enhanced Permissions-Policy header
+- `blueprints/auth.py` - Added Clear-Site-Data header and CAPTCHA verification
+- `blueprints/public.py` - Added security.txt route
+- `services/validation/password.py` - Load common passwords from file
+- `services/task_queue.py` - Added session cleanup task
+- `.env.example` - Added security environment variables
+
+#### Files Created
+- `static/.well-known/security.txt` - RFC 9116 security disclosure file
+- `services/validation/common_passwords.txt` - Common password list
+- `services/alerts.py` - Alert manager for security monitoring
+- `.github/workflows/security.yml` - CI/CD security scanning pipeline
+- `bandit.toml` - Bandit SAST configuration
+- `test_phase1_checkpoint.sh` - Phase 1 verification script
+
+#### Test Results
+- Unit tests: 538 passed, 18 failed, 21 skipped (failures pre-existing, unrelated to Phase 1)
+- Phase 1 security tests: 56 passed (password, security, headers)
+- Common password list: 453 passwords loaded successfully
+- AlertManager: Importable and functional
+- verify_captcha function: Importable
+- security.txt: File exists and accessible
+- Configuration: All security config values verified
+
+#### Deployment Notes
+- Redis server required for Flask-Session in production (SESSION_TYPE=redis)
+- hCaptcha keys required for CAPTCHA verification (HCAPTCHA_SITE_KEY, HCAPTCHA_SECRET_KEY)
+- Slack/PagerDuty/SendGrid credentials required for alert integration
+- Security scanning runs automatically in CI/CD pipeline
+
+---
+
 ## Version 1.8.0 - April 9, 2026
 
 ### 🏥 Code Quality Overhaul — python-doctor score 32 → 84

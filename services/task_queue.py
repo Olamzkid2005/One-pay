@@ -186,3 +186,26 @@ def cleanup_webhook_idempotency_task():
     """
     with get_db() as db:
         cleanup_webhook_idempotency_records(db, older_than_hours=24)
+
+
+@huey.periodic_task(crontab(hour="*/6"))
+def cleanup_expired_sessions():
+    """
+    Clean up expired Redis sessions every 6 hours.
+
+    Logs the current number of sessions in Redis for monitoring.
+    Redis automatically expires sessions via TTL, but this task
+    provides visibility into session count.
+
+    **Validates: SEC-007**
+    """
+    try:
+        import redis
+
+        from config import Config
+
+        redis_client = redis.from_url(Config.SESSION_REDIS)
+        session_count = redis_client.dbsize()
+        logger.info("Current Redis sessions: %d", session_count)
+    except Exception as e:
+        logger.error("Failed to check Redis sessions: %s", e)

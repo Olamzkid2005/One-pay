@@ -173,6 +173,25 @@ def create_app() -> Flask:
         SESSION_TIMEOUT_AUTHENTICATED=Config.SESSION_TIMEOUT_AUTHENTICATED,
         SESSION_TIMEOUT_UNAUTHENTICATED=Config.SESSION_TIMEOUT_UNAUTHENTICATED,
     )
+
+    # Flask-Session with Redis configuration (skip in testing mode)
+    if not Config.TESTING and Config.SESSION_TYPE == "redis":
+        app.config["SESSION_TYPE"] = Config.SESSION_TYPE
+        app.config["SESSION_KEY_PREFIX"] = Config.SESSION_KEY_PREFIX
+        app.config["SESSION_USE_SIGNER"] = Config.SESSION_USE_SIGNER
+        app.config["SESSION_PERMANENT"] = Config.SESSION_PERMANENT
+        app.config["SESSION_COOKIE_HTTPONLY"] = Config.SESSION_COOKIE_HTTPONLY
+        app.config["SESSION_COOKIE_SECURE"] = Config.SESSION_COOKIE_SECURE
+        app.config["SESSION_COOKIE_SAMESITE"] = Config.SESSION_COOKIE_SAMESITE
+
+        # Initialize Redis client for Flask-Session
+        import redis
+        app.config["SESSION_REDIS"] = redis.from_url(Config.SESSION_REDIS)
+
+        # Initialize Flask-Session
+        from flask_session import Session
+        Session(app)
+
     Config.validate()
     app.config["BOOT_TIME"] = datetime.now(timezone.utc).isoformat()
 

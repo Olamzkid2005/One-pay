@@ -224,7 +224,11 @@ def _register_after_request(app: Flask) -> None:
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response.headers.setdefault(
             "Permissions-Policy",
-            "geolocation=(), camera=(), microphone=(), payment=(), usb=(), magnetometer=()",
+            "geolocation=(), camera=(), microphone=(), payment=(), usb=(), "
+            "magnetometer=(), gyroscope=(), accelerometer=(), "
+            "ambient-light-sensor=(), autoplay=(), encrypted-media=(), "
+            "picture-in-picture=(), sync-xhr=(), fullscreen=(), "
+            "interest-cohort=()",
         )
         if request.endpoint not in ["auth.login_page", "auth.register_page"]:
             response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")

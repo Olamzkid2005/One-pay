@@ -62,6 +62,19 @@ class BaseConfig:
     KORAPAY_CONNECT_TIMEOUT = int(os.getenv("KORAPAY_CONNECT_TIMEOUT", "10"))
     KORAPAY_MAX_RETRIES = int(os.getenv("KORAPAY_MAX_RETRIES", "3"))
 
+    # ── CAPTCHA for Password Reset ────────────────────────────────────────────────
+    HCAPTCHA_SITE_KEY = os.getenv("HCAPTCHA_SITE_KEY", "")
+    HCAPTCHA_SECRET_KEY = os.getenv("HCAPTCHA_SECRET_KEY", "")
+    HCAPTCHA_ENABLED = os.getenv("HCAPTCHA_ENABLED", "true").lower() == "true"
+
+    # ── Alert Integration for Security Monitoring ────────────────────────────────────
+    SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
+    PAGERDUTY_API_KEY = os.getenv("PAGERDUTY_API_KEY", "")
+    PAGERDUTY_SERVICE_ID = os.getenv("PAGERDUTY_SERVICE_ID", "")
+    SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
+    SECURITY_ALERT_EMAIL = os.getenv("SECURITY_ALERT_EMAIL", "security@yourdomain.com")
+    ALERT_ENABLED = os.getenv("ALERT_ENABLED", "true").lower() == "true"
+
     # ── Rate Limiting ─────────────────────────────────────────────────────────
     RATE_LIMIT_LINK_CREATE = int(os.getenv("RATE_LIMIT_LINK_CREATE", "10"))
     RATE_LIMIT_VERIFY = int(os.getenv("RATE_LIMIT_VERIFY", "20"))
@@ -95,6 +108,16 @@ class BaseConfig:
     SESSION_TIMEOUT_UNAUTHENTICATED = int(
         os.getenv("SESSION_TIMEOUT_UNAUTHENTICATED", "60")
     )
+
+    # ── Flask-Session with Redis ────────────────────────────────────────────────
+    SESSION_TYPE = os.getenv("SESSION_TYPE", "redis")
+    SESSION_REDIS = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    SESSION_KEY_PREFIX = os.getenv("SESSION_KEY_PREFIX", "onepay:session:")
+    SESSION_USE_SIGNER = os.getenv("SESSION_USE_SIGNER", "true").lower() == "true"
+    SESSION_PERMANENT = os.getenv("SESSION_PERMANENT", "false").lower() == "true"
+    SESSION_COOKIE_HTTPONLY = os.getenv("SESSION_COOKIE_HTTPONLY", "true").lower() == "true"
+    SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
+    SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 
     # ── HTTPS ─────────────────────────────────────────────────────────────────
     ENFORCE_HTTPS = os.getenv("ENFORCE_HTTPS", "false").lower() == "true"
