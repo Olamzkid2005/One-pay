@@ -12,7 +12,7 @@ from typing import Optional
 
 from flask import Blueprint, jsonify, redirect, render_template, request, url_for
 from sqlalchemy import case, func
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from config import Config
 from core.audit import log_event
@@ -250,10 +250,12 @@ def export_transactions():
     from io import StringIO
 
     from flask import make_response
+    from sqlalchemy.orm import joinedload
 
     with get_db() as db:
         transactions = (
             db.query(Transaction)
+            .options(joinedload(Transaction.user))
             .filter(Transaction.user_id == current_user_id())
             .order_by(Transaction.created_at.desc())
             .limit(MAX_EXPORT_ROWS)
@@ -351,6 +353,61 @@ def _build_chart_data(db, user_id: int, now, thirty_days_ago) -> dict:
     return {"labels": labels, "dataset": values}
 
 
+def _get_payment_stats(db, user_id, start_date=None):
+    """Get payment statistics for a given user and optional date range."""
+    query = (
+        db.query(
+            func.coalesce(func.sum(case((Transaction.status == TransactionStatus.VERIFIED, Transaction.amount), else_=0)), 0).label("total_verified_amount"),
+            func.count(Transaction.id).label("total_links"),
+            func.sum(case((Transaction.status == TransactionStatus.VERIFIED, 1), else_=0)).label("total_verified"),
+        )
+        .filter(Transaction.user_id == user_id)
+    )
+
+    if start_date:
+        query = query.filter(Transaction.created_at >= start_date)
+
+    return query.first()
+
+
+def _get_all_time_stats(db, user_id):
+    """Get all-time payment statistics including expired count."""
+    return (
+        db.query(
+            func.coalesce(func.sum(case((Transaction.status == TransactionStatus.VERIFIED, Transaction.amount), else_=0)), 0).label("total_verified_amount"),
+            func.count(Transaction.id).label("total_links"),
+            func.sum(case((Transaction.status == TransactionStatus.VERIFIED, 1), else_=0)).label("total_verified"),
+            func.sum(case((Transaction.status == TransactionStatus.EXPIRED, 1), else_=0)).label("total_expired"),
+        )
+        .filter(Transaction.user_id == user_id)
+        .first()
+    )
+
+
+def _build_payment_summary_result(all_time, this_month, chart_data):
+    """Build payment summary result dictionary."""
+    all_time_rate = round((all_time.total_verified or 0) / all_time.total_links * 100, 1) if all_time.total_links > 0 else 0
+    this_month_rate = round((this_month.total_verified or 0) / this_month.total_links * 100, 1) if this_month.total_links > 0 else 0
+
+    return {
+        "success": True,
+        "all_time": {
+            "total_collected": str(all_time.total_verified_amount or 0),
+            "total_links": all_time.total_links or 0,
+            "total_verified": all_time.total_verified or 0,
+            "total_expired": all_time.total_expired or 0,
+            "conversion_rate": all_time_rate,
+        },
+        "this_month": {
+            "total_collected": str(this_month.total_verified_amount or 0),
+            "total_links": this_month.total_links or 0,
+            "total_verified": this_month.total_verified or 0,
+            "conversion_rate": this_month_rate,
+        },
+        "chart_data": chart_data,
+    }
+
+
 @rate_limit("summary:{user_id}", limit=20, window_secs=60)
 @payments_bp.route("/payments/summary", methods=["GET"])
 def payment_summary():
@@ -368,47 +425,11 @@ def payment_summary():
         month_start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
         thirty_days_ago = now - timedelta(days=30)
 
-        all_time = (
-            db.query(
-                func.coalesce(func.sum(case((Transaction.status == TransactionStatus.VERIFIED, Transaction.amount), else_=0)), 0).label("total_verified_amount"),
-                func.count(Transaction.id).label("total_links"),
-                func.sum(case((Transaction.status == TransactionStatus.VERIFIED, 1), else_=0)).label("total_verified"),
-                func.sum(case((Transaction.status == TransactionStatus.EXPIRED, 1), else_=0)).label("total_expired"),
-            )
-            .filter(Transaction.user_id == user_id)
-            .first()
-        )
+        all_time = _get_all_time_stats(db, user_id)
+        this_month = _get_payment_stats(db, user_id, month_start)
+        chart_data = _build_chart_data(db, user_id, now, thirty_days_ago)
 
-        this_month = (
-            db.query(
-                func.coalesce(func.sum(case((Transaction.status == TransactionStatus.VERIFIED, Transaction.amount), else_=0)), 0).label("total_verified_amount"),
-                func.count(Transaction.id).label("total_links"),
-                func.sum(case((Transaction.status == TransactionStatus.VERIFIED, 1), else_=0)).label("total_verified"),
-            )
-            .filter(Transaction.user_id == user_id, Transaction.created_at >= month_start)
-            .first()
-        )
-
-        all_time_rate = round((all_time.total_verified or 0) / all_time.total_links * 100, 1) if all_time.total_links > 0 else 0
-        this_month_rate = round((this_month.total_verified or 0) / this_month.total_links * 100, 1) if this_month.total_links > 0 else 0
-
-        result = {
-            "success": True,
-            "all_time": {
-                "total_collected": str(all_time.total_verified_amount or 0),
-                "total_links": all_time.total_links or 0,
-                "total_verified": all_time.total_verified or 0,
-                "total_expired": all_time.total_expired or 0,
-                "conversion_rate": all_time_rate,
-            },
-            "this_month": {
-                "total_collected": str(this_month.total_verified_amount or 0),
-                "total_links": this_month.total_links or 0,
-                "total_verified": this_month.total_verified or 0,
-                "conversion_rate": this_month_rate,
-            },
-            "chart_data": _build_chart_data(db, user_id, now, thirty_days_ago),
-        }
+        result = _build_payment_summary_result(all_time, this_month, chart_data)
         cache_set(cache_key, result, ttl=60)
         return jsonify(result)
 
@@ -799,7 +820,7 @@ def transaction_history():
 
         transactions = (
             db.query(Transaction)
-            .options(selectinload(Transaction.invoice))
+            .options(joinedload(Transaction.user), selectinload(Transaction.invoice))
             .filter(Transaction.user_id == current_user_id())
             .order_by(Transaction.created_at.desc())
             .offset(offset)
@@ -913,6 +934,45 @@ def refunds():
     )
 
 
+def _validate_refund_request():
+    """Validate refund request and return tx_ref, amount, reason."""
+    tx_ref = request.form.get("tx_ref") if request.form else request.get_json().get("tx_ref")
+    amount = request.form.get("amount") if request.form else request.get_json().get("amount")
+    reason = request.form.get("reason") if request.form else request.get_json().get("reason")
+
+    if not tx_ref or not amount:
+        raise ValidationError("tx_ref and amount are required")
+
+    try:
+        amount = Decimal(str(amount))
+    except (ValueError, TypeError):
+        raise ValidationError("Invalid amount format")
+
+    return tx_ref, amount, reason
+
+
+def _initiate_korapay_refund(tx, refund, amount, reason, refund_reference):
+    """Initiate refund via KoraPay API and update refund status."""
+    try:
+        result = korapay.initiate_refund(
+            payment_reference=tx.korapay_merchant_ref or tx.tx_ref,
+            refund_reference=refund_reference,
+            amount=int(float(amount) * 100),  # Convert to kobo
+            reason=reason
+        )
+        refund.provider_refund_id = result.get("reference")
+        refund.status = RefundStatus.PROCESSING
+        logger.info("Refund initiated via KoraPay | refund_ref=%s tx_ref=%s", refund_reference, tx.tx_ref)
+    except KoraPayError as e:
+        refund.status = RefundStatus.FAILED
+        refund.failure_reason = str(e)
+        logger.error("Refund initiation failed | refund_ref=%s error=%s", refund_reference, e)
+    except Exception as e:
+        refund.status = RefundStatus.FAILED
+        refund.failure_reason = str(e)
+        logger.error("Unexpected error during refund initiation | refund_ref=%s error=%s", refund_reference, e)
+
+
 @payments_bp.route("/refunds/create", methods=["POST"])
 def create_refund():
     """Create a new refund."""
@@ -926,17 +986,7 @@ def create_refund():
         if not is_valid_csrf_token(csrf_header):
             raise AuthorizationError("CSRF validation failed")
 
-    tx_ref = request.form.get("tx_ref") if request.form else request.get_json().get("tx_ref")
-    amount = request.form.get("amount") if request.form else request.get_json().get("amount")
-    reason = request.form.get("reason") if request.form else request.get_json().get("reason")
-
-    if not tx_ref or not amount:
-        raise ValidationError("tx_ref and amount are required")
-
-    try:
-        amount = Decimal(str(amount))
-    except (ValueError, TypeError):
-        raise ValidationError("Invalid amount format")
+    tx_ref, amount, reason = _validate_refund_request()
 
     with get_db() as db:
         tx = db.query(Transaction).filter_by(tx_ref=tx_ref).first()
@@ -969,25 +1019,7 @@ def create_refund():
         db.add(refund)
         db.flush()
 
-        # Call KoraPay refund API
-        try:
-            result = korapay.initiate_refund(
-                payment_reference=tx.korapay_merchant_ref or tx_ref,
-                refund_reference=refund_reference,
-                amount=int(float(amount) * 100),  # Convert to kobo
-                reason=reason
-            )
-            refund.provider_refund_id = result.get("reference")
-            refund.status = RefundStatus.PROCESSING
-            logger.info("Refund initiated via KoraPay | refund_ref=%s tx_ref=%s", refund_reference, tx_ref)
-        except KoraPayError as e:
-            refund.status = RefundStatus.FAILED
-            refund.failure_reason = str(e)
-            logger.error("Refund initiation failed | refund_ref=%s error=%s", refund_reference, e)
-        except Exception as e:
-            refund.status = RefundStatus.FAILED
-            refund.failure_reason = str(e)
-            logger.error("Unexpected error during refund initiation | refund_ref=%s error=%s", refund_reference, e)
+        _initiate_korapay_refund(tx, refund, amount, reason, refund_reference)
 
         db.commit()
 

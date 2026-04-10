@@ -9,10 +9,10 @@ import time
 logger = logging.getLogger(__name__)
 
 
-def start_background_threads(shutdown_event: threading.Event) -> None:
+def start_background_threads(shutdown_event: threading.Event, app) -> None:
     """Start all background daemon threads."""
-    _start_webhook_retry_thread(shutdown_event)
-    _start_security_monitor_thread(shutdown_event)
+    _start_webhook_retry_thread(shutdown_event, app)
+    _start_security_monitor_thread(shutdown_event, app)
 
     try:
         from app_cleanup import start_cleanup_threads
@@ -21,15 +21,16 @@ def start_background_threads(shutdown_event: threading.Event) -> None:
         pass
 
 
-def _start_webhook_retry_thread(shutdown_event: threading.Event) -> None:
+def _start_webhook_retry_thread(shutdown_event: threading.Event, app) -> None:
     def _loop():
         time.sleep(5)
         while not shutdown_event.is_set():
             try:
                 from database import get_db
                 from services.webhook import retry_failed_webhooks
-                with get_db() as db:
-                    retry_failed_webhooks(db)
+                with app.app_context():
+                    with get_db() as db:
+                        retry_failed_webhooks(db)
             except Exception as e:
                 logger.error("Webhook retry loop error: %s", e)
             if not shutdown_event.is_set():
@@ -40,17 +41,18 @@ def _start_webhook_retry_thread(shutdown_event: threading.Event) -> None:
     logger.info("Webhook retry thread started")
 
 
-def _start_security_monitor_thread(shutdown_event: threading.Event) -> None:
+def _start_security_monitor_thread(shutdown_event: threading.Event, app) -> None:
     def _loop():
         time.sleep(10)
         while not shutdown_event.is_set():
             try:
                 from database import get_db
                 from services.security_monitor import detect_suspicious_activity
-                with get_db() as db:
-                    alerts = detect_suspicious_activity(db)
-                    if alerts:
-                        logger.info("Security monitoring detected %d alerts", len(alerts))
+                with app.app_context():
+                    with get_db() as db:
+                        alerts = detect_suspicious_activity(db)
+                        if alerts:
+                            logger.info("Security monitoring detected %d alerts", len(alerts))
             except Exception as e:
                 logger.error("Security monitoring error: %s", e)
             if not shutdown_event.is_set():

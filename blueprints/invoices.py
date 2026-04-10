@@ -6,6 +6,7 @@ Handles: invoice creation, retrieval, download, email, and settings
 import logging
 
 from flask import Blueprint, jsonify, render_template, request
+from sqlalchemy.orm import joinedload
 
 from core.auth import (
     current_user_id,
@@ -799,7 +800,9 @@ def list_recurring_invoices():
         user = db.query(User).filter(User.id == current_user_id()).first()
         profile_picture = user.profile_picture_url if user else None
 
-        recurring_invoices = db.query(RecurringInvoice).filter(
+        recurring_invoices = db.query(RecurringInvoice).options(
+            joinedload(RecurringInvoice.user)
+        ).filter(
             RecurringInvoice.user_id == current_user_id()
         ).order_by(RecurringInvoice.created_at.desc()).all()
 
@@ -811,6 +814,68 @@ def list_recurring_invoices():
         recurring_invoices=recurring_invoices,
         active_page="recurring_invoices",
     )
+
+
+def _validate_recurring_invoice_data(data):
+    """Validate recurring invoice data and return parsed values."""
+    from datetime import datetime, timezone
+    from decimal import Decimal
+
+    customer_email = data.get("customer_email")
+    customer_name = data.get("customer_name")
+    customer_phone = data.get("customer_phone")
+    amount = data.get("amount")
+    currency = data.get("currency", "NGN")
+    description = data.get("description")
+    frequency = data.get("frequency")
+    start_date = data.get("start_date")
+    end_date = data.get("end_date")
+    notes = data.get("notes")
+
+    if not customer_email or not amount or not frequency or not start_date:
+        raise ValidationError("customer_email, amount, frequency, and start_date are required")
+
+    validated_email = validate_email(customer_email)
+    if not validated_email:
+        raise ValidationError("Invalid email address")
+
+    validated_phone = validate_phone(customer_phone) if customer_phone else None
+
+    try:
+        amount_decimal = Decimal(str(amount))
+        if amount_decimal <= 0:
+            raise ValidationError("Amount must be greater than 0")
+    except (ValueError, TypeError):
+        raise ValidationError("Invalid amount")
+
+    valid_frequencies = ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]
+    if frequency not in valid_frequencies:
+        raise ValidationError(f"Invalid frequency. Must be one of: {', '.join(valid_frequencies)}")
+
+    try:
+        start_dt = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        raise ValidationError("Invalid start_date format")
+
+    end_dt = None
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            raise ValidationError("Invalid end_date format")
+
+    return {
+        "customer_email": validated_email,
+        "customer_name": customer_name,
+        "customer_phone": validated_phone,
+        "amount": amount_decimal,
+        "currency": currency.upper()[:3],
+        "description": description,
+        "frequency": frequency.lower(),
+        "start_date": start_dt,
+        "end_date": end_dt,
+        "notes": notes,
+    }
 
 
 @invoices_bp.route("/recurring-invoices/create", methods=["POST"])
@@ -831,72 +896,14 @@ def create_recurring_invoice():
         if not check_rate_limit(db, f"recurring_create:{current_user_id()}", limit=10, window_secs=60):
             return rate_limited()
 
-        from datetime import datetime, timezone
-
         data = request.get_json(silent=True) or {}
-        customer_email = data.get("customer_email")
-        customer_name = data.get("customer_name")
-        customer_phone = data.get("customer_phone")
-        amount = data.get("amount")
-        currency = data.get("currency", "NGN")
-        description = data.get("description")
-        frequency = data.get("frequency")
-        start_date = data.get("start_date")
-        end_date = data.get("end_date")
-        notes = data.get("notes")
-
-        if not customer_email or not amount or not frequency or not start_date:
-            raise ValidationError("customer_email, amount, frequency, and start_date are required")
-
-        # Validate email
-        validated_email = validate_email(customer_email)
-        if not validated_email:
-            raise ValidationError("Invalid email address")
-
-        # Validate phone if provided
-        validated_phone = validate_phone(customer_phone) if customer_phone else None
-
-        # Parse amount
-        try:
-            from decimal import Decimal
-            amount_decimal = Decimal(str(amount))
-            if amount_decimal <= 0:
-                raise ValidationError("Amount must be greater than 0")
-        except (ValueError, TypeError):
-            raise ValidationError("Invalid amount")
-
-        # Validate frequency
-        valid_frequencies = ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]
-        if frequency not in valid_frequencies:
-            raise ValidationError(f"Invalid frequency. Must be one of: {', '.join(valid_frequencies)}")
-
-        # Parse dates
-        try:
-            start_dt = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
-        except (ValueError, TypeError):
-            raise ValidationError("Invalid start_date format")
-
-        end_dt = None
-        if end_date:
-            try:
-                end_dt = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
-            except (ValueError, TypeError):
-                raise ValidationError("Invalid end_date format")
+        validated = _validate_recurring_invoice_data(data)
 
         recurring = RecurringInvoice(
             user_id=current_user_id(),
-            customer_email=validated_email,
-            customer_name=customer_name,
-            customer_phone=validated_phone,
-            amount=amount_decimal,
-            currency=currency.upper()[:3],
-            description=description,
-            frequency=frequency.lower(),
-            start_date=start_dt,
-            end_date=end_dt,
-            next_invoice_date=start_dt,
-            notes=notes,
-            is_active=1
+            next_invoice_date=validated["start_date"],
+            is_active=1,
+            **validated
         )
         db.add(recurring)
         db.commit()
@@ -954,6 +961,34 @@ def get_recurring_invoice(recurring_id):
         }), 200
 
 
+def _update_recurring_invoice_fields(recurring, data):
+    """Update recurring invoice fields from validated data."""
+    if data.get("customer_email"):
+        validated_email = validate_email(data["customer_email"])
+        if not validated_email:
+            raise ValidationError("Invalid email address")
+        recurring.customer_email = validated_email
+
+    if data.get("customer_name") is not None:
+        recurring.customer_name = data["customer_name"]
+    if data.get("customer_phone") is not None:
+        recurring.customer_phone = validate_phone(data["customer_phone"]) if data["customer_phone"] else None
+    if data.get("amount"):
+        from decimal import Decimal
+        recurring.amount = Decimal(str(data["amount"]))
+    if data.get("description") is not None:
+        recurring.description = data["description"]
+    if data.get("frequency"):
+        valid_frequencies = ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]
+        if data["frequency"] not in valid_frequencies:
+            raise ValidationError(f"Invalid frequency. Must be one of: {', '.join(valid_frequencies)}")
+        recurring.frequency = data["frequency"].lower()
+    if data.get("is_active") is not None:
+        recurring.is_active = 1 if data["is_active"] else 0
+    if data.get("notes") is not None:
+        recurring.notes = data["notes"]
+
+
 @invoices_bp.route("/recurring-invoices/<int:recurring_id>", methods=["PUT"])
 def update_recurring_invoice(recurring_id):
     """Update a recurring invoice schedule."""
@@ -981,31 +1016,7 @@ def update_recurring_invoice(recurring_id):
             raise ValidationError("Recurring invoice not found")
 
         data = request.get_json(silent=True) or {}
-
-        if data.get("customer_email"):
-            validated_email = validate_email(data["customer_email"])
-            if not validated_email:
-                raise ValidationError("Invalid email address")
-            recurring.customer_email = validated_email
-
-        if data.get("customer_name") is not None:
-            recurring.customer_name = data["customer_name"]
-        if data.get("customer_phone") is not None:
-            recurring.customer_phone = validate_phone(data["customer_phone"]) if data["customer_phone"] else None
-        if data.get("amount"):
-            from decimal import Decimal
-            recurring.amount = Decimal(str(data["amount"]))
-        if data.get("description") is not None:
-            recurring.description = data["description"]
-        if data.get("frequency"):
-            valid_frequencies = ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]
-            if data["frequency"] not in valid_frequencies:
-                raise ValidationError(f"Invalid frequency. Must be one of: {', '.join(valid_frequencies)}")
-            recurring.frequency = data["frequency"].lower()
-        if data.get("is_active") is not None:
-            recurring.is_active = 1 if data["is_active"] else 0
-        if data.get("notes") is not None:
-            recurring.notes = data["notes"]
+        _update_recurring_invoice_fields(recurring, data)
 
         db.commit()
         db.refresh(recurring)

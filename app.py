@@ -40,6 +40,7 @@ from services.task_queue import huey
 # ── Prometheus Metrics ────────────────────────────────────────────────────────
 try:
     from prometheus_client import generate_latest
+
     from services.metrics import PROMETHEUS_AVAILABLE
 except ImportError:
     PROMETHEUS_AVAILABLE = False
@@ -244,7 +245,7 @@ def create_app() -> Flask:
     from core.background import start_background_threads
     _shutdown_event = threading.Event()
     app._shutdown_event = _shutdown_event
-    start_background_threads(_shutdown_event)
+    start_background_threads(_shutdown_event, app)
 
     # Warm cache on startup (production only)
     if not Config.DEBUG and not Config.TESTING:

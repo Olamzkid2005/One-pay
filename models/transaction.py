@@ -19,9 +19,9 @@ from sqlalchemy import (
     Text,
 )
 
-logger = logging.getLogger(__name__)
-
 from models.base import Base
+
+logger = logging.getLogger(__name__)
 
 
 class TransactionStatus(str, enum.Enum):

@@ -44,10 +44,18 @@ def _validate_rate_limit_key(key: str) -> bool:
     return True
 
 
-def check_rate_limit(db, key: str, limit: int, window_secs: int = 60, critical: bool = False) -> bool:
+def check_rate_limit(db, key: str, limit: int, window_secs: int = 60, critical: bool = False, use_memory: bool = True) -> bool:
     """
     Return True if the request is allowed, False if rate-limited.
     Uses a fixed-window counter stored in the DB with in-memory fallback.
+
+    Args:
+        db: Database session
+        key: Rate limit key
+        limit: Maximum requests per window
+        window_secs: Window size in seconds
+        critical: If True, fail closed on DB errors
+        use_memory: If True, use in-memory fallback by default to reduce DB queries
     """
     if not _validate_rate_limit_key(key):
         return True  # fail open on invalid key
@@ -55,6 +63,10 @@ def check_rate_limit(db, key: str, limit: int, window_secs: int = 60, critical: 
     key = key.replace('\x00', '')
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(seconds=window_secs)
+
+    # Use in-memory fallback by default for non-critical operations to reduce DB queries
+    if use_memory and not critical:
+        return _check_rate_limit_memory(key, limit, window_secs)
 
     try:
         with db.begin_nested():
