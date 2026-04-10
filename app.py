@@ -37,6 +37,13 @@ from database import init_db
 # Huey task queue (for worker command: huey_consumer app.huey)
 from services.task_queue import huey
 
+# ── Prometheus Metrics ────────────────────────────────────────────────────────
+try:
+    from prometheus_client import generate_latest
+    from services.metrics import PROMETHEUS_AVAILABLE
+except ImportError:
+    PROMETHEUS_AVAILABLE = False
+
 # ── Logging ────────────────────────────────────────────────────────────────────
 
 
@@ -57,6 +64,7 @@ def _configure_logging():
     """
     Use JSON structured logging in production, plain text in debug.
     JSON logs are easier to ingest in log aggregators (CloudWatch, Datadog, etc.)
+    Can be configured via LOG_FORMAT env var ("json" or "text").
     """
     from core.logging_filters import CorrelationIdFilter, SensitiveDataFilter
 
@@ -64,20 +72,10 @@ def _configure_logging():
     correlation_id_filter = CorrelationIdFilter()
     sensitive_filter = SensitiveDataFilter()
 
-    if Config.DEBUG:
-        handler = logging.StreamHandler()
-        handler.setFormatter(
-            logging.Formatter(
-                "%(asctime)s  %(levelname)-8s  [%(request_id)s]  [%(correlation_id)s]  %(name)s — %(message)s"
-            )
-        )
-        handler.addFilter(request_id_filter)
-        handler.addFilter(correlation_id_filter)
-        handler.addFilter(sensitive_filter)
-        root = logging.getLogger()
-        root.handlers = [handler]
-        root.setLevel(logging.DEBUG)
-    else:
+    # Determine if JSON logging should be used
+    use_json = Config.LOG_FORMAT.lower() == "json" or (not Config.DEBUG and Config.LOG_FORMAT.lower() != "text")
+
+    if use_json:
         try:
             from pythonjsonlogger import jsonlogger
 
@@ -91,8 +89,9 @@ def _configure_logging():
             handler.addFilter(sensitive_filter)
             root = logging.getLogger()
             root.handlers = [handler]
-            root.setLevel(logging.INFO)
+            root.setLevel(logging.DEBUG if Config.DEBUG else logging.INFO)
         except ImportError:
+            # Fallback to text logging if python-json-logger not installed
             handler = logging.StreamHandler()
             handler.setFormatter(
                 logging.Formatter(
@@ -104,7 +103,20 @@ def _configure_logging():
             handler.addFilter(sensitive_filter)
             root = logging.getLogger()
             root.handlers = [handler]
-            root.setLevel(logging.INFO)
+            root.setLevel(logging.DEBUG if Config.DEBUG else logging.INFO)
+    else:
+        handler = logging.StreamHandler()
+        handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s  %(levelname)-8s  [%(request_id)s]  [%(correlation_id)s]  %(name)s — %(message)s"
+            )
+        )
+        handler.addFilter(request_id_filter)
+        handler.addFilter(correlation_id_filter)
+        handler.addFilter(sensitive_filter)
+        root = logging.getLogger()
+        root.handlers = [handler]
+        root.setLevel(logging.DEBUG if Config.DEBUG else logging.INFO)
 
 
 _configure_logging()
@@ -216,6 +228,12 @@ def create_app() -> Flask:
     app.register_blueprint(invoices_bp, url_prefix="/api/v1")
     app.register_blueprint(api_keys_bp, url_prefix="/api/v1")
     app.register_blueprint(webhooks_bp, url_prefix="/api/v1")
+
+    # Add Prometheus metrics endpoint
+    if PROMETHEUS_AVAILABLE:
+        @app.route("/metrics")
+        def metrics():
+            return generate_latest()
 
     _setup_talisman(app)
     init_db()

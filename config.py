@@ -146,6 +146,9 @@ class BaseConfig:
     SQLALCHEMY_ECHO = os.getenv("SQLALCHEMY_ECHO", "false").lower() == "true"
     SQLALCHEMY_RECORD_QUERIES = os.getenv("SQLALCHEMY_RECORD_QUERIES", "false").lower() == "true"
 
+    # ── Logging Configuration ───────────────────────────────────────────────
+    LOG_FORMAT = os.getenv("LOG_FORMAT", "text")  # "json" or "text"
+
     # ── VoicePay Integration ──────────────────────────────────────────────────
     VOICEPAY_WEBHOOK_URL = os.getenv("VOICEPAY_WEBHOOK_URL", "")
     VOICEPAY_WEBHOOK_SECRET = os.getenv("VOICEPAY_WEBHOOK_SECRET", "")
