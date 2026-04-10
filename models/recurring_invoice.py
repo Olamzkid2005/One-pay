@@ -58,8 +58,5 @@ class RecurringInvoice(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    # Relationship to generated invoices
-    invoices = relationship("Invoice", backref="recurring_invoice", lazy="dynamic")
-
     def __repr__(self) -> str:
         return f"<RecurringInvoice(id={self.id}, customer_email={self.customer_email!r}, frequency={self.frequency})>"

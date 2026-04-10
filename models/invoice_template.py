@@ -47,8 +47,5 @@ class InvoiceTemplate(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    # Relationship to Invoice
-    invoices = relationship("Invoice", backref="template", lazy="dynamic")
-
     def __repr__(self) -> str:
         return f"<InvoiceTemplate(id={self.id}, name={self.name!r}, user_id={self.user_id})>"
