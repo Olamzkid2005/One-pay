@@ -173,6 +173,31 @@ def _setup_debug_query_monitoring(app: Flask) -> None:
 
 def create_app() -> Flask:
     app = Flask(__name__)
+    _configure_app(app)
+    _configure_session(app)
+    Config.validate()
+    app.config["BOOT_TIME"] = datetime.now(timezone.utc).isoformat()
+
+    from core.error_handlers import register_error_handlers
+    from core.middleware import register_middleware
+    register_middleware(app)
+    register_error_handlers(app)
+
+    _register_blueprints(app)
+    _setup_prometheus_metrics(app)
+    _setup_talisman(app)
+    init_db()
+    _setup_debug_query_monitoring(app)
+
+    _start_background_threads(app)
+    _warm_cache_if_needed(app)
+    _register_cache_listeners(app)
+
+    return app
+
+
+def _configure_app(app: Flask) -> None:
+    """Configure basic Flask app settings."""
     app.config["SECRET_KEY"] = Config.SECRET_KEY
     app.config["DEBUG"] = Config.DEBUG
     app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024
@@ -187,7 +212,9 @@ def create_app() -> Flask:
         SESSION_TIMEOUT_UNAUTHENTICATED=Config.SESSION_TIMEOUT_UNAUTHENTICATED,
     )
 
-    # Flask-Session with Redis configuration (skip in testing mode)
+
+def _configure_session(app: Flask) -> None:
+    """Configure Flask-Session with Redis or filesystem fallback."""
     if not Config.TESTING and Config.SESSION_TYPE == "redis":
         app.config["SESSION_TYPE"] = Config.SESSION_TYPE
         app.config["SESSION_KEY_PREFIX"] = Config.SESSION_KEY_PREFIX
@@ -197,7 +224,6 @@ def create_app() -> Flask:
         app.config["SESSION_COOKIE_SECURE"] = Config.SESSION_COOKIE_SECURE
         app.config["SESSION_COOKIE_SAMESITE"] = Config.SESSION_COOKIE_SAMESITE
 
-        # Initialize Redis client for Flask-Session (optional)
         try:
             import redis
             app.config["SESSION_REDIS"] = redis.from_url(Config.SESSION_REDIS)
@@ -207,21 +233,15 @@ def create_app() -> Flask:
             import tempfile
             app.config["SESSION_FILE_DIR"] = tempfile.mkdtemp()
 
-        # Initialize Flask-Session (optional)
         try:
             from flask_session import Session
             Session(app)
         except ImportError:
             logger.warning("Flask-Session not installed, using default Flask sessions")
 
-    Config.validate()
-    app.config["BOOT_TIME"] = datetime.now(timezone.utc).isoformat()
 
-    from core.error_handlers import register_error_handlers
-    from core.middleware import register_middleware
-    register_middleware(app)
-    register_error_handlers(app)
-
+def _register_blueprints(app: Flask) -> None:
+    """Register all Flask blueprints."""
     app.register_blueprint(public_bp)
     app.register_blueprint(auth_bp, url_prefix="/api/v1")
     app.register_blueprint(payments_bp, url_prefix="/api/v1")
@@ -230,24 +250,28 @@ def create_app() -> Flask:
     app.register_blueprint(api_keys_bp, url_prefix="/api/v1")
     app.register_blueprint(webhooks_bp, url_prefix="/api/v1")
 
-    # Add Prometheus metrics endpoint
+
+def _setup_prometheus_metrics(app: Flask) -> None:
+    """Setup Prometheus metrics endpoint if available."""
     if PROMETHEUS_AVAILABLE:
         @app.route("/metrics")
         def metrics():
             return generate_latest()
 
-    _setup_talisman(app)
-    init_db()
-    _setup_debug_query_monitoring(app)
 
+def _start_background_threads(app: Flask) -> None:
+    """Start background daemon threads."""
     import threading
 
     from core.background import start_background_threads
+
     _shutdown_event = threading.Event()
     app._shutdown_event = _shutdown_event
     start_background_threads(_shutdown_event, app)
 
-    # Warm cache on startup (production only)
+
+def _warm_cache_if_needed(app: Flask) -> None:
+    """Warm cache on startup in production mode."""
     if not Config.DEBUG and not Config.TESTING:
         try:
             from services.cache_warming import warm_all_users_cache
@@ -256,15 +280,15 @@ def create_app() -> Flask:
         except Exception as e:
             logger.warning(f"Cache warming failed on startup: {e}")
 
-    # Register cache invalidation listeners
+
+def _register_cache_listeners(app: Flask) -> None:
+    """Register cache invalidation listeners."""
     try:
         from models.transaction import register_cache_listeners
         register_cache_listeners()
         logger.info("Cache invalidation listeners registered")
     except Exception as e:
         logger.warning(f"Failed to register cache listeners: {e}")
-
-    return app
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 # Module-level app instance for gunicorn (gunicorn app:app)
